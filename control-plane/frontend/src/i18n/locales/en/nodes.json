@@ -1,0 +1,83 @@
+{
+  "pageTitle": "Worker Nodes",
+  "addNode": "Add Node",
+  "noNodes": "No worker nodes",
+  "noNodesDesc": "Add a worker node to start deploying projects",
+  "nodeCreated": "Node created",
+  "nodeUpdated": "Node updated",
+  "nodeDeleted": "Node deleted",
+  "headers": {
+    "name": "Name",
+    "url": "URL",
+    "region": "Region",
+    "status": "Status",
+    "projects": "Projects",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "disk": "Disk",
+    "lastHeartbeat": "Last Heartbeat"
+  },
+  "status": {
+    "online": "Online",
+    "offline": "Offline",
+    "maintenance": "Maintenance"
+  },
+  "createDialog": {
+    "title": "Add Worker Node",
+    "name": "Name",
+    "namePlaceholder": "EU Worker 1",
+    "slug": "Slug",
+    "slugPlaceholder": "eu-1",
+    "url": "URL",
+    "urlPlaceholder": "https://eu.dataforge.io",
+    "region": "Region",
+    "regionPlaceholder": "eu-west-1",
+    "maxProjects": "Max Projects",
+    "creating": "Creating...",
+    "createBtn": "Add Node",
+    "cancel": "Cancel",
+    "create": "Add Node",
+    "slugMin": "Minimum 2 characters",
+    "slugFormat": "Lowercase, numbers, dashes only"
+  },
+  "editDialog": {
+    "title": "Edit Node",
+    "save": "Save",
+    "saving": "Saving..."
+  },
+  "updated": "Node updated",
+  "apiKeyDialog": {
+    "title": "Node API Key",
+    "desc": "Copy this API key now. You won't be able to see it again. Use it as NODE_API_KEY env var on the worker.",
+    "warning": "Save this key — it will only be shown once.",
+    "done": "Done",
+    "regenerate": "Regenerate API Key"
+  },
+  "deleteConfirm": {
+    "title": "Delete Node",
+    "desc": "This will remove the node. Existing projects will need to be migrated.",
+    "confirm": "Delete"
+  },
+  "heartbeat": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}} min ago",
+    "offline": "Offline"
+  },
+  "title": "Worker Nodes",
+  "empty": "No worker nodes",
+  "emptyDesc": "Add a worker node to start deploying projects",
+  "notConnected": "Not connected yet",
+  "setupCommand": "Setup Command",
+  "setupCommandDesc": "Run this command on your server to install the DataForge worker node. The token expires in 1 hour.",
+  "systemNodes": "System Nodes",
+  "userNodes": "User Nodes",
+  "noSystemNodes": "No system nodes configured",
+  "created": "Node created",
+  "deleted": "Node deleted",
+  "metrics": {
+    "cpu": "CPU Usage",
+    "ram": "RAM Usage",
+    "disk": "Disk Usage",
+    "projects": "Projects"
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "pageTitle": "SQL Консоль",
+  "explorer": {
+    "tables": "Таблицы"
+  },
+  "toolbar": {
+    "run": "Выполнить",
+    "running": "Выполнение...",
+    "explain": "EXPLAIN",
+    "ctrlEnterHint": "Ctrl+Enter для запуска",
+    "placeholder": "SELECT * FROM ..."
+  },
+  "tabs": {
+    "results": "Результаты",
+    "messages": "Сообщения",
+    "explain": "EXPLAIN"
+  },
+  "results": {
+    "rows": "{{count}} строк",
+    "empty": "Выполните запрос для просмотра результатов"
+  },
+  "messages": {
+    "empty": "Нет сообщений"
+  },
+  "explain": {
+    "empty": "Запустите EXPLAIN для просмотра плана запроса"
+  },
+  "queryBuilder": {
+    "title": "Конструктор запросов",
+    "selectTable": "Выберите таблицу",
+    "queryType": "Тип запроса",
+    "columns": "Колонки (нажмите для выбора)",
+    "joins": "Соединения",
+    "joinTable": "Таблица",
+    "leftColumn": "Левая колонка",
+    "rightColumn": "Правая колонка",
+    "noJoins": "Соединения не добавлены",
+    "filters": "Фильтры (WHERE)",
+    "column": "Колонка",
+    "value": "Значение",
+    "noFilters": "Фильтры не добавлены",
+    "groupOrder": "Группировка и сортировка",
+    "groupByLabel": "GROUP BY",
+    "orderByLabel": "ORDER BY",
+    "direction": "Направление",
+    "limit": "Лимит",
+    "sqlPreview": "Предпросмотр SQL",
+    "saveQuery": "Сохранить запрос",
+    "createEndpoint": "Создать эндпоинт",
+    "saved": "Запрос сохранён",
+    "endpointCreated": "Эндпоинт создан",
+    "addPairs": "Добавьте пары колонка-значение",
+    "columnValues": "Значения колонок",
+    "setValues": "Значения SET",
+    "types": {
+      "select": "SELECT",
+      "insert": "INSERT",
+      "update": "UPDATE",
+      "delete": "DELETE"
+    },
+    "createEndpointDialog": {
+      "title": "Создать эндпоинт",
+      "description": "Создать API эндпоинт из этого запроса.",
+      "name": "Название эндпоинта",
+      "namePlaceholder": "Мой эндпоинт",
+      "method": "HTTP метод",
+      "path": "Путь",
+      "query": "SQL запрос"
+    }
+  },
+  "naturalLanguage": {
+    "title": "Запрос на естественном языке",
+    "button": "Естественный язык",
+    "placeholder": "Задайте вопрос о ваших данных...\n\nПример: Покажи топ-10 пользователей по количеству заказов",
+    "hint": "Нажмите Ctrl+Enter для отправки. Будут сгенерированы только запросы на чтение (SELECT).",
+    "generate": "Сгенерировать и выполнить",
+    "generating": "Генерация...",
+    "success": "Запрос сгенерирован и выполнен"
+  },
+  "ai": {
+    "title": "AI Ассистент",
+    "generate": "Сгенерировать",
+    "explain": "Объяснить",
+    "optimize": "Оптимизировать",
+    "fixError": "Исправить ошибку",
+    "prompt": "Опишите, что вы хотите...",
+    "generating": "Генерация...",
+    "explaining": "Анализ...",
+    "optimizing": "Оптимизация...",
+    "fixing": "Исправление...",
+    "useQuery": "Использовать",
+    "result": "Результат",
+    "noResult": "Используйте AI-ассистент для генерации, объяснения или оптимизации SQL-запросов.",
+    "errorPlaceholder": "Вставьте сообщение об ошибке...",
+    "tokensEstimate": "токенов",
+    "today": "сегодня"
+  }
+}

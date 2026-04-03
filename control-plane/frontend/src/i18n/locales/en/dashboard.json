@@ -1,0 +1,30 @@
+{
+  "title": "Dashboard",
+  "metrics": {
+    "tables": "Tables",
+    "records": "Records",
+    "endpoints": "API Endpoints",
+    "webhooks": "Webhooks",
+    "tablesTotal": "{{count}} total",
+    "noTables": "None yet",
+    "acrossTables": "Across {{count}} tables",
+    "active": "{{count}} active"
+  },
+  "charts": {
+    "apiRequests": "API Requests (7 days)",
+    "cacheRatio": "Cache Hit/Miss Ratio"
+  },
+  "recentActivity": "Recent Activity",
+  "noActivity": "No activity yet",
+  "activeWebhooks": "Active Webhooks",
+  "noWebhooks": "No webhooks configured",
+  "cacheHit": "Cache HIT: {{count}} ({{percentage}}%)",
+  "cacheMiss": "Cache MISS: {{count}} ({{percentage}}%)",
+  "noDataYet": "No data yet",
+  "aiUsage": {
+    "title": "AI Usage",
+    "monthlySpend": "This month",
+    "requests": "requests",
+    "budget": "Budget"
+  }
+}

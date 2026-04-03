@@ -1,0 +1,347 @@
+{
+  "projects": {
+    "title": "All Projects (System)",
+    "deleted": "Project deleted",
+    "headers": {
+      "name": "Name",
+      "slug": "Slug",
+      "owner": "Owner",
+      "members": "Members",
+      "created": "Created"
+    },
+    "deleteConfirm": {
+      "title": "Delete Project",
+      "desc": "Permanently delete \"{{name}}\"? This will drop the database schema and all data.",
+      "confirm": "Delete Project"
+    },
+    "you": "YOU"
+  },
+  "users": {
+    "title": "All Users (System)",
+    "createUser": "Create User",
+    "created": "User created",
+    "actionCompleted": "Action completed",
+    "actions": "Actions",
+    "promote": "Promote to Superadmin",
+    "demote": "Demote Superadmin",
+    "deactivate": "Deactivate",
+    "block": "Block User",
+    "unblock": "Unblock User",
+    "deleteUser": "Delete User",
+    "roleSuperadmin": "SUPERADMIN",
+    "roleUser": "User",
+    "headers": {
+      "user": "User",
+      "email": "Email",
+      "role": "Role",
+      "invitedBy": "Invited By",
+      "projects": "Projects",
+      "lastLogin": "Last Login",
+      "status": "Status",
+      "blockedAt": "Blocked At"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "blocked": "Blocked",
+      "never": "Never"
+    },
+    "confirmActions": {
+      "promote": "Promote to Superadmin",
+      "demote": "Demote Superadmin",
+      "deactivate": "Deactivate User",
+      "block": "Block User",
+      "unblock": "Unblock User",
+      "delete": "Delete User",
+      "desc": "Are you sure you want to {{action}} \"{{name}}\"?",
+      "deactivateConfirm": "Deactivate",
+      "confirm": "Confirm"
+    },
+    "createDialog": {
+      "title": "Create User",
+      "name": "Name",
+      "email": "Email",
+      "password": "Password",
+      "creating": "Creating...",
+      "createBtn": "Create User"
+    },
+    "detail": {
+      "backToUsers": "Back to Users",
+      "roleAssignment": "Role Assignment",
+      "assignRole": "Assign Role",
+      "noRole": "No Role",
+      "roleAssigned": "Role assigned",
+      "quotaOverview": "Quota Overview",
+      "quotaSource": {
+        "override": "Source: User Override",
+        "role": "Source: Role \"{{name}}\"",
+        "default": "Source: System Defaults"
+      },
+      "overrideQuotas": "Override Quotas",
+      "resetToRole": "Reset to Role Defaults",
+      "quotaOverrideSaved": "Quota override saved",
+      "quotaReset": "Quota reset to role defaults",
+      "blockSecurity": "Block / Security",
+      "blockReason": "Block Reason",
+      "blockReasonPlaceholder": "Reason for blocking this user...",
+      "userProjects": "User Projects",
+      "noProjects": "This user has no projects.",
+      "projectName": "Project",
+      "projectRole": "Role",
+      "joinedAt": "Joined",
+      "adminActions": "Admin Actions",
+      "memberSince": "Member since",
+      "lastLogin": "Last login",
+      "resetPassword": "Reset Password",
+      "resetPasswordConfirm": "Generate a random password for this user?",
+      "newPassword": "New password",
+      "passwordCopied": "Password copied to clipboard"
+    }
+  },
+  "health": {
+    "title": "System Health",
+    "autoRefresh": "Auto-refresh 30s",
+    "cpStatus": "Control Plane",
+    "workerCount": "Worker Nodes",
+    "totalProjects": "Total Projects",
+    "healthy": "Healthy",
+    "degraded": "Degraded",
+    "unreachable": "Unreachable",
+    "controlPlane": "Control Plane",
+    "uptime": "Uptime",
+    "hostname": "Hostname",
+    "ramUsage": "RAM Usage",
+    "heapUsed": "Heap Used",
+    "rss": "RSS Memory",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "disk": "Disk",
+    "diskFree": "{{free}} GB free of {{total}} GB",
+    "dbConnection": "Database",
+    "dbStatus": "Database Status",
+    "redisStatus": "Redis Status",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "latency": "Latency",
+    "workerDbStatus": "Worker Database Status",
+    "workerRedisStatus": "Worker Redis Status",
+    "nodeVersion": "Node.js Version",
+    "platform": "Platform",
+    "tabs": {
+      "overview": "Overview",
+      "postgresql": "PostgreSQL",
+      "redis": "Redis",
+      "nodejs": "Node.js"
+    }
+  },
+  "errors": {
+    "title": "Error Tracking",
+    "empty": "No errors tracked",
+    "emptyDesc": "No errors have been recorded yet",
+    "filters": {
+      "source": "Source",
+      "severity": "Severity",
+      "status": "Status",
+      "allSources": "All Sources",
+      "allSeverities": "All Severities",
+      "allStatuses": "All Statuses"
+    },
+    "headers": {
+      "time": "Time",
+      "source": "Source",
+      "severity": "Severity",
+      "title": "Title",
+      "status": "Status"
+    },
+    "status": {
+      "open": "Open",
+      "acknowledged": "Acknowledged",
+      "resolved": "Resolved"
+    },
+    "severity": {
+      "error": "Error",
+      "warning": "Warning",
+      "critical": "Critical"
+    },
+    "source": {
+      "api": "API",
+      "webhook": "Webhook",
+      "cron": "Cron",
+      "node": "Node",
+      "system": "System"
+    },
+    "detail": {
+      "title": "Error Details",
+      "message": "Message",
+      "stackTrace": "Stack Trace",
+      "metadata": "Metadata",
+      "acknowledge": "Acknowledge",
+      "resolve": "Resolve",
+      "acknowledgedBy": "Acknowledged by",
+      "resolvedAt": "Resolved at"
+    }
+  },
+  "globalSettings": {
+    "title": "Global Settings",
+    "general": "General",
+    "instanceName": "Instance Name",
+    "instanceUrl": "Instance URL",
+    "authDefaults": "Auth Defaults",
+    "sessionTtl": "Session TTL (minutes)",
+    "minPasswordLength": "Minimum Password Length",
+    "rateLimiting": "Rate Limiting Defaults",
+    "defaultRateLimit": "Default Rate Limit",
+    "window": "Window",
+    "maintenance": "Maintenance Mode",
+    "maintenanceDesc": "Disable access for all users except superadmins",
+    "save": "Save Settings",
+    "saved": "Settings saved",
+    "1sec": "1 second",
+    "10sec": "10 seconds",
+    "1min": "1 minute",
+    "5min": "5 minutes",
+    "1hour": "1 hour",
+    "quotas": {
+      "title": "Default Quotas",
+      "maxProjects": "Max Projects",
+      "maxTables": "Max Tables",
+      "maxRecords": "Max Records",
+      "maxApiRequests": "Max API Requests (per day)",
+      "maxStorageMb": "Max Storage (MB)",
+      "maxEndpoints": "Max Endpoints",
+      "maxWebhooks": "Max Webhooks",
+      "maxFiles": "Max Files",
+      "maxBackups": "Max Backups",
+      "maxCron": "Max Cron Jobs",
+      "maxAiRequestsPerDay": "Max AI Requests / Day",
+      "maxAiTokensPerDay": "Max AI Tokens / Day",
+      "maxQueryTimeoutMs": "Query Timeout (ms)",
+      "maxConcurrentRequests": "Max Concurrent Requests",
+      "maxRowsPerQuery": "Max Rows per Query",
+      "maxExportRows": "Max Export Rows",
+      "saved": "Quotas saved"
+    },
+    "alerts": {
+      "title": "Alerts",
+      "failedLoginThreshold": "Failed login alert threshold",
+      "alertEmail": "Alert email",
+      "enableAlerts": "Enable failed login alerts"
+    },
+    "dataRetention": {
+      "title": "Data Retention",
+      "auditRetention": "Audit log retention days",
+      "requestRetention": "Request log retention days",
+      "timeTravelDays": "Time Travel history (days)",
+      "timeTravelDaysDesc": "How many days of change history to keep for Time Travel snapshots"
+    },
+    "backup": {
+      "title": "System Backup",
+      "description": "Export all system metadata as JSON or import from a previous export.",
+      "exportButton": "Export System",
+      "importButton": "Import System",
+      "exported": "System exported successfully",
+      "imported": "System imported successfully"
+    },
+    "security": {
+      "security": "Security",
+      "maxBodySize": "Max Request Body Size (MB)",
+      "rateLimitMax": "Rate Limit Max Requests",
+      "rateLimitWindow": "Rate Limit Window",
+      "bruteForceMax": "Brute Force Max Attempts",
+      "bruteForceLockout": "Brute Force Lockout Duration (minutes)",
+      "corsOrigin": "CORS Origin"
+    },
+    "ai": {
+      "title": "AI Configuration",
+      "enableAi": "Enable AI Features",
+      "enableAiDesc": "When AI is disabled, all AI features (SQL Assistant, Schema Designer, Data Analyzer) are hidden from the UI.",
+      "apiKey": "API Key",
+      "apiKeyPlaceholder": "sk-ant-...",
+      "apiKeyNote": "Store in Secrets Vault for production use.",
+      "model": "Model",
+      "modelPlaceholder": "Select AI model",
+      "saved": "AI settings saved"
+    },
+    "aiBudget": {
+      "title": "AI Budget",
+      "description": "Set default daily AI usage limits per user. Users can be given individual overrides in User Management.",
+      "maxRequestsPerDay": "Max AI Requests / Day",
+      "maxTokensPerDay": "Max AI Tokens / Day",
+      "monthlyBudgetTitle": "AI Monthly Budget",
+      "currentMonthSpent": "Current Month Spent",
+      "ofBudget": "of budget",
+      "totalRequests": "Total Requests",
+      "totalTokens": "Total Tokens",
+      "monthlyBudgetUsd": "Monthly Budget (USD)",
+      "alertThresholdPct": "Alert Threshold (%)",
+      "saved": "AI budget settings saved"
+    },
+    "instanceNamePlaceholder": "My DataForge Instance",
+    "maintenanceToggle": "Enable Maintenance Mode",
+    "registration": {
+      "title": "Registration",
+      "enableRegistration": "Enable Registration",
+      "enableRegistrationDesc": "Allow new users to create accounts.",
+      "requireInvite": "Require Invite Key",
+      "requireInviteDesc": "Users must provide an invite key to register.",
+      "defaultRole": "Default Role",
+      "maxUsers": "Max Users",
+      "maxUsersHint": "0 = unlimited",
+      "noRolesWarning": "No roles configured. Create a role in the Roles page first."
+    }
+  },
+  "roles": {
+    "title": "Roles",
+    "createRole": "Create Role",
+    "editRole": "Edit Role",
+    "created": "Role created",
+    "updated": "Role updated",
+    "deleted": "Role deleted",
+    "noRoles": "No roles",
+    "noRolesDesc": "Create a role to define quotas for users.",
+    "roleName": "Role Name",
+    "roleNamePlaceholder": "e.g. Developer",
+    "description": "Description",
+    "descriptionPlaceholder": "What is this role for?",
+    "color": "Color",
+    "quotas": "Quotas",
+    "usersCount": "users",
+    "quotaGroups": {
+      "resources": "Resources",
+      "apiAutomation": "API & Automation",
+      "backups": "Backups",
+      "ai": "AI",
+      "performance": "Performance"
+    },
+    "quotaFields": {
+      "max_projects": "Max Projects",
+      "max_tables": "Max Tables",
+      "max_records": "Max Records",
+      "max_api_requests": "Max API Requests / Day",
+      "max_storage_mb": "Max Storage (MB)",
+      "max_endpoints": "Max Endpoints",
+      "max_webhooks": "Max Webhooks",
+      "max_files": "Max Files",
+      "max_backups": "Max Backups",
+      "max_cron": "Max Cron Jobs",
+      "max_ai_requests_per_day": "Max AI Requests / Day",
+      "max_ai_tokens_per_day": "Max AI Tokens / Day",
+      "max_query_timeout_ms": "Query Timeout (ms)",
+      "max_concurrent_requests": "Max Concurrent Requests",
+      "max_rows_per_query": "Max Rows per Query",
+      "max_export_rows": "Max Export Rows"
+    },
+    "headers": {
+      "name": "Name",
+      "users": "Users",
+      "quotas": "Quotas",
+      "created": "Created"
+    },
+    "deleteConfirm": {
+      "title": "Delete Role",
+      "desc": "Are you sure you want to delete this role?"
+    },
+    "deleteWarningUsers": "This role is assigned to {{count}} user(s). They will be unassigned. Are you sure?",
+    "cannotDeleteDefault": "Cannot delete the default role. Change the default role in Global Settings first."
+  }
+}

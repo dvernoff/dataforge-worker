@@ -1,0 +1,37 @@
+{
+  "pageTitle": "Webhooks",
+  "createWebhook": "Create Webhook",
+  "noWebhooks": "No webhooks yet",
+  "noWebhooksDesc": "Create a webhook to get notified about data changes",
+  "webhookCreated": "Webhook created",
+  "webhookDeleted": "Webhook deleted",
+  "creating": "Creating...",
+  "form": {
+    "name": "Name",
+    "namePlaceholder": "My webhook",
+    "table": "Table",
+    "selectTable": "Select table",
+    "events": "Events",
+    "url": "URL",
+    "urlPlaceholder": "https://...",
+    "secret": "Secret (optional)",
+    "secretPlaceholder": "HMAC secret"
+  },
+  "stats": {
+    "successRate": "Success rate: {{rate}}% ({{success}}/{{total}})",
+    "lastTriggered": "Last: {{date}}"
+  },
+  "viewLogs": "View Logs",
+  "logs": {
+    "title": "Webhook Logs",
+    "time": "Time",
+    "event": "Event",
+    "status": "Status",
+    "duration": "Duration",
+    "noLogs": "No logs yet"
+  },
+  "deleteConfirm": {
+    "title": "Delete Webhook",
+    "desc": "This webhook will stop receiving events. Logs will be deleted."
+  }
+}

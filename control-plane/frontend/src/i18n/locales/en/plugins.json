@@ -1,0 +1,228 @@
+{
+  "pageTitle": "Plugins",
+  "noPlugins": "No plugins available",
+  "noPluginsDesc": "Plugins will appear here when they are installed.",
+  "enabled": "Enabled",
+  "disabled": "Disabled",
+  "enable": "Enable",
+  "disable": "Disable",
+  "pluginEnabled": "Plugin enabled",
+  "pluginDisabled": "Plugin disabled",
+  "settingsUpdated": "Plugin settings updated",
+  "settings": "Settings",
+  "saveSettings": "Save Settings",
+  "version": "Version",
+  "runtime": "Runtime",
+  "runtimes": {
+    "worker": "Worker Node",
+    "control": "Control Plane"
+  },
+  "workerPlugins": "Worker Plugins",
+  "cpPlugins": "Control Plane Plugins",
+  "features": "Features",
+  "featureType": "Feature",
+  "categories": {
+    "functionality": "Functionality",
+    "data": "Data & Analytics",
+    "views": "Views",
+    "developer": "Developer Tools"
+  },
+  "settingsDialog": {
+    "title": "Plugin Settings",
+    "description": "Configure the plugin settings below. Required fields are marked with *.",
+    "noSettings": "This plugin has no configurable settings."
+  },
+  "plugins": {
+    "sbox-auth": {
+      "name": "S&box Auth",
+      "description": "S&box player authentication via Facepunch token validation."
+    },
+    "telegram-bot": {
+      "name": "Telegram Bot",
+      "description": "Send notifications via Telegram Bot API."
+    },
+    "email-smtp": {
+      "name": "Email (SMTP)",
+      "description": "Send emails via SMTP."
+    },
+    "discord-webhook": {
+      "name": "Discord Webhook",
+      "description": "Send messages to Discord via webhooks."
+    },
+    "s3-storage": {
+      "name": "S3 Storage",
+      "description": "S3-compatible file storage (AWS, MinIO, etc.)."
+    },
+    "local-storage": {
+      "name": "Local Storage",
+      "description": "Store files on the local filesystem."
+    },
+    "uptime-ping": {
+      "name": "Uptime Ping",
+      "description": "Periodic HTTP health checks."
+    },
+    "feature-api-playground": {
+      "name": "API Playground",
+      "description": "Interactive API testing environment."
+    },
+    "feature-calendar": {
+      "name": "Calendar View",
+      "description": "Calendar view for data browser."
+    },
+    "feature-data-pipeline": {
+      "name": "Data Pipeline",
+      "description": "Visual data pipeline builder."
+    },
+    "feature-db-map": {
+      "name": "Database Map",
+      "description": "Interactive database schema visualization."
+    },
+    "feature-gallery": {
+      "name": "Gallery View",
+      "description": "Gallery view for data browser."
+    },
+    "feature-kanban": {
+      "name": "Kanban View",
+      "description": "Kanban board view for data browser."
+    },
+    "feature-time-travel": {
+      "name": "Time Travel",
+      "description": "View historical data snapshots."
+    },
+    "feature-websocket": {
+      "name": "WebSocket API",
+      "description": "Real-time WebSocket connections for live data updates."
+    }
+  },
+  "descriptions": {
+    "sbox-auth": "Authenticate S&box players via Facepunch API. Validates player tokens on each request, maps Steam IDs to DataForge users, and supports session-based or token-based authentication flows for game servers.",
+    "telegram-bot": "Send notifications and alerts via Telegram Bot API. Configure webhook events to trigger messages to channels or groups. Supports rich text formatting, inline keyboards, and message templates.",
+    "email-smtp": "Send transactional emails via any SMTP provider. Supports TLS/SSL, custom templates with variable interpolation, and batch sending. Use for password resets, invite notifications, and audit alerts.",
+    "discord-webhook": "Send real-time messages to Discord channels via webhooks. Supports embeds, mentions, and custom avatars. Trigger notifications on data changes, API events, or scheduled intervals.",
+    "s3-storage": "Store and manage files using any S3-compatible storage service (AWS S3, MinIO, DigitalOcean Spaces, etc.). Supports presigned URLs, multipart uploads, and automatic cleanup based on retention policies.",
+    "local-storage": "Store uploaded files directly on the local filesystem of the worker node. Ideal for development and small deployments. Supports configurable storage paths and automatic directory creation.",
+    "uptime-ping": "Monitor service availability with periodic HTTP health checks. Sends configurable GET/POST requests to endpoints, tracks response times and status codes, and triggers alerts on failures.",
+    "feature-api-playground": "Interactive API testing environment with collections, request editor, and response viewer. Supports all HTTP methods and custom headers.",
+    "feature-calendar": "Calendar view for data browser — display records on a date grid. Visualize records as events, drag to reschedule.",
+    "feature-data-pipeline": "Visual data pipeline builder with Source, Transform, and Destination nodes. Import, transform, and export data.",
+    "feature-db-map": "Interactive 2D visualization of your database schema showing tables as nodes and foreign key relationships as connections.",
+    "feature-gallery": "Gallery view for data browser — display image thumbnails in a grid. Visual cards with thumbnails, titles, and descriptions.",
+    "feature-kanban": "Kanban board view for data browser — group records by status column. Drag and drop records between columns.",
+    "feature-time-travel": "View historical data snapshots at any point in time using data history. Compare versions and restore previous states.",
+    "feature-websocket": "Real-time WebSocket connections for live data updates. Subscribe to table changes and receive events instantly."
+  },
+  "featurePlugins": {
+    "feature-sdk": {
+      "name": "SDK",
+      "description": "Auto-generated client SDKs for TypeScript, Python, and cURL. Copy-paste ready code snippets for all API endpoints with authentication and type definitions included."
+    },
+    "feature-cron": {
+      "name": "Cron Jobs",
+      "description": "Schedule recurring tasks using cron expressions. Execute SQL queries, API calls, or flow triggers on a defined schedule. Includes execution history and error tracking."
+    },
+    "feature-flows": {
+      "name": "Flows",
+      "description": "Visual workflow builder for automating multi-step data operations. Chain triggers, conditions, and actions together. Supports webhooks, SQL, HTTP requests, and plugin integrations."
+    },
+    "feature-dashboards": {
+      "name": "Dashboards",
+      "description": "Build custom data dashboards with drag-and-drop widgets. Supports charts, tables, counters, and custom SQL queries. Share dashboards with team members."
+    },
+    "feature-graphql": {
+      "name": "GraphQL",
+      "description": "Auto-generated GraphQL API from your database schema. Includes queries, mutations, filtering, sorting, and pagination. Built-in GraphQL Playground with schema documentation."
+    },
+    "feature-backups": {
+      "name": "Backups",
+      "description": "Automated and manual database backups with configurable retention policies. Schedule backups via cron, download backup files, and restore from any point in time."
+    },
+    "feature-analytics": {
+      "name": "Analytics",
+      "description": "Track API usage, response times, error rates, and popular endpoints. Visualize trends over time with interactive charts. Export analytics data for external analysis."
+    },
+    "feature-query-builder": {
+      "name": "Query Builder",
+      "description": "Visual SQL query builder with drag-and-drop interface. Build SELECT, INSERT, UPDATE, and DELETE queries without writing SQL. Save queries and create API endpoints from them."
+    },
+    "feature-websocket": {
+      "name": "WebSocket",
+      "description": "Real-time data streaming via WebSocket connections. Subscribe to table changes and receive INSERT, UPDATE, DELETE events instantly. Supports authentication and rate limiting."
+    },
+    "feature-db-map": {
+      "name": "DB Map",
+      "description": "Interactive visual map of your database schema. View tables, columns, relationships, and foreign keys in a graph layout. Navigate complex schemas with ease."
+    },
+    "feature-api-playground": {
+      "name": "API Playground",
+      "description": "Interactive API testing environment. Send requests to your endpoints, inspect responses, and debug authentication. Supports all HTTP methods and custom headers."
+    },
+    "feature-data-pipeline": {
+      "name": "Data Pipeline",
+      "description": "ETL pipeline builder for importing, transforming, and exporting data. Connect external data sources, apply transformations, and load data into your tables on a schedule."
+    },
+    "feature-kanban": {
+      "name": "Kanban",
+      "description": "Kanban board view for any table with a status column. Drag and drop records between columns, filter by assignee, and track progress visually."
+    },
+    "feature-calendar": {
+      "name": "Calendar",
+      "description": "Calendar view for tables with date/datetime columns. Visualize records as events, drag to reschedule, and filter by category or status."
+    },
+    "feature-gallery": {
+      "name": "Gallery",
+      "description": "Gallery/card view for tables with image columns. Display records as visual cards with thumbnails, titles, and descriptions. Supports grid and list layouts."
+    },
+    "feature-time-travel": {
+      "name": "Time Travel",
+      "description": "Browse historical versions of your data. View record changes over time, compare versions side by side, and restore previous states. Powered by audit log integration."
+    },
+    "feature-webhooks": {
+      "name": "Webhooks",
+      "description": "Event-driven HTTP callbacks on data changes. Configure URLs, events (INSERT/UPDATE/DELETE), HMAC signing, and retry policies. View delivery logs and success rates."
+    },
+    "feature-secrets": {
+      "name": "Secrets",
+      "description": "Encrypted vault for sensitive configuration values. Store API keys, tokens, and credentials securely. Reference secrets in webhooks, SQL, and flows via {{SECRET.KEY_NAME}}."
+    }
+  },
+  "settingLabels": {
+    "discord-webhook": {
+      "webhook_url": "Webhook URL"
+    },
+    "telegram-bot": {
+      "bot_token": "Bot Token",
+      "default_chat_id": "Default Chat ID"
+    },
+    "email-smtp": {
+      "host": "SMTP Host",
+      "port": "SMTP Port",
+      "user": "Username",
+      "password": "Password",
+      "from_address": "From Address"
+    },
+    "s3-storage": {
+      "bucket": "Bucket Name",
+      "region": "Region",
+      "access_key": "Access Key ID",
+      "secret_key": "Secret Access Key",
+      "endpoint": "Custom Endpoint (optional)"
+    },
+    "local-storage": {
+      "base_path": "Base Path"
+    },
+    "uptime-ping": {
+      "ping_url": "Ping URL",
+      "interval_seconds": "Interval (seconds)"
+    },
+    "feature-websocket": {
+      "max_connections": "Max Connections",
+      "auth_mode": "Auth Mode"
+    },
+    "sbox-auth": {
+      "service_name": "Service Name",
+      "session_table": "Session Table",
+      "steam_id_column": "Steam ID Column",
+      "session_key_column": "Session Key Column"
+    }
+  }
+}

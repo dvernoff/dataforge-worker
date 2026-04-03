@@ -1,0 +1,99 @@
+{
+  "pageTitle": "Cron задачи",
+  "createJob": "Создать Cron задачу",
+  "createHint": "Задача будет создана выключенной. Расписание, запрос и другие параметры настроите на следующей странице.",
+  "editJob": "Редактировать Cron задачу",
+  "noJobs": "Нет cron задач",
+  "noJobsDesc": "Планируйте повторяющиеся задачи: SQL запросы, API вызовы или вебхуки.",
+  "jobCreated": "Cron задача создана",
+  "jobUpdated": "Cron задача обновлена",
+  "jobDeleted": "Cron задача удалена",
+  "jobTriggered": "Задача запущена вручную",
+  "creating": "Создание...",
+  "builder": {
+    "presets": "Быстрые шаблоны",
+    "everyMinute": "Каждую минуту",
+    "every5min": "Каждые 5 мин",
+    "every15min": "Каждые 15 мин",
+    "everyHour": "Каждый час",
+    "everyDayMidnight": "Каждый день 00:00",
+    "everyDayNoon": "Каждый день 12:00",
+    "everyMonday": "Каждый понедельник",
+    "everyMonth": "Каждый месяц",
+    "minute": "Мин",
+    "hour": "Час",
+    "dayMonth": "День",
+    "month": "Месяц",
+    "dayWeek": "День нед.",
+    "hintMinute": "0-59",
+    "hintHour": "0-23",
+    "hintDayMonth": "1-31",
+    "hintMonth": "1-12",
+    "hintDayWeek": "0-6",
+    "nextExecutions": "Ближайшие 3 запуска (ваше время)",
+    "yourTimezone": "Время указано в вашем часовом поясе"
+  },
+  "form": {
+    "name": "Название задачи",
+    "namePlaceholder": "Например, Очистка старых сессий",
+    "nameRequired": "Название задачи обязательно",
+    "cronExpression": "Cron выражение",
+    "cronPlaceholder": "Например, 0 * * * * (каждый час)",
+    "cronHelp": "Формат: минута час день месяц день_недели. Используйте * для любого значения.",
+    "actionType": "Тип действия",
+    "actionTypes": {
+      "sql": "SQL запрос",
+      "api_call": "API вызов",
+      "webhook": "Вебхук"
+    },
+    "sqlQuery": "SQL запрос",
+    "sqlQueryPlaceholder": "DELETE FROM sessions WHERE expires_at < NOW()",
+    "apiUrl": "URL",
+    "apiUrlPlaceholder": "https://api.example.com/endpoint",
+    "apiMethod": "HTTP метод",
+    "apiHeaders": "Заголовки (JSON)",
+    "apiBody": "Тело запроса (JSON)",
+    "webhookUrl": "URL вебхука",
+    "webhookUrlPlaceholder": "https://hooks.example.com/trigger",
+    "webhookPayload": "Данные (JSON)"
+  },
+  "table": {
+    "name": "Название",
+    "expression": "Cron выражение",
+    "nextRun": "Следующий запуск",
+    "lastStatus": "Последний статус",
+    "active": "Активна",
+    "runCount": "Запуски"
+  },
+  "actionTypeDesc": {
+    "sql": "Выполнить SQL запрос в базе проекта по расписанию. Очистка данных, агрегаты, отчёты, любая обработка.",
+    "api_call": "Отправить HTTP запрос на любой адрес. Получить данные из внешнего API, запустить задачу, синхронизировать.",
+    "webhook": "Отправить POST запрос с данными. Уведомления в Telegram, Discord, Slack или другой webhook-сервис."
+  },
+  "urlSource": {
+    "local": "Из проекта",
+    "external": "Внешний URL",
+    "selectEndpoint": "Выберите API эндпоинт...",
+    "selectWebhook": "Выберите вебхук...",
+    "noEndpoints": "Нет активных эндпоинтов. Сначала создайте в разделе API.",
+    "noWebhooks": "Нет вебхуков. Сначала создайте в разделе Вебхуки."
+  },
+  "actions": {
+    "runNow": "Запустить сейчас",
+    "createAndTest": "Создать и тест",
+    "viewRuns": "История запусков",
+    "toggle": "Переключить"
+  },
+  "runs": {
+    "title": "История запусков",
+    "time": "Время",
+    "status": "Статус",
+    "duration": "Длительность",
+    "error": "Ошибка",
+    "noRuns": "Нет запусков"
+  },
+  "deleteConfirm": {
+    "title": "Удалить Cron задачу",
+    "desc": "Это остановит и безвозвратно удалит задачу. Действие нельзя отменить."
+  }
+}

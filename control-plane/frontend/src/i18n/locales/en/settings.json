@@ -1,0 +1,301 @@
+{
+  "users": {
+    "title": "Project Users",
+    "roleUpdated": "Role updated",
+    "never": "Never",
+    "inviteUser": "Invite User",
+    "invited": "User invited to project",
+    "removed": "User removed from project",
+    "searchUser": "Search User",
+    "searchPlaceholder": "Search by name or email...",
+    "inviteBtn": "Invite",
+    "removeConfirm": {
+      "title": "Remove User",
+      "desc": "Are you sure you want to remove \"{{name}}\" from this project?"
+    },
+    "headers": {
+      "user": "User",
+      "email": "Email",
+      "role": "Role",
+      "lastActive": "Last Active"
+    },
+    "roles": {
+      "admin": "Admin",
+      "editor": "Editor",
+      "viewer": "Viewer"
+    }
+  },
+  "invites": {
+    "title": "Invite Keys",
+    "createKey": "Create Key",
+    "noKeys": "No invite keys",
+    "noKeysDesc": "Create an invite key to let others join this project",
+    "created": "Invite key created",
+    "keyCopied": "Key copied to clipboard",
+    "copiedSuccess": "Copied to clipboard",
+    "createBtn": "Create Key",
+    "headers": {
+      "key": "Key",
+      "role": "Role",
+      "uses": "Uses",
+      "status": "Status",
+      "created": "Created"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "expired": "Expired",
+      "depleted": "Depleted"
+    },
+    "createDialog": {
+      "title": "Create Invite Key",
+      "role": "Role",
+      "maxUses": "Max Uses (0 = unlimited)",
+      "creating": "Creating...",
+      "createBtn": "Create Key"
+    }
+  },
+  "tokens": {
+    "title": "API Tokens",
+    "createToken": "Create Token",
+    "noTokens": "No API tokens",
+    "noTokensDesc": "Create a token to authenticate API requests",
+    "revoked": "Token revoked",
+    "copied": "Token copied to clipboard",
+    "revoke": "Revoke",
+    "done": "Done",
+    "headers": {
+      "name": "Name",
+      "prefix": "Prefix",
+      "scopes": "Scopes",
+      "lastUsed": "Last Used",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Active",
+      "revoked": "Revoked",
+      "never": "Never"
+    },
+    "createDialog": {
+      "title": "Create API Token",
+      "name": "Name",
+      "namePlaceholder": "My API Token",
+      "scopes": "Scopes",
+      "creating": "Creating...",
+      "createBtn": "Create Token"
+    },
+    "revealDialog": {
+      "title": "Token Created",
+      "desc": "Copy this token now. You won't be able to see it again."
+    }
+  },
+  "security": {
+    "title": "Security",
+    "cancel": "Cancel",
+    "saved": "Security settings saved",
+    "twofa": {
+      "title": "Two-Factor Authentication",
+      "enable": "Enable 2FA",
+      "disable": "Disable 2FA",
+      "enabled": "2FA is enabled",
+      "disabled": "2FA is not enabled",
+      "scanQr": "Scan this QR code with your authenticator app",
+      "enterCode": "Enter the 6-digit code",
+      "backupCodes": "Backup Codes",
+      "backupDesc": "Save these codes. Each can be used once.",
+      "confirmPassword": "Confirm your password"
+    },
+    "ip": {
+      "title": "IP Access Control",
+      "mode": "Mode",
+      "disabled": "Disabled",
+      "whitelist": "Whitelist Only",
+      "blacklist": "Blacklist",
+      "ipList": "IP Addresses",
+      "ipListHint": "One IP per line",
+      "applyTo": "Apply to",
+      "ui": "Admin UI",
+      "api": "External API"
+    },
+    "geo": {
+      "title": "Geo Blocking",
+      "mode": "Mode",
+      "disabled": "Disabled",
+      "allow": "Allow Only",
+      "block": "Block",
+      "countries": "Country Codes",
+      "countriesHint": "ISO country codes, one per line (US, DE, RU...)"
+    },
+    "rls": {
+      "title": "Row-Level Security",
+      "noRules": "No RLS rules configured",
+      "noRulesDesc": "Add rules to restrict data access at the row level",
+      "addRule": "Add Rule",
+      "deleteRule": "Delete",
+      "table": "Table",
+      "column": "Column",
+      "operator": "Operator",
+      "valueSource": "Value Source",
+      "valueStatic": "Static Value",
+      "selectTable": "Select table",
+      "selectColumn": "Select column",
+      "operators": {
+        "eq": "Equals",
+        "neq": "Not Equals",
+        "gt": "Greater Than",
+        "lt": "Less Than",
+        "gte": "Greater or Equal",
+        "lte": "Less or Equal",
+        "in": "In List",
+        "contains": "Contains"
+      },
+      "sources": {
+        "static": "Static Value",
+        "current_user_id": "Current User ID",
+        "current_user_role": "Current User Role",
+        "header": "Request Header",
+        "context": "Context"
+      },
+      "created": "RLS rule created",
+      "deleted": "RLS rule deleted"
+    }
+  },
+  "backups": {
+    "title": "Backups",
+    "createBackup": "Create Backup",
+    "noBackups": "No backups yet",
+    "noBackupsDesc": "Create your first backup to protect your data",
+    "creating": "Backup started",
+    "schedule": "Schedule",
+    "cronExpression": "Cron Expression",
+    "maxBackups": "Max Backups",
+    "active": "Active",
+    "scheduleSaved": "Schedule saved",
+    "headers": {
+      "date": "Date",
+      "type": "Type",
+      "status": "Status",
+      "size": "Size"
+    },
+    "types": {
+      "manual": "Manual",
+      "scheduled": "Scheduled"
+    },
+    "status": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "deleteConfirm": {
+      "title": "Delete Backup",
+      "desc": "Are you sure you want to delete this backup? This action cannot be undone."
+    },
+    "quotaUsage": "Backup Quota",
+    "used": "used",
+    "quotaReached": "Backup quota reached. Delete old backups or increase your limit.",
+    "maxScheduleHint": "Maximum allowed by quota: {{max}}",
+    "restoreSuccess": "Backup restored successfully"
+  },
+  "secrets": {
+    "title": "Secrets Vault",
+    "addSecret": "Add Secret",
+    "noSecrets": "No secrets configured",
+    "key": "Key",
+    "value": "Value",
+    "description": "Description",
+    "valuePlaceholder": "Enter secret value",
+    "descriptionPlaceholder": "What is this secret used for?",
+    "reveal": "Reveal",
+    "hide": "Hide",
+    "created": "Secret created",
+    "deleted": "Secret deleted",
+    "info": "Use {{SECRET.KEY_NAME}} in webhooks, SQL, and flows to reference secrets securely."
+  },
+  "projectSettings": {
+    "title": "Project Settings",
+    "general": "General",
+    "name": "Project Name",
+    "slug": "Slug",
+    "description": "Description",
+    "save": "Save Changes",
+    "saving": "Saving...",
+    "saved": "Settings saved",
+    "dangerZone": "Danger Zone",
+    "deleteProject": "Delete Project",
+    "deleteDesc": "Permanently delete this project and all its data. Type the project slug to confirm.",
+    "deleteConfirm": "Delete Project",
+    "typeSlug": "Type \"{{slug}}\" to confirm",
+    "graphql": {
+      "title": "GraphQL API",
+      "enable": "Enable GraphQL",
+      "enableDesc": "Expose a GraphQL endpoint for this project. Auto-generates schema from all tables.",
+      "url": "Endpoint URL",
+      "auth": "Authentication",
+      "authPublic": "Public (no auth)",
+      "authToken": "API Token",
+      "authSession": "Session"
+    },
+    "websocket": {
+      "title": "WebSocket API",
+      "enable": "Enable WebSocket",
+      "enableDesc": "Real-time WebSocket connections for live data updates. Clients subscribe to table channels and receive INSERT/UPDATE/DELETE events.",
+      "url": "WebSocket URL",
+      "copied": "WebSocket URL copied",
+      "auth": "Authentication",
+      "authPublic": "Public (no auth)",
+      "authToken": "API Token",
+      "authSession": "Session",
+      "maxConnections": "Max Connections"
+    },
+    "cache": {
+      "title": "Cache Management",
+      "description": "Cache is automatically invalidated when data changes. You can also manually clear all caches.",
+      "clearAll": "Clear All Cache",
+      "cleared": "All caches cleared"
+    }
+  },
+  "myNodes": {
+    "title": "My Nodes",
+    "description": "Deploy and manage your own worker nodes for increased resources and self-hosted workloads.",
+    "addNode": "Add My Node",
+    "empty": "No personal nodes",
+    "emptyDesc": "Deploy your own worker node to run projects on your infrastructure.",
+    "deleted": "Node deleted",
+    "notConnected": "Not connected yet",
+    "region": "Region",
+    "projects": "Projects",
+    "version": "Version",
+    "disk": "Disk",
+    "updateMode": "Update Mode",
+    "deleteTitle": "Delete Node",
+    "deleteDesc": "Are you sure you want to delete \"{{name}}\"? All projects on this node will need to be migrated.",
+    "deleteConfirm": "Delete",
+    "wizard": {
+      "title": "Add My Node",
+      "step1": "Configure",
+      "step2": "Install",
+      "step3": "Connected",
+      "name": "Node Name",
+      "namePlaceholder": "My Home Server",
+      "region": "Region",
+      "updateMode": "Update Mode",
+      "updateAuto": "Auto (recommended)",
+      "updateManual": "Manual",
+      "cancel": "Cancel",
+      "next": "Next",
+      "creating": "Creating...",
+      "installDesc": "Run this command on your server to install the DataForge worker node. The command includes your setup token which expires in 1 hour.",
+      "waiting": "Waiting for connection...",
+      "connected": "Connected!",
+      "connectedDesc": "Your node is online and ready to host projects.",
+      "done": "Done"
+    },
+    "setupCommand": "Setup Command",
+    "regenerateToken": "Get Setup Command",
+    "regenerating": "Generating...",
+    "tokenReady": "Run this command on your server. Token expires in 1 hour.",
+    "pendingSetup": "Waiting for setup",
+    "pendingSetupDesc": "This node was created but hasn't been connected yet. Get the install command to set it up."
+  }
+}

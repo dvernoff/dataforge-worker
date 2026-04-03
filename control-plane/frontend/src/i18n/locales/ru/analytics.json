@@ -1,0 +1,30 @@
+{
+  "title": "Аналитика",
+  "totalRequests": "Всего запросов",
+  "avgResponseTime": "Среднее время ответа",
+  "errorRate": "Процент ошибок",
+  "uniqueIps": "Уникальных IP",
+  "ms": "{{value}}мс",
+  "percent": "{{value}}%",
+  "requestVolume": "Объём запросов (7 дней)",
+  "topEndpoints": "Топ эндпоинтов",
+  "slowQueries": "Медленные запросы",
+  "requestLog": "Журнал запросов",
+  "noData": "Нет данных аналитики",
+  "noDataDesc": "Данные аналитики появятся после выполнения API-запросов",
+  "headers": {
+    "method": "Метод",
+    "path": "Путь",
+    "statusCode": "Статус",
+    "responseTime": "Время ответа",
+    "ip": "IP адрес",
+    "time": "Время",
+    "requests": "Запросы",
+    "avgTime": "Ср. время"
+  },
+  "filters": {
+    "dateRange": "Период",
+    "status": "Код статуса",
+    "method": "Метод"
+  }
+}

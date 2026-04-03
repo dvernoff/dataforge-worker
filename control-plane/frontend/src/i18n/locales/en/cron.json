@@ -1,0 +1,99 @@
+{
+  "pageTitle": "Cron Jobs",
+  "createJob": "Create Cron Job",
+  "createHint": "The job will be created as inactive. You can configure schedule, query, and other settings on the next page.",
+  "editJob": "Edit Cron Job",
+  "noJobs": "No cron jobs yet",
+  "noJobsDesc": "Schedule recurring tasks like SQL queries, API calls, or webhooks.",
+  "jobCreated": "Cron job created",
+  "jobUpdated": "Cron job updated",
+  "jobDeleted": "Cron job deleted",
+  "jobTriggered": "Job triggered manually",
+  "creating": "Creating...",
+  "builder": {
+    "presets": "Quick presets",
+    "everyMinute": "Every minute",
+    "every5min": "Every 5 min",
+    "every15min": "Every 15 min",
+    "everyHour": "Every hour",
+    "everyDayMidnight": "Every day 00:00",
+    "everyDayNoon": "Every day 12:00",
+    "everyMonday": "Every Monday",
+    "everyMonth": "Every month",
+    "minute": "Min",
+    "hour": "Hour",
+    "dayMonth": "Day",
+    "month": "Month",
+    "dayWeek": "Weekday",
+    "hintMinute": "0-59",
+    "hintHour": "0-23",
+    "hintDayMonth": "1-31",
+    "hintMonth": "1-12",
+    "hintDayWeek": "0-6",
+    "nextExecutions": "Next 3 runs (your time)",
+    "yourTimezone": "Times shown in your timezone"
+  },
+  "form": {
+    "name": "Job Name",
+    "namePlaceholder": "e.g. Cleanup old sessions",
+    "nameRequired": "Job name is required",
+    "cronExpression": "Cron Expression",
+    "cronPlaceholder": "e.g. 0 * * * * (every hour)",
+    "cronHelp": "Format: minute hour day month weekday. Use * for any.",
+    "actionType": "Action Type",
+    "actionTypes": {
+      "sql": "SQL Query",
+      "api_call": "API Call",
+      "webhook": "Webhook"
+    },
+    "sqlQuery": "SQL Query",
+    "sqlQueryPlaceholder": "DELETE FROM sessions WHERE expires_at < NOW()",
+    "apiUrl": "URL",
+    "apiUrlPlaceholder": "https://api.example.com/endpoint",
+    "apiMethod": "HTTP Method",
+    "apiHeaders": "Headers (JSON)",
+    "apiBody": "Body (JSON)",
+    "webhookUrl": "Webhook URL",
+    "webhookUrlPlaceholder": "https://hooks.example.com/trigger",
+    "webhookPayload": "Payload (JSON)"
+  },
+  "table": {
+    "name": "Name",
+    "expression": "Cron Expression",
+    "nextRun": "Next Run",
+    "lastStatus": "Last Status",
+    "active": "Active",
+    "runCount": "Runs"
+  },
+  "actionTypeDesc": {
+    "sql": "Execute a SQL query in the project database on schedule. Use for cleanup, aggregations, reports, or any data processing.",
+    "api_call": "Send an HTTP request to any URL. Fetch data from external APIs, trigger tasks on other services, or sync data.",
+    "webhook": "Send a POST request with a payload. Notifications to Telegram, Discord, Slack, or any webhook-compatible service."
+  },
+  "urlSource": {
+    "local": "From project",
+    "external": "External URL",
+    "selectEndpoint": "Select an API endpoint...",
+    "selectWebhook": "Select a webhook...",
+    "noEndpoints": "No active endpoints in this project. Create one in API Endpoints first.",
+    "noWebhooks": "No webhooks in this project. Create one in Webhooks first."
+  },
+  "actions": {
+    "runNow": "Run Now",
+    "createAndTest": "Create & Test",
+    "viewRuns": "View Runs",
+    "toggle": "Toggle Active"
+  },
+  "runs": {
+    "title": "Run History",
+    "time": "Time",
+    "status": "Status",
+    "duration": "Duration",
+    "error": "Error",
+    "noRuns": "No runs yet"
+  },
+  "deleteConfirm": {
+    "title": "Delete Cron Job",
+    "desc": "This will stop and permanently delete this cron job. This action cannot be undone."
+  }
+}

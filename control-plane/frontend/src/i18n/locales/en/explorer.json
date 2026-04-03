@@ -1,0 +1,29 @@
+{
+  "title": "Query Builder",
+  "selectTable": "Select Table",
+  "selectTablePlaceholder": "Choose a table...",
+  "rows": "Group By (Rows)",
+  "columns": "Pivot Column",
+  "values": "Value Column",
+  "aggregation": "Aggregation",
+  "run": "Run Query",
+  "running": "Running...",
+  "results": "Results",
+  "noResults": "No results",
+  "noResultsDesc": "Configure your query and click Run",
+  "noTables": "No tables found",
+  "noTablesDesc": "Create tables in your project first",
+  "tableView": "Table",
+  "chartView": "Chart",
+  "rowCount": "{{count}} rows",
+  "dragColumns": "Select columns to group by",
+  "selectValue": "Select value column",
+  "selectAggregation": "Select aggregation",
+  "aggregations": {
+    "count": "Count",
+    "sum": "Sum",
+    "avg": "Average",
+    "min": "Minimum",
+    "max": "Maximum"
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "pageTitle": "SQL Console",
+  "explorer": {
+    "tables": "Tables"
+  },
+  "toolbar": {
+    "run": "Run",
+    "running": "Running...",
+    "explain": "EXPLAIN",
+    "ctrlEnterHint": "Ctrl+Enter to run",
+    "placeholder": "SELECT * FROM ..."
+  },
+  "tabs": {
+    "results": "Results",
+    "messages": "Messages",
+    "explain": "EXPLAIN"
+  },
+  "results": {
+    "rows": "{{count}} rows",
+    "empty": "Run a query to see results"
+  },
+  "messages": {
+    "empty": "No messages"
+  },
+  "explain": {
+    "empty": "Run EXPLAIN to see query plan"
+  },
+  "queryBuilder": {
+    "title": "Query Builder",
+    "selectTable": "Select Table",
+    "queryType": "Query Type",
+    "columns": "Columns (click to select)",
+    "joins": "Joins",
+    "joinTable": "Join table",
+    "leftColumn": "Left column",
+    "rightColumn": "Right column",
+    "noJoins": "No joins added",
+    "filters": "Filters (WHERE)",
+    "column": "Column",
+    "value": "Value",
+    "noFilters": "No filters added",
+    "groupOrder": "Group & Order",
+    "groupByLabel": "GROUP BY",
+    "orderByLabel": "ORDER BY",
+    "direction": "Direction",
+    "limit": "Limit",
+    "sqlPreview": "SQL Preview",
+    "saveQuery": "Save Query",
+    "createEndpoint": "Create Endpoint",
+    "saved": "Query saved",
+    "endpointCreated": "Endpoint created",
+    "addPairs": "Add column-value pairs",
+    "columnValues": "Column Values",
+    "setValues": "SET Values",
+    "types": {
+      "select": "SELECT",
+      "insert": "INSERT",
+      "update": "UPDATE",
+      "delete": "DELETE"
+    },
+    "createEndpointDialog": {
+      "title": "Create Endpoint",
+      "description": "Create an API endpoint from this query.",
+      "name": "Endpoint Name",
+      "namePlaceholder": "My Endpoint",
+      "method": "HTTP Method",
+      "path": "Path",
+      "query": "SQL Query"
+    }
+  },
+  "naturalLanguage": {
+    "title": "Natural Language Query",
+    "button": "Natural Language",
+    "placeholder": "Ask a question about your data...\n\nExample: Show me the top 10 users by number of orders",
+    "hint": "Press Ctrl+Enter to submit. Only read-only (SELECT) queries will be generated.",
+    "generate": "Generate & Run",
+    "generating": "Generating...",
+    "success": "Query generated and executed"
+  },
+  "ai": {
+    "title": "AI Assistant",
+    "generate": "Generate",
+    "explain": "Explain",
+    "optimize": "Optimize",
+    "fixError": "Fix Error",
+    "prompt": "Describe what you want...",
+    "generating": "Generating...",
+    "explaining": "Explaining...",
+    "optimizing": "Optimizing...",
+    "fixing": "Fixing...",
+    "useQuery": "Use",
+    "result": "Result",
+    "noResult": "Use the AI assistant to generate, explain, or optimize SQL queries.",
+    "errorPlaceholder": "Paste the error message...",
+    "tokensEstimate": "tokens",
+    "today": "today"
+  }
+}

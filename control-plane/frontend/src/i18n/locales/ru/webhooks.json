@@ -1,0 +1,37 @@
+{
+  "pageTitle": "Вебхуки",
+  "createWebhook": "Создать вебхук",
+  "noWebhooks": "Нет вебхуков",
+  "noWebhooksDesc": "Создайте вебхук для уведомлений об изменениях данных",
+  "webhookCreated": "Вебхук создан",
+  "webhookDeleted": "Вебхук удалён",
+  "creating": "Создание...",
+  "form": {
+    "name": "Название",
+    "namePlaceholder": "Мой вебхук",
+    "table": "Таблица",
+    "selectTable": "Выберите таблицу",
+    "events": "События",
+    "url": "URL",
+    "urlPlaceholder": "https://...",
+    "secret": "Секрет (необязательно)",
+    "secretPlaceholder": "HMAC секрет"
+  },
+  "stats": {
+    "successRate": "Успешность: {{rate}}% ({{success}}/{{total}})",
+    "lastTriggered": "Последний: {{date}}"
+  },
+  "viewLogs": "Просмотреть логи",
+  "logs": {
+    "title": "Логи вебхука",
+    "time": "Время",
+    "event": "Событие",
+    "status": "Статус",
+    "duration": "Длительность",
+    "noLogs": "Логов пока нет"
+  },
+  "deleteConfirm": {
+    "title": "Удалить вебхук",
+    "desc": "Вебхук перестанет получать события. Логи будут удалены."
+  }
+}

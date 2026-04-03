@@ -1,0 +1,30 @@
+{
+  "title": "Analytics",
+  "totalRequests": "Total Requests",
+  "avgResponseTime": "Avg Response Time",
+  "errorRate": "Error Rate",
+  "uniqueIps": "Unique IPs",
+  "ms": "{{value}}ms",
+  "percent": "{{value}}%",
+  "requestVolume": "Request Volume (Last 7 Days)",
+  "topEndpoints": "Top Endpoints",
+  "slowQueries": "Slowest Requests",
+  "requestLog": "Request Log",
+  "noData": "No analytics data yet",
+  "noDataDesc": "Analytics data will appear once API requests are made",
+  "headers": {
+    "method": "Method",
+    "path": "Path",
+    "statusCode": "Status",
+    "responseTime": "Response Time",
+    "ip": "IP Address",
+    "time": "Time",
+    "requests": "Requests",
+    "avgTime": "Avg Time"
+  },
+  "filters": {
+    "dateRange": "Date Range",
+    "status": "Status Code",
+    "method": "Method"
+  }
+}

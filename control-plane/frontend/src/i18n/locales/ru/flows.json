@@ -1,0 +1,89 @@
+{
+  "pageTitle": "Потоки",
+  "createFlow": "Создать поток",
+  "editFlow": "Редактировать поток",
+  "noFlows": "Нет потоков",
+  "noFlowsDesc": "Создавайте автоматизированные процессы с триггерами, условиями и действиями.",
+  "flowCreated": "Поток создан",
+  "flowUpdated": "Поток обновлён",
+  "flowDeleted": "Поток удалён",
+  "flowTriggered": "Поток запущен вручную",
+  "creating": "Создание...",
+  "form": {
+    "name": "Название потока",
+    "namePlaceholder": "Например, Онбординг нового пользователя",
+    "description": "Описание",
+    "descriptionPlaceholder": "Что делает этот поток?",
+    "triggerType": "Тип триггера",
+    "triggerTypes": {
+      "manual": "Ручной",
+      "data_change": "Изменение данных",
+      "webhook": "Вебхук",
+      "cron": "Cron расписание",
+      "api_call": "API вызов"
+    }
+  },
+  "nodes": {
+    "title": "Шаги",
+    "addStep": "Добавить шаг",
+    "removeStep": "Удалить шаг",
+    "types": {
+      "action_sql": "SQL запрос",
+      "action_http": "HTTP запрос",
+      "action_webhook": "Вебхук",
+      "action_transform": "Трансформация",
+      "condition": "Условие"
+    },
+    "config": {
+      "query": "SQL запрос",
+      "queryPlaceholder": "SELECT * FROM users WHERE ...",
+      "url": "URL",
+      "urlPlaceholder": "https://api.example.com/endpoint",
+      "method": "HTTP метод",
+      "headers": "Заголовки (JSON)",
+      "body": "Тело (JSON)",
+      "webhookUrl": "URL вебхука",
+      "payload": "Данные (JSON)",
+      "operation": "Операция",
+      "operations": {
+        "passthrough": "Без изменений",
+        "pick_fields": "Выбрать поля",
+        "set_variable": "Установить переменную"
+      },
+      "fields": "Поля (через запятую)",
+      "variable": "Имя переменной",
+      "field": "Поле для проверки",
+      "operator": "Оператор",
+      "operators": {
+        "eq": "Равно",
+        "neq": "Не равно",
+        "gt": "Больше",
+        "gte": "Больше или равно",
+        "lt": "Меньше",
+        "lte": "Меньше или равно",
+        "contains": "Содержит",
+        "exists": "Существует",
+        "empty": "Пусто"
+      },
+      "value": "Значение"
+    }
+  },
+  "runs": {
+    "title": "История запусков",
+    "time": "Время",
+    "status": "Статус",
+    "duration": "Длительность",
+    "error": "Ошибка",
+    "noRuns": "Нет запусков"
+  },
+  "deleteConfirm": {
+    "title": "Удалить поток",
+    "desc": "Это безвозвратно удалит поток и всю историю запусков. Действие нельзя отменить."
+  },
+  "card": {
+    "trigger": "Триггер",
+    "runs": "запусков",
+    "steps": "шагов",
+    "lastRun": "Последний запуск"
+  }
+}

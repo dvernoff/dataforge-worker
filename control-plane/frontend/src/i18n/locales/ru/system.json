@@ -1,0 +1,347 @@
+{
+  "projects": {
+    "title": "Все проекты (система)",
+    "deleted": "Проект удалён",
+    "headers": {
+      "name": "Название",
+      "slug": "Slug",
+      "owner": "Владелец",
+      "members": "Участников",
+      "created": "Создан"
+    },
+    "deleteConfirm": {
+      "title": "Удалить проект",
+      "desc": "Безвозвратно удалить \"{{name}}\"? Схема базы данных и все данные будут удалены.",
+      "confirm": "Удалить проект"
+    },
+    "you": "ВЫ"
+  },
+  "users": {
+    "title": "Все пользователи (система)",
+    "createUser": "Создать пользователя",
+    "created": "Пользователь создан",
+    "actionCompleted": "Действие выполнено",
+    "actions": "Действия",
+    "promote": "Назначить суперадмином",
+    "demote": "Снять права суперадмина",
+    "deactivate": "Деактивировать",
+    "block": "Заблокировать",
+    "unblock": "Разблокировать",
+    "deleteUser": "Удалить пользователя",
+    "roleSuperadmin": "СУПЕРАДМИН",
+    "roleUser": "Пользователь",
+    "headers": {
+      "user": "Пользователь",
+      "email": "Email",
+      "role": "Роль",
+      "invitedBy": "Приглашён",
+      "projects": "Проекты",
+      "lastLogin": "Последний вход",
+      "status": "Статус",
+      "blockedAt": "Заблокирован"
+    },
+    "status": {
+      "active": "Активен",
+      "inactive": "Неактивен",
+      "blocked": "Заблокирован",
+      "never": "Никогда"
+    },
+    "confirmActions": {
+      "promote": "Назначить суперадмином",
+      "demote": "Снять права суперадмина",
+      "deactivate": "Деактивировать пользователя",
+      "block": "Заблокировать пользователя",
+      "unblock": "Разблокировать пользователя",
+      "delete": "Удалить пользователя",
+      "desc": "Вы уверены, что хотите {{action}} \"{{name}}\"?",
+      "deactivateConfirm": "Деактивировать",
+      "confirm": "Подтвердить"
+    },
+    "createDialog": {
+      "title": "Создать пользователя",
+      "name": "Имя",
+      "email": "Email",
+      "password": "Пароль",
+      "creating": "Создание...",
+      "createBtn": "Создать пользователя"
+    },
+    "detail": {
+      "backToUsers": "Назад к пользователям",
+      "roleAssignment": "Назначение роли",
+      "assignRole": "Назначить роль",
+      "noRole": "Без роли",
+      "roleAssigned": "Роль назначена",
+      "quotaOverview": "Обзор квот",
+      "quotaSource": {
+        "override": "Источник: Переопределение пользователя",
+        "role": "Источник: Роль \"{{name}}\"",
+        "default": "Источник: Системные настройки"
+      },
+      "overrideQuotas": "Переопределить квоты",
+      "resetToRole": "Сбросить к квотам роли",
+      "quotaOverrideSaved": "Квоты переопределены",
+      "quotaReset": "Квоты сброшены к квотам роли",
+      "blockSecurity": "Блокировка / Безопасность",
+      "blockReason": "Причина блокировки",
+      "blockReasonPlaceholder": "Причина блокировки пользователя...",
+      "userProjects": "Проекты пользователя",
+      "noProjects": "У пользователя нет проектов.",
+      "projectName": "Проект",
+      "projectRole": "Роль",
+      "joinedAt": "Присоединился",
+      "adminActions": "Действия администратора",
+      "memberSince": "Участник с",
+      "lastLogin": "Последний вход",
+      "resetPassword": "Сбросить пароль",
+      "resetPasswordConfirm": "Сгенерировать случайный пароль для этого пользователя?",
+      "newPassword": "Новый пароль",
+      "passwordCopied": "Пароль скопирован"
+    }
+  },
+  "health": {
+    "title": "Состояние системы",
+    "autoRefresh": "Автообновление 30с",
+    "cpStatus": "Панель управления",
+    "workerCount": "Рабочие ноды",
+    "totalProjects": "Всего проектов",
+    "healthy": "Исправна",
+    "degraded": "Деградация",
+    "unreachable": "Недоступен",
+    "controlPlane": "Панель управления",
+    "uptime": "Время работы",
+    "hostname": "Хост",
+    "ramUsage": "Использование RAM",
+    "heapUsed": "Heap использ.",
+    "rss": "RSS память",
+    "cpu": "ЦПУ",
+    "ram": "RAM",
+    "disk": "Диск",
+    "diskFree": "{{free}} ГБ свободно из {{total}} ГБ",
+    "dbConnection": "База данных",
+    "dbStatus": "Статус базы данных",
+    "redisStatus": "Статус Redis",
+    "connected": "Подключён",
+    "disconnected": "Отключён",
+    "latency": "Задержка",
+    "workerDbStatus": "Статус БД воркеров",
+    "workerRedisStatus": "Статус Redis воркеров",
+    "nodeVersion": "Версия Node.js",
+    "platform": "Платформа",
+    "tabs": {
+      "overview": "Обзор",
+      "postgresql": "PostgreSQL",
+      "redis": "Redis",
+      "nodejs": "Node.js"
+    }
+  },
+  "errors": {
+    "title": "Отслеживание ошибок",
+    "empty": "Ошибок не обнаружено",
+    "emptyDesc": "Ошибки ещё не зафиксированы",
+    "filters": {
+      "source": "Источник",
+      "severity": "Серьёзность",
+      "status": "Статус",
+      "allSources": "Все источники",
+      "allSeverities": "Все уровни",
+      "allStatuses": "Все статусы"
+    },
+    "headers": {
+      "time": "Время",
+      "source": "Источник",
+      "severity": "Серьёзность",
+      "title": "Заголовок",
+      "status": "Статус"
+    },
+    "status": {
+      "open": "Открыта",
+      "acknowledged": "Подтверждена",
+      "resolved": "Решена"
+    },
+    "severity": {
+      "error": "Ошибка",
+      "warning": "Предупреждение",
+      "critical": "Критическая"
+    },
+    "source": {
+      "api": "API",
+      "webhook": "Вебхук",
+      "cron": "Cron",
+      "node": "Нода",
+      "system": "Система"
+    },
+    "detail": {
+      "title": "Детали ошибки",
+      "message": "Сообщение",
+      "stackTrace": "Стек вызовов",
+      "metadata": "Метаданные",
+      "acknowledge": "Подтвердить",
+      "resolve": "Решить",
+      "acknowledgedBy": "Подтверждена",
+      "resolvedAt": "Решена в"
+    }
+  },
+  "globalSettings": {
+    "title": "Глобальные настройки",
+    "general": "Основное",
+    "instanceName": "Название инстанса",
+    "instanceUrl": "URL инстанса",
+    "authDefaults": "Настройки авторизации",
+    "sessionTtl": "Время жизни сессии (мин)",
+    "minPasswordLength": "Мин. длина пароля",
+    "rateLimiting": "Лимиты запросов",
+    "defaultRateLimit": "Лимит по умолчанию",
+    "window": "Окно",
+    "maintenance": "Режим обслуживания",
+    "maintenanceDesc": "Отключить доступ для всех пользователей, кроме суперадминов",
+    "save": "Сохранить настройки",
+    "saved": "Настройки сохранены",
+    "1sec": "1 секунда",
+    "10sec": "10 секунд",
+    "1min": "1 минута",
+    "5min": "5 минут",
+    "1hour": "1 час",
+    "quotas": {
+      "title": "Квоты по умолчанию",
+      "maxProjects": "Макс. проектов",
+      "maxTables": "Макс. таблиц",
+      "maxRecords": "Макс. записей",
+      "maxApiRequests": "Макс. API-запросов (в день)",
+      "maxStorageMb": "Макс. хранилище (МБ)",
+      "maxEndpoints": "Макс. эндпоинтов",
+      "maxWebhooks": "Макс. вебхуков",
+      "maxFiles": "Макс. файлов",
+      "maxBackups": "Макс. бэкапов",
+      "maxCron": "Макс. cron-задач",
+      "maxAiRequestsPerDay": "Макс. AI запросов / день",
+      "maxAiTokensPerDay": "Макс. AI токенов / день",
+      "maxQueryTimeoutMs": "Таймаут запроса (мс)",
+      "maxConcurrentRequests": "Макс. одновр. запросов",
+      "maxRowsPerQuery": "Макс. строк в запросе",
+      "maxExportRows": "Макс. строк экспорта",
+      "saved": "Квоты сохранены"
+    },
+    "alerts": {
+      "title": "Оповещения",
+      "failedLoginThreshold": "Порог оповещения о неудачных входах",
+      "alertEmail": "Email для оповещений",
+      "enableAlerts": "Включить оповещения о неудачных входах"
+    },
+    "dataRetention": {
+      "title": "Хранение данных",
+      "auditRetention": "Дней хранения журнала аудита",
+      "requestRetention": "Дней хранения журнала запросов",
+      "timeTravelDays": "История Time Travel (дней)",
+      "timeTravelDaysDesc": "Сколько дней хранить историю изменений для снимков Time Travel"
+    },
+    "backup": {
+      "title": "Бэкап системы",
+      "description": "Экспортируйте все метаданные системы в JSON или импортируйте из предыдущего экспорта.",
+      "exportButton": "Экспорт системы",
+      "importButton": "Импорт системы",
+      "exported": "Система успешно экспортирована",
+      "imported": "Система успешно импортирована"
+    },
+    "security": {
+      "security": "Безопасность",
+      "maxBodySize": "Макс. размер тела запроса (МБ)",
+      "rateLimitMax": "Макс. количество запросов",
+      "rateLimitWindow": "Окно ограничения запросов",
+      "bruteForceMax": "Макс. попыток перебора",
+      "bruteForceLockout": "Время блокировки перебора (мин)",
+      "corsOrigin": "CORS источник"
+    },
+    "ai": {
+      "title": "Настройки ИИ",
+      "enableAi": "Включить функции ИИ",
+      "enableAiDesc": "Когда ИИ отключён, все функции ИИ (SQL-ассистент, дизайнер схемы, анализатор данных) скрыты из интерфейса.",
+      "apiKey": "API Ключ",
+      "apiKeyPlaceholder": "sk-ant-...",
+      "apiKeyNote": "Для продакшена храните в хранилище секретов.",
+      "model": "Модель",
+      "modelPlaceholder": "Выберите модель ИИ",
+      "saved": "Настройки ИИ сохранены"
+    },
+    "aiBudget": {
+      "title": "Бюджет ИИ",
+      "description": "Установите дневные лимиты использования ИИ на пользователя. Индивидуальные лимиты можно задать в управлении пользователями.",
+      "maxRequestsPerDay": "Макс. AI запросов / день",
+      "maxTokensPerDay": "Макс. AI токенов / день",
+      "monthlyBudgetTitle": "Месячный бюджет ИИ",
+      "currentMonthSpent": "Потрачено в этом месяце",
+      "ofBudget": "от бюджета",
+      "totalRequests": "Всего запросов",
+      "totalTokens": "Всего токенов",
+      "monthlyBudgetUsd": "Месячный бюджет (USD)",
+      "alertThresholdPct": "Порог оповещения (%)",
+      "saved": "Настройки бюджета ИИ сохранены"
+    },
+    "instanceNamePlaceholder": "Мой инстанс DataForge",
+    "maintenanceToggle": "Включить режим обслуживания",
+    "registration": {
+      "title": "Регистрация",
+      "enableRegistration": "Включить регистрацию",
+      "enableRegistrationDesc": "Разрешить новым пользователям создавать аккаунты.",
+      "requireInvite": "Требовать ключ приглашения",
+      "requireInviteDesc": "Пользователи должны предоставить ключ приглашения для регистрации.",
+      "defaultRole": "Роль по умолчанию",
+      "maxUsers": "Макс. пользователей",
+      "maxUsersHint": "0 = без лимита",
+      "noRolesWarning": "Роли не настроены. Сначала создайте роль на странице Роли."
+    }
+  },
+  "roles": {
+    "title": "Роли",
+    "createRole": "Создать роль",
+    "editRole": "Редактировать роль",
+    "created": "Роль создана",
+    "updated": "Роль обновлена",
+    "deleted": "Роль удалена",
+    "noRoles": "Нет ролей",
+    "noRolesDesc": "Создайте роль для определения квот пользователей.",
+    "roleName": "Название роли",
+    "roleNamePlaceholder": "напр. Разработчик",
+    "description": "Описание",
+    "descriptionPlaceholder": "Для чего эта роль?",
+    "color": "Цвет",
+    "quotas": "Квоты",
+    "usersCount": "польз.",
+    "quotaGroups": {
+      "resources": "Ресурсы",
+      "apiAutomation": "API и автоматизация",
+      "backups": "Бэкапы",
+      "ai": "ИИ",
+      "performance": "Производительность"
+    },
+    "quotaFields": {
+      "max_projects": "Макс. проектов",
+      "max_tables": "Макс. таблиц",
+      "max_records": "Макс. записей",
+      "max_api_requests": "Макс. API запросов / день",
+      "max_storage_mb": "Макс. хранилище (МБ)",
+      "max_endpoints": "Макс. эндпоинтов",
+      "max_webhooks": "Макс. вебхуков",
+      "max_files": "Макс. файлов",
+      "max_backups": "Макс. бэкапов",
+      "max_cron": "Макс. крон задач",
+      "max_ai_requests_per_day": "Макс. AI запросов / день",
+      "max_ai_tokens_per_day": "Макс. AI токенов / день",
+      "max_query_timeout_ms": "Таймаут запроса (мс)",
+      "max_concurrent_requests": "Макс. одновр. запросов",
+      "max_rows_per_query": "Макс. строк в запросе",
+      "max_export_rows": "Макс. строк экспорта"
+    },
+    "headers": {
+      "name": "Название",
+      "users": "Пользователи",
+      "quotas": "Квоты",
+      "created": "Создана"
+    },
+    "deleteConfirm": {
+      "title": "Удалить роль",
+      "desc": "Вы уверены, что хотите удалить эту роль?"
+    },
+    "deleteWarningUsers": "Эта роль назначена {{count}} пользователю(ям). Они будут отвязаны. Вы уверены?",
+    "cannotDeleteDefault": "Нельзя удалить роль по умолчанию. Сначала измените роль по умолчанию в настройках."
+  }
+}

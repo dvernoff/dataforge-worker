@@ -1,0 +1,39 @@
+{
+  "pageTitle": "Audit Log",
+  "globalTitle": "System Audit Log",
+  "globalDesc": "All actions across the platform",
+  "projectDesc": "Actions within this project",
+  "allTypes": "All types",
+  "types": {
+    "auth": "Auth",
+    "project": "Project",
+    "node": "Node",
+    "table": "Table",
+    "data": "Data",
+    "api": "API",
+    "webhook": "Webhook",
+    "token": "Token",
+    "invite": "Invite",
+    "sql": "SQL",
+    "cache": "Cache"
+  },
+  "searchPlaceholder": "Search by user, action or details...",
+  "headers": {
+    "time": "Time",
+    "user": "User",
+    "action": "Action",
+    "resource": "Resource",
+    "details": "Details",
+    "ip": "IP Address"
+  },
+  "noLogs": "No audit logs found",
+  "noLogsDesc": "Actions will appear here once users start interacting with the system.",
+  "detail": {
+    "title": "Event Details",
+    "superadmin": "Superadmin",
+    "resourceId": "Resource ID"
+  },
+  "page": "Page {{page}} of {{total}}",
+  "previous": "Previous",
+  "next": "Next"
+}

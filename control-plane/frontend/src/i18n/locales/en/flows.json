@@ -1,0 +1,89 @@
+{
+  "pageTitle": "Flows",
+  "createFlow": "Create Flow",
+  "editFlow": "Edit Flow",
+  "noFlows": "No flows yet",
+  "noFlowsDesc": "Create automated workflows with triggers, conditions, and actions.",
+  "flowCreated": "Flow created",
+  "flowUpdated": "Flow updated",
+  "flowDeleted": "Flow deleted",
+  "flowTriggered": "Flow triggered manually",
+  "creating": "Creating...",
+  "form": {
+    "name": "Flow Name",
+    "namePlaceholder": "e.g. New user onboarding",
+    "description": "Description",
+    "descriptionPlaceholder": "What does this flow do?",
+    "triggerType": "Trigger Type",
+    "triggerTypes": {
+      "manual": "Manual",
+      "data_change": "Data Change",
+      "webhook": "Webhook",
+      "cron": "Cron Schedule",
+      "api_call": "API Call"
+    }
+  },
+  "nodes": {
+    "title": "Steps",
+    "addStep": "Add Step",
+    "removeStep": "Remove Step",
+    "types": {
+      "action_sql": "SQL Query",
+      "action_http": "HTTP Request",
+      "action_webhook": "Webhook",
+      "action_transform": "Transform",
+      "condition": "Condition"
+    },
+    "config": {
+      "query": "SQL Query",
+      "queryPlaceholder": "SELECT * FROM users WHERE ...",
+      "url": "URL",
+      "urlPlaceholder": "https://api.example.com/endpoint",
+      "method": "HTTP Method",
+      "headers": "Headers (JSON)",
+      "body": "Body (JSON)",
+      "webhookUrl": "Webhook URL",
+      "payload": "Payload (JSON)",
+      "operation": "Operation",
+      "operations": {
+        "passthrough": "Pass Through",
+        "pick_fields": "Pick Fields",
+        "set_variable": "Set Variable"
+      },
+      "fields": "Fields (comma-separated)",
+      "variable": "Variable Name",
+      "field": "Field to Check",
+      "operator": "Operator",
+      "operators": {
+        "eq": "Equals",
+        "neq": "Not Equals",
+        "gt": "Greater Than",
+        "gte": "Greater or Equal",
+        "lt": "Less Than",
+        "lte": "Less or Equal",
+        "contains": "Contains",
+        "exists": "Exists",
+        "empty": "Is Empty"
+      },
+      "value": "Value"
+    }
+  },
+  "runs": {
+    "title": "Run History",
+    "time": "Time",
+    "status": "Status",
+    "duration": "Duration",
+    "error": "Error",
+    "noRuns": "No runs yet"
+  },
+  "deleteConfirm": {
+    "title": "Delete Flow",
+    "desc": "This will permanently delete this flow and all its run history. This action cannot be undone."
+  },
+  "card": {
+    "trigger": "Trigger",
+    "runs": "runs",
+    "steps": "steps",
+    "lastRun": "Last run"
+  }
+}

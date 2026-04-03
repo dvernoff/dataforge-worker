@@ -1,0 +1,83 @@
+{
+  "pageTitle": "Worker ноды",
+  "addNode": "Добавить ноду",
+  "noNodes": "Нет worker нод",
+  "noNodesDesc": "Добавьте worker ноду для развёртывания проектов",
+  "nodeCreated": "Нода создана",
+  "nodeUpdated": "Нода обновлена",
+  "nodeDeleted": "Нода удалена",
+  "headers": {
+    "name": "Название",
+    "url": "URL",
+    "region": "Регион",
+    "status": "Статус",
+    "projects": "Проекты",
+    "cpu": "CPU",
+    "ram": "RAM",
+    "disk": "Диск",
+    "lastHeartbeat": "Последний heartbeat"
+  },
+  "status": {
+    "online": "Онлайн",
+    "offline": "Оффлайн",
+    "maintenance": "Обслуживание"
+  },
+  "createDialog": {
+    "title": "Добавить Worker ноду",
+    "name": "Название",
+    "namePlaceholder": "EU Worker 1",
+    "slug": "Slug",
+    "slugPlaceholder": "eu-1",
+    "url": "URL",
+    "urlPlaceholder": "https://eu.dataforge.io",
+    "region": "Регион",
+    "regionPlaceholder": "eu-west-1",
+    "maxProjects": "Макс. проектов",
+    "creating": "Создание...",
+    "createBtn": "Добавить ноду",
+    "cancel": "Отмена",
+    "create": "Добавить ноду",
+    "slugMin": "Минимум 2 символа",
+    "slugFormat": "Только строчные латинские буквы, цифры и дефисы"
+  },
+  "editDialog": {
+    "title": "Редактировать ноду",
+    "save": "Сохранить",
+    "saving": "Сохранение..."
+  },
+  "updated": "Нода обновлена",
+  "apiKeyDialog": {
+    "title": "API ключ ноды",
+    "desc": "Скопируйте API ключ сейчас. Вы больше не сможете его увидеть. Используйте его как NODE_API_KEY в env переменных worker'а.",
+    "warning": "Сохраните ключ — он будет показан только один раз.",
+    "done": "Готово",
+    "regenerate": "Перегенерировать API ключ"
+  },
+  "deleteConfirm": {
+    "title": "Удалить ноду",
+    "desc": "Нода будет удалена. Существующие проекты нужно будет перенести.",
+    "confirm": "Удалить"
+  },
+  "heartbeat": {
+    "justNow": "Только что",
+    "minutesAgo": "{{count}} мин назад",
+    "offline": "Оффлайн"
+  },
+  "title": "Worker Ноды",
+  "empty": "Нет worker нод",
+  "emptyDesc": "Добавьте worker ноду для развёртывания проектов",
+  "notConnected": "Ещё не подключена",
+  "setupCommand": "Команда установки",
+  "setupCommandDesc": "Выполните эту команду на вашем сервере для установки DataForge worker ноды. Токен действителен 1 час.",
+  "created": "Нода создана",
+  "deleted": "Нода удалена",
+  "systemNodes": "Системные ноды",
+  "userNodes": "Пользовательские ноды",
+  "noSystemNodes": "Системные ноды не настроены",
+  "metrics": {
+    "cpu": "Использование CPU",
+    "ram": "Использование RAM",
+    "disk": "Использование диска",
+    "projects": "Проекты"
+  }
+}

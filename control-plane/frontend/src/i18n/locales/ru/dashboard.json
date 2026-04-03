@@ -1,0 +1,30 @@
+{
+  "title": "Дашборд",
+  "metrics": {
+    "tables": "Таблицы",
+    "records": "Записей",
+    "endpoints": "API Эндпоинты",
+    "webhooks": "Вебхуки",
+    "tablesTotal": "{{count}} всего",
+    "noTables": "Пока нет",
+    "acrossTables": "По {{count}} таблицам",
+    "active": "{{count}} активных"
+  },
+  "charts": {
+    "apiRequests": "API запросы (7 дней)",
+    "cacheRatio": "Соотношение Cache Hit/Miss"
+  },
+  "recentActivity": "Последние действия",
+  "noActivity": "Нет активности",
+  "activeWebhooks": "Активные вебхуки",
+  "noWebhooks": "Вебхуки не настроены",
+  "cacheHit": "Cache HIT: {{count}} ({{percentage}}%)",
+  "cacheMiss": "Cache MISS: {{count}} ({{percentage}}%)",
+  "noDataYet": "Нет данных",
+  "aiUsage": {
+    "title": "Использование ИИ",
+    "monthlySpend": "За этот месяц",
+    "requests": "запросов",
+    "budget": "Бюджет"
+  }
+}
