@@ -53,7 +53,7 @@ jobs:
       - name: Build & push Worker
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: worker-node
           file: worker-node/backend/Dockerfile
           push: true
           tags: |

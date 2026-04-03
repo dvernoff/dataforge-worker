@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-cp-backend:
     name: CP Backend
@@ -15,13 +18,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: control-plane/backend/package-lock.json
       - run: npm ci
         working-directory: control-plane/backend
       - name: Type check
-        run: npx tsc --noEmit 2>&1 || echo "Type check completed with warnings"
+        run: npx tsc --noEmit
         working-directory: control-plane/backend
+        continue-on-error: true
 
   build-cp-frontend:
     name: CP Frontend
@@ -31,8 +33,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: control-plane/frontend/package-lock.json
       - run: npm ci
         working-directory: control-plane/frontend
       - run: npx vite build
@@ -46,13 +46,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: worker-node/backend/package-lock.json
       - run: npm ci
         working-directory: worker-node/backend
       - name: Type check
-        run: npx tsc --noEmit 2>&1 || echo "Type check completed with warnings"
+        run: npx tsc --noEmit
         working-directory: worker-node/backend
+        continue-on-error: true
 
   docker-cp:
     name: Docker CP
@@ -99,7 +98,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
-          context: .
+          context: worker-node
           file: worker-node/backend/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}/worker:latest
