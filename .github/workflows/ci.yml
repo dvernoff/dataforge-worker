@@ -37,6 +37,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: npm install --ignore-scripts 2>/dev/null || true
+        working-directory: shared
       - run: npm ci
         working-directory: control-plane/frontend
       - run: npx vite build

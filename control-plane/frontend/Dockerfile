@@ -1,11 +1,12 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY shared/ ./shared/
+RUN cd shared && npm install --ignore-scripts 2>/dev/null || true
 COPY control-plane/frontend/package*.json ./control-plane/frontend/
 WORKDIR /app/control-plane/frontend
 RUN npm ci
 COPY control-plane/frontend/ .
-RUN npm run build
+RUN npx vite build
 
 FROM node:20-alpine
 WORKDIR /app
