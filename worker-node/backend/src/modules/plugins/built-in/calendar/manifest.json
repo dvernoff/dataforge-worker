@@ -1,0 +1,11 @@
+{
+  "id": "feature-calendar",
+  "name": "Calendar View",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "type": "feature",
+  "description": "Calendar view for data browser — display records on a date grid",
+  "icon": "calendar",
+  "default_enabled": false,
+  "settings": []
+}

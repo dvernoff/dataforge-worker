@@ -1,0 +1,130 @@
+---
+import '../styles/global.css';
+import type { Locale } from '../i18n';
+import { t, getLocalizedPath } from '../i18n';
+
+interface Props {
+  locale: Locale;
+  title?: string;
+  description?: string;
+  canonicalPath?: string;
+}
+
+const { locale, title, description, canonicalPath = '/' } = Astro.props;
+const i = t(locale);
+
+const pageTitle = title ?? i.meta.title;
+const pageDescription = description ?? i.meta.description;
+const siteUrl = 'https://dataforge.me';
+const canonicalUrl = `${siteUrl}${locale === 'ru' ? '/ru' : ''}${canonicalPath === '/' ? '' : canonicalPath}`;
+const enUrl = `${siteUrl}${canonicalPath === '/' ? '' : canonicalPath}`;
+const ruUrl = `${siteUrl}/ru${canonicalPath === '/' ? '' : canonicalPath}`;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>{pageTitle}</title>
+    <meta name="description" content={pageDescription} />
+    <meta name="keywords" content="database management, API builder, self-hosted, PostgreSQL, webhooks, S&box, game backend, REST API, GraphQL" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Canonical + hreflang -->
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="alternate" hreflang="en" href={enUrl} />
+    <link rel="alternate" hreflang="ru" href={ruUrl} />
+    <link rel="alternate" hreflang="x-default" href={enUrl} />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content={i.meta.ogTitle} />
+    <meta property="og:description" content={i.meta.ogDescription} />
+    <meta property="og:image" content={`${siteUrl}/og-image.png`} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:locale" content={locale === 'ru' ? 'ru_RU' : 'en_US'} />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={i.meta.ogTitle} />
+    <meta name="twitter:description" content={i.meta.ogDescription} />
+    <meta name="twitter:image" content={`${siteUrl}/og-image.png`} />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Structured Data -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "DataForge",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Linux, Docker",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "description": "Self-hosted database management and API platform"
+    })} />
+  </head>
+  <body class="min-h-screen">
+    <slot />
+
+    <!-- Scroll reveal observer -->
+    <script>
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.1 }
+      );
+
+      document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+    </script>
+
+    <!-- Language auto-detection (runs once) -->
+    <script>
+      (function () {
+        const stored = localStorage.getItem('df-lang');
+        if (stored) return;
+
+        const isRoot = window.location.pathname === '/' || window.location.pathname === '';
+        if (!isRoot) return;
+
+        const lang = navigator.language || (navigator as any).userLanguage || '';
+        if (lang.startsWith('ru')) {
+          localStorage.setItem('df-lang', 'ru');
+          window.location.replace('/ru/');
+        } else {
+          localStorage.setItem('df-lang', 'en');
+        }
+      })();
+    </script>
+
+    <!-- Navbar scroll effect -->
+    <script>
+      const navbar = document.getElementById('navbar');
+      if (navbar) {
+        window.addEventListener('scroll', () => {
+          if (window.scrollY > 20) {
+            navbar.classList.add('navbar-scrolled');
+          } else {
+            navbar.classList.remove('navbar-scrolled');
+          }
+        }, { passive: true });
+      }
+    </script>
+  </body>
+</html>

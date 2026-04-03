@@ -1,0 +1,24 @@
+{
+  "id": "feature-websocket",
+  "name": "WebSocket API",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "type": "feature",
+  "description": "Real-time WebSocket connections for live data updates",
+  "icon": "radio",
+  "default_enabled": false,
+  "settings": [
+    {
+      "key": "max_connections",
+      "label": "Max Connections",
+      "type": "number",
+      "default": 100
+    },
+    {
+      "key": "auth_mode",
+      "label": "Auth Mode",
+      "type": "string",
+      "default": "api_token"
+    }
+  ]
+}

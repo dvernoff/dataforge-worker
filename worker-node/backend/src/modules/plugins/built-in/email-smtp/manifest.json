@@ -1,0 +1,45 @@
+{
+  "id": "email-smtp",
+  "name": "Email (SMTP)",
+  "description": "Send emails via SMTP using nodemailer.",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "icon": "mail",
+  "settings": [
+    {
+      "key": "host",
+      "label": "SMTP Host",
+      "type": "string",
+      "required": true,
+      "placeholder": "smtp.gmail.com"
+    },
+    {
+      "key": "port",
+      "label": "SMTP Port",
+      "type": "number",
+      "required": true,
+      "default": 587,
+      "placeholder": "587"
+    },
+    {
+      "key": "user",
+      "label": "Username",
+      "type": "string",
+      "required": true,
+      "placeholder": "user@example.com"
+    },
+    {
+      "key": "password",
+      "label": "Password",
+      "type": "password",
+      "required": true
+    },
+    {
+      "key": "from_address",
+      "label": "From Address",
+      "type": "string",
+      "required": true,
+      "placeholder": "noreply@example.com"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "telegram-bot",
+  "name": "Telegram Bot",
+  "description": "Send notifications and messages via Telegram Bot API.",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "icon": "send",
+  "settings": [
+    {
+      "key": "bot_token",
+      "label": "Bot Token",
+      "type": "password",
+      "required": true,
+      "placeholder": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+    },
+    {
+      "key": "default_chat_id",
+      "label": "Default Chat ID",
+      "type": "string",
+      "required": false,
+      "placeholder": "-1001234567890"
+    }
+  ]
+}

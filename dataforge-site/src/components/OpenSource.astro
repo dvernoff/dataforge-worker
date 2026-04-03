@@ -1,0 +1,50 @@
+---
+import type { Locale } from '../i18n';
+import { t } from '../i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const i = t(locale);
+---
+
+<section class="py-20 sm:py-28">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+    <!-- Glow -->
+    <div class="absolute left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-accent-green/5 rounded-full blur-[100px] pointer-events-none"></div>
+
+    <div class="relative z-10">
+      <h2 class="text-2xl sm:text-3xl font-bold text-text-primary mb-4 reveal">{i.openSource.sectionTitle}</h2>
+      <p class="text-text-secondary text-sm sm:text-base max-w-lg mx-auto mb-8 leading-relaxed reveal">
+        {i.openSource.sectionSubtitle}
+      </p>
+
+      <!-- Docker command -->
+      <div class="code-block px-6 py-4 inline-block mb-8 reveal">
+        <code class="text-sm">docker compose up -d</code>
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-3 reveal">
+        <a
+          href="https://github.com/dataforge"
+          target="_blank"
+          rel="noopener"
+          class="btn-ghost px-5 py-2.5 rounded-lg text-sm font-medium"
+        >
+          {i.openSource.github} →
+        </a>
+        <a
+          href="https://docs.dataforge.me"
+          target="_blank"
+          rel="noopener"
+          class="btn-ghost px-5 py-2.5 rounded-lg text-sm font-medium"
+        >
+          {i.openSource.docs} →
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

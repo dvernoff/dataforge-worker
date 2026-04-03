@@ -1,0 +1,80 @@
+---
+import type { Locale } from '../i18n';
+import { t } from '../i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const i = t(locale);
+
+const links = [
+  {
+    icon: '📖',
+    title: i.links.documentation,
+    desc: i.links.documentationDesc,
+    href: 'https://docs.dataforge.me',
+    disabled: false,
+  },
+  {
+    icon: '📚',
+    title: i.links.wiki,
+    desc: i.links.wikiDesc,
+    href: '#',
+    disabled: true,
+  },
+  {
+    icon: '💬',
+    title: i.links.community,
+    desc: i.links.communityDesc,
+    href: 'https://t.me/username',
+    disabled: false,
+  },
+  {
+    icon: '🐙',
+    title: i.links.github,
+    desc: i.links.githubDesc,
+    href: 'https://github.com/dataforge',
+    disabled: false,
+  },
+];
+---
+
+<section class="py-20 sm:py-28">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6">
+    <h2 class="text-2xl sm:text-3xl font-bold text-text-primary mb-10 text-center reveal">{i.links.sectionTitle}</h2>
+
+    <div class="flex flex-col gap-3 stagger">
+      {links.map((link) => (
+        <div class="reveal">
+          {link.disabled ? (
+            <div class="link-disabled flex items-center gap-4 rounded-xl border border-border-default bg-bg-card p-4">
+              <span class="text-xl">{link.icon}</span>
+              <div class="flex-1">
+                <span class="text-sm font-medium text-text-primary">{link.title}</span>
+                <p class="text-xs text-text-muted">{link.desc}</p>
+              </div>
+              <span class="text-text-muted text-xs">→</span>
+              <span class="tooltip">{i.nav.wikiTooltip}</span>
+            </div>
+          ) : (
+            <a
+              href={link.href}
+              target="_blank"
+              rel="noopener"
+              class="card-hover flex items-center gap-4 rounded-xl border border-border-default bg-bg-card p-4"
+            >
+              <span class="text-xl">{link.icon}</span>
+              <div class="flex-1">
+                <span class="text-sm font-medium text-text-primary">{link.title}</span>
+                <p class="text-xs text-text-secondary">{link.desc}</p>
+              </div>
+              <span class="text-text-muted text-xs">→</span>
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

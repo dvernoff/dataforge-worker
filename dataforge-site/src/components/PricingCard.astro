@@ -1,0 +1,49 @@
+---
+import type { Locale } from '../i18n';
+import { t } from '../i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const i = t(locale);
+
+const featureKeys = Object.keys(i.pricing.features) as (keyof typeof i.pricing.features)[];
+---
+
+<div class="max-w-lg mx-auto reveal">
+  <div class="rounded-2xl border border-accent-blue/20 bg-bg-card p-8 relative overflow-hidden">
+    <!-- Glow -->
+    <div class="absolute -top-20 -right-20 w-40 h-40 bg-accent-blue/10 rounded-full blur-[60px] pointer-events-none"></div>
+
+    <div class="relative z-10">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-3xl">🆓</span>
+        <h3 class="text-xl font-bold text-text-primary">{i.pricing.planName}</h3>
+      </div>
+
+      <p class="text-text-secondary text-sm mb-6 leading-relaxed">{i.pricing.planDescription}</p>
+
+      <ul class="space-y-2.5 mb-8">
+        {featureKeys.map((key) => (
+          <li class="flex items-center gap-2.5 text-sm text-text-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-accent-green shrink-0">
+              <polyline points="20,6 9,17 4,12" />
+            </svg>
+            {i.pricing.features[key]}
+          </li>
+        ))}
+      </ul>
+
+      <a
+        href="https://t.me/username"
+        target="_blank"
+        rel="noopener"
+        class="btn-primary w-full py-3 rounded-lg text-sm font-medium text-center block"
+      >
+        {i.pricing.deploy} →
+      </a>
+    </div>
+  </div>
+</div>

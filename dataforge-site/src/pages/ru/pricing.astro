@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Navbar from '../../components/Navbar.astro';
+import PricingCard from '../../components/PricingCard.astro';
+import RateLimitsTable from '../../components/RateLimitsTable.astro';
+import Footer from '../../components/Footer.astro';
+import { t } from '../../i18n';
+
+const locale = 'ru' as const;
+const i = t(locale);
+---
+
+<BaseLayout locale={locale} title={i.pricingMeta.title} description={i.pricingMeta.description} canonicalPath="/pricing">
+  <Navbar locale={locale} />
+  <main class="pt-32 pb-20">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <!-- Header -->
+      <div class="text-center mb-14 reveal">
+        <h1 class="text-3xl sm:text-4xl font-bold text-text-primary mb-3">{i.pricing.title}</h1>
+        <p class="text-text-secondary text-base">{i.pricing.subtitle}</p>
+      </div>
+
+      <PricingCard locale={locale} />
+      <RateLimitsTable locale={locale} />
+    </div>
+  </main>
+  <Footer locale={locale} />
+</BaseLayout>

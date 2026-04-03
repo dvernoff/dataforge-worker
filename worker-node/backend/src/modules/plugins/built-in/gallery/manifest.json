@@ -1,0 +1,11 @@
+{
+  "id": "feature-gallery",
+  "name": "Gallery View",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "type": "feature",
+  "description": "Gallery view for data browser — display image thumbnails in a grid",
+  "icon": "image",
+  "default_enabled": false,
+  "settings": []
+}

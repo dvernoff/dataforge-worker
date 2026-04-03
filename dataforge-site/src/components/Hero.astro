@@ -1,0 +1,54 @@
+---
+import type { Locale } from '../i18n';
+import { t, getLocalizedPath } from '../i18n';
+import MarqueeStrip from './MarqueeStrip.astro';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const i = t(locale);
+---
+
+<section class="relative pt-32 pb-20 sm:pt-40 sm:pb-28 overflow-hidden">
+  <!-- Glow background -->
+  <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-accent-blue/5 rounded-full blur-[120px] pointer-events-none"></div>
+
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 text-center relative z-10">
+    <!-- Title -->
+    <h1 class="gradient-text text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 reveal">
+      {i.hero.title}
+    </h1>
+
+    <!-- Marquee -->
+    <div class="mb-8 reveal">
+      <MarqueeStrip locale={locale} />
+    </div>
+
+    <!-- Subtitle -->
+    <p class="text-text-secondary text-base sm:text-lg max-w-xl mx-auto mb-10 leading-relaxed reveal">
+      {i.hero.subtitle}
+    </p>
+
+    <!-- CTA buttons -->
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-3 reveal">
+      <a
+        href="https://t.me/username"
+        target="_blank"
+        rel="noopener"
+        class="btn-primary px-6 py-3 rounded-lg text-sm font-medium w-full sm:w-auto"
+      >
+        {i.hero.cta} →
+      </a>
+      <a
+        href="https://docs.dataforge.me"
+        target="_blank"
+        rel="noopener"
+        class="btn-ghost px-6 py-3 rounded-lg text-sm font-medium w-full sm:w-auto"
+      >
+        {i.hero.docs}
+      </a>
+    </div>
+  </div>
+</section>

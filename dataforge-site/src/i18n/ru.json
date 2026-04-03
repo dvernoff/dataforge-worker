@@ -1,0 +1,155 @@
+{
+  "meta": {
+    "title": "DataForge — Self-hosted платформа для баз данных и API",
+    "description": "Визуальное управление базами данных, конструктор API, вебхуки, плагины. Self-hosted, бесплатно, с авторизацией S&box. Разверни за 5 минут с Docker.",
+    "ogTitle": "DataForge",
+    "ogDescription": "Self-hosted платформа для баз данных и API"
+  },
+  "nav": {
+    "features": "Возможности",
+    "pricing": "Цены",
+    "docs": "Документация",
+    "wiki": "Wiki",
+    "wikiTooltip": "Скоро",
+    "getAccess": "Получить доступ"
+  },
+  "hero": {
+    "title": "DataForge",
+    "subtitle": "Платформа для управления базами данных и API. Визуальный конструктор таблиц, эндпоинтов, вебхуков — без написания кода.",
+    "cta": "Получить доступ",
+    "docs": "Документация",
+    "marquee": "Создавай базы · Строй API · Автоматизируй бэкапы · Подключай плагины · Реалтайм синхронизация · Визуальный конструктор запросов · S&box авторизация · Деплой по миру"
+  },
+  "features": {
+    "sectionTitle": "Что такое DataForge",
+    "sectionSubtitle": "Всё, что нужно для создания, управления и масштабирования бэкенда — визуально.",
+    "tables": {
+      "title": "Таблицы",
+      "description": "Создавай и управляй таблицами PostgreSQL визуально. Колонки, индексы, связи — без SQL."
+    },
+    "api": {
+      "title": "API Builder",
+      "description": "Создавай REST и GraphQL эндпоинты в визуальном редакторе. Auth, кэш, лимиты — всё из UI."
+    },
+    "webhooks": {
+      "title": "Вебхуки",
+      "description": "HTTP-вызовы при изменении данных. Авто-повтор при ошибках. Полные логи доставки."
+    },
+    "automations": {
+      "title": "Автоматизации",
+      "description": "Cron-задачи, визуальные цепочки, расписание. Подключай Telegram, Email, Discord."
+    },
+    "security": {
+      "title": "Безопасность",
+      "description": "2FA, IP whitelist, RLS, шифрование полей, DDoS защита через BunnyCDN."
+    },
+    "sbox": {
+      "title": "S&box Auth",
+      "description": "Встроенная аутентификация игроков S&box через Facepunch API. Сессии, без настройки."
+    },
+    "distributed": {
+      "title": "Распределённость",
+      "description": "Размещай воркеры по миру. Каждая нода автономна: своя БД, кэш, плагины."
+    },
+    "analytics": {
+      "title": "Аналитика",
+      "description": "Аналитика запросов, отслеживание ошибок, мониторинг здоровья, аптайм — всё встроено."
+    },
+    "free": {
+      "title": "Бесплатно",
+      "description": "Self-hosted. Нет привязки к вендору. Твой сервер, твои данные, твои правила. Бесплатно навсегда."
+    }
+  },
+  "architecture": {
+    "sectionTitle": "Как это работает",
+    "sectionSubtitle": "Простая, распределённая архитектура. BunnyCDN обрабатывает трафик, воркеры работают независимо.",
+    "client": "Клиент",
+    "cdn": "BunnyCDN",
+    "worker": "Worker Node",
+    "controlPlane": "Control Plane",
+    "api": "API",
+    "database": "База данных",
+    "cache": "Кэш",
+    "plugins": "Плагины",
+    "uiOnly": "Только UI"
+  },
+  "plugins": {
+    "sectionTitle": "Плагины",
+    "sectionSubtitle": "Расширяй DataForge встроенными плагинами. Подключай сервисы, провайдеров авторизации, хранилища.",
+    "sboxAuth": { "title": "S&box Auth", "description": "Авторизация игроков" },
+    "telegram": { "title": "Telegram Bot", "description": "Уведомления и команды" },
+    "email": { "title": "Email SMTP", "description": "Транзакционные письма" },
+    "discord": { "title": "Discord", "description": "Интеграция с ботом" },
+    "s3": { "title": "S3 Storage", "description": "Облачное хранилище" },
+    "localStorage": { "title": "Local Storage", "description": "Хранилище на сервере" },
+    "oauth": { "title": "OAuth Google", "description": "Вход через Google" },
+    "uptime": { "title": "Uptime Ping", "description": "Мониторинг здоровья" },
+    "cron": { "title": "Cron Helper", "description": "Задачи по расписанию" }
+  },
+  "openSource": {
+    "sectionTitle": "Бесплатно. Навсегда.",
+    "sectionSubtitle": "Self-hosted платформа. Разверни на своём сервере за 5 минут с Docker. Никаких подписок, лимитов на данные, или vendor lock-in.",
+    "github": "GitHub",
+    "docs": "Документация"
+  },
+  "links": {
+    "sectionTitle": "Ресурсы",
+    "documentation": "Документация",
+    "documentationDesc": "Полные руководства и API справка",
+    "wiki": "Wiki",
+    "wikiDesc": "Скоро",
+    "community": "Сообщество",
+    "communityDesc": "Присоединяйся в Telegram",
+    "github": "GitHub",
+    "githubDesc": "Исходный код и задачи"
+  },
+  "footer": {
+    "tagline": "Self-hosted платформа для баз данных",
+    "copyright": "© 2025 DataForge",
+    "builtWith": "Собрано на Astro"
+  },
+  "pricing": {
+    "title": "Цены",
+    "subtitle": "Просто. Прозрачно. Бесплатно.",
+    "planName": "Free (self-hosted)",
+    "planDescription": "Всё включено. Без лимитов на данные. Ты хостишь — ты владеешь.",
+    "deploy": "Развернуть сейчас",
+    "features": {
+      "projects": "Безлимитные проекты",
+      "tables": "Безлимитные таблицы",
+      "records": "Безлимитные записи",
+      "endpoints": "Безлимитные API эндпоинты",
+      "plugins": "Все плагины включены",
+      "sbox": "S&box Auth встроен",
+      "multiNode": "Мульти-нодовый деплой",
+      "api": "Полный API (REST + GraphQL)",
+      "websocket": "WebSocket реалтайм",
+      "dashboard": "Конструктор дашбордов",
+      "flow": "Конструктор цепочек",
+      "backups": "Бэкапы и экспорт",
+      "security": "2FA, RLS, шифрование"
+    },
+    "limitsTitle": "Дефолтные лимиты",
+    "limitsSubtitle": "Все лимиты настраиваются администратором через UI панель. Нет хардкодных ограничений.",
+    "limitsHeaders": {
+      "parameter": "Параметр",
+      "default": "По умолчанию",
+      "configurable": "Настраивается"
+    },
+    "limits": {
+      "apiRequests": { "param": "API запросов на IP", "default": "100/сек", "config": "Из UI" },
+      "requestBody": { "param": "Макс. тело запроса", "default": "10 МБ", "config": "Из UI" },
+      "tablesPerProject": { "param": "Макс. таблиц в проекте", "default": "50", "config": "Из UI (квоты)" },
+      "recordsPerTable": { "param": "Макс. записей в таблице", "default": "100 000", "config": "Из UI (квоты)" },
+      "endpointsPerProject": { "param": "Макс. эндпоинтов в проекте", "default": "50", "config": "Из UI (квоты)" },
+      "fileStorage": { "param": "Макс. файловое хранилище", "default": "500 МБ", "config": "Из UI (квоты)" },
+      "bruteForce": { "param": "Блокировка брутфорса", "default": "5 попыток / 15 мин", "config": "Из UI" },
+      "webhookRetry": { "param": "Повтор вебхуков", "default": "3 попытки", "config": "Встроено" },
+      "cacheTTL": { "param": "Кэш TTL", "default": "По эндпоинту", "config": "Из UI" }
+    }
+  },
+  "pricingMeta": {
+    "title": "Цены — DataForge",
+    "description": "DataForge: бесплатно, self-hosted, без лимитов. Разверни свою платформу баз данных с Docker."
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "id": "sbox-auth",
+  "name": "S&box Auth",
+  "description": "S&box player authentication via Facepunch token validation. Manages player sessions with Steam ID based authentication.",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "icon": "gamepad-2",
+  "auth_types": ["sbox_validate", "sbox_session"],
+  "hooks": ["auth"],
+  "settings": [
+    {
+      "key": "service_name",
+      "label": "Service Name",
+      "type": "string",
+      "required": true,
+      "placeholder": "my-game-server",
+      "description": "The service/game name for Facepunch token validation"
+    },
+    {
+      "key": "session_table",
+      "label": "Session Table",
+      "type": "string",
+      "required": true,
+      "default": "players",
+      "placeholder": "players",
+      "description": "Database table to store player sessions"
+    },
+    {
+      "key": "steam_id_column",
+      "label": "Steam ID Column",
+      "type": "string",
+      "required": true,
+      "default": "steam_id",
+      "placeholder": "steam_id",
+      "description": "Column name for the player's Steam ID"
+    },
+    {
+      "key": "session_key_column",
+      "label": "Session Key Column",
+      "type": "string",
+      "required": true,
+      "default": "session_key",
+      "placeholder": "session_key",
+      "description": "Column name for the session authentication key"
+    }
+  ]
+}

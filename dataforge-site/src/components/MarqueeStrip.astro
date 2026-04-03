@@ -1,0 +1,31 @@
+---
+import type { Locale } from '../i18n';
+import { t } from '../i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const i = t(locale);
+const items = i.hero.marquee.split(' · ');
+---
+
+<div class="relative overflow-hidden py-3">
+  <!-- Fade edges -->
+  <div class="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-bg-primary to-transparent z-10 pointer-events-none"></div>
+  <div class="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-bg-primary to-transparent z-10 pointer-events-none"></div>
+
+  <div class="marquee-track">
+    {[0, 1].map(() => (
+      <div class="flex items-center shrink-0">
+        {items.map((item) => (
+          <>
+            <span class="font-mono text-[13px] text-text-muted whitespace-nowrap px-3">{item}</span>
+            <span class="text-accent-cyan text-xs">·</span>
+          </>
+        ))}
+      </div>
+    ))}
+  </div>
+</div>

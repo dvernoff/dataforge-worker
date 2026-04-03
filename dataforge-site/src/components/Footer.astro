@@ -1,0 +1,32 @@
+---
+import type { Locale } from '../i18n';
+import { t } from '../i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const i = t(locale);
+---
+
+<footer class="border-t border-border-default py-10">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 text-center">
+    <div class="flex items-center justify-center gap-2 mb-3">
+      <div class="w-6 h-6 rounded bg-gradient-to-br from-accent-blue to-accent-cyan flex items-center justify-center text-white text-[9px] font-bold font-mono">
+        DF
+      </div>
+      <span class="text-text-primary text-sm font-semibold">DataForge</span>
+      <span class="text-text-muted text-xs">· {i.footer.tagline}</span>
+    </div>
+
+    <div class="flex items-center justify-center gap-4 text-xs text-text-muted mb-3">
+      <span>{i.footer.copyright}</span>
+      <a href="https://github.com/dataforge" target="_blank" rel="noopener" class="hover:text-text-secondary transition-colors">GitHub</a>
+      <a href="https://t.me/username" target="_blank" rel="noopener" class="hover:text-text-secondary transition-colors">Telegram</a>
+      <a href="https://discord.gg/" target="_blank" rel="noopener" class="hover:text-text-secondary transition-colors">Discord</a>
+    </div>
+
+    <p class="text-[11px] text-text-muted">{i.footer.builtWith}</p>
+  </div>
+</footer>

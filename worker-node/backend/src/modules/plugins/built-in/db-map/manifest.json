@@ -1,0 +1,11 @@
+{
+  "id": "feature-db-map",
+  "name": "Database Map",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "type": "feature",
+  "description": "Interactive 2D visualization of your database schema showing tables as nodes and foreign key relationships as connections",
+  "icon": "map",
+  "default_enabled": false,
+  "settings": []
+}

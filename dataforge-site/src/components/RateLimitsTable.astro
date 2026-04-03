@@ -1,0 +1,39 @@
+---
+import type { Locale } from '../i18n';
+import { t } from '../i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const i = t(locale);
+
+const limitKeys = Object.keys(i.pricing.limits) as (keyof typeof i.pricing.limits)[];
+---
+
+<div class="max-w-2xl mx-auto mt-16 reveal">
+  <h3 class="text-lg font-bold text-text-primary mb-2 text-center">{i.pricing.limitsTitle}</h3>
+  <p class="text-text-muted text-xs text-center mb-6">{i.pricing.limitsSubtitle}</p>
+
+  <div class="rounded-xl border border-border-default overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-border-default bg-bg-secondary">
+          <th class="text-left px-4 py-3 text-xs font-medium text-text-muted">{i.pricing.limitsHeaders.parameter}</th>
+          <th class="text-left px-4 py-3 text-xs font-medium text-text-muted">{i.pricing.limitsHeaders.default}</th>
+          <th class="text-left px-4 py-3 text-xs font-medium text-text-muted">{i.pricing.limitsHeaders.configurable}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {limitKeys.map((key, idx) => (
+          <tr class:list={["border-b border-border-default last:border-b-0", idx % 2 === 0 ? 'bg-bg-card' : '']}>
+            <td class="px-4 py-2.5 text-xs text-text-secondary">{i.pricing.limits[key].param}</td>
+            <td class="px-4 py-2.5 text-xs text-text-primary font-mono">{i.pricing.limits[key].default}</td>
+            <td class="px-4 py-2.5 text-xs text-accent-green">{i.pricing.limits[key].config}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</div>

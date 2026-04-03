@@ -1,0 +1,95 @@
+---
+import type { Locale } from '../i18n';
+import { t, getLocalizedPath } from '../i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const i = t(locale);
+const altLocale = locale === 'en' ? 'ru' : 'en';
+
+const currentPath = Astro.url.pathname;
+const switchPath = locale === 'ru'
+  ? currentPath.replace(/^\/ru/, '') || '/'
+  : `/ru${currentPath}`;
+---
+
+<nav id="navbar" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+    <!-- Logo -->
+    <a href={getLocalizedPath('/', locale)} class="flex items-center gap-2.5 group">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-blue to-accent-cyan flex items-center justify-center text-white text-xs font-bold font-mono">
+        DF
+      </div>
+      <span class="text-text-primary font-semibold text-sm tracking-tight">DataForge</span>
+    </a>
+
+    <!-- Desktop nav -->
+    <div class="hidden md:flex items-center gap-6">
+      <a href={`${getLocalizedPath('/', locale)}#features`} class="text-text-secondary hover:text-text-primary text-sm transition-colors">
+        {i.nav.features}
+      </a>
+      <a href={getLocalizedPath('/pricing', locale)} class="text-text-secondary hover:text-text-primary text-sm transition-colors">
+        {i.nav.pricing}
+      </a>
+      <a href="https://docs.dataforge.me" target="_blank" rel="noopener" class="text-text-secondary hover:text-text-primary text-sm transition-colors">
+        {i.nav.docs}
+      </a>
+      <span class="link-disabled text-text-secondary text-sm">
+        {i.nav.wiki}
+        <span class="tooltip">{i.nav.wikiTooltip}</span>
+      </span>
+    </div>
+
+    <!-- Right side -->
+    <div class="flex items-center gap-3">
+      <a
+        href={switchPath}
+        class="text-text-muted hover:text-text-primary text-xs font-mono px-2 py-1 rounded border border-border-default hover:border-border-hover transition-colors"
+        onclick={`localStorage.setItem('df-lang','${altLocale}')`}
+      >
+        {altLocale.toUpperCase()}
+      </a>
+      <a
+        href="https://t.me/username"
+        target="_blank"
+        rel="noopener"
+        class="hidden sm:inline-flex btn-primary px-4 py-2 rounded-lg text-sm font-medium"
+      >
+        {i.nav.getAccess} →
+      </a>
+
+      <!-- Mobile burger -->
+      <button id="burger" class="md:hidden text-text-secondary hover:text-text-primary p-1" aria-label="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile menu -->
+  <div id="mobile-menu" class="md:hidden hidden border-t border-border-default bg-bg-primary/95 backdrop-blur-md">
+    <div class="px-4 py-4 flex flex-col gap-3">
+      <a href={`${getLocalizedPath('/', locale)}#features`} class="text-text-secondary text-sm py-2">{i.nav.features}</a>
+      <a href={getLocalizedPath('/pricing', locale)} class="text-text-secondary text-sm py-2">{i.nav.pricing}</a>
+      <a href="https://docs.dataforge.me" target="_blank" rel="noopener" class="text-text-secondary text-sm py-2">{i.nav.docs}</a>
+      <span class="text-text-muted text-sm py-2 opacity-40">{i.nav.wiki} — {i.nav.wikiTooltip}</span>
+      <a href="https://t.me/username" target="_blank" rel="noopener" class="btn-primary px-4 py-2 rounded-lg text-sm font-medium text-center mt-2">
+        {i.nav.getAccess} →
+      </a>
+    </div>
+  </div>
+</nav>
+
+<script>
+  const burger = document.getElementById('burger');
+  const menu = document.getElementById('mobile-menu');
+  burger?.addEventListener('click', () => {
+    menu?.classList.toggle('hidden');
+  });
+</script>

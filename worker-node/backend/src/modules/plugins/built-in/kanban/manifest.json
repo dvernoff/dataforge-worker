@@ -1,0 +1,11 @@
+{
+  "id": "feature-kanban",
+  "name": "Kanban View",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "type": "feature",
+  "description": "Kanban board view for data browser — group records by status column",
+  "icon": "columns",
+  "default_enabled": false,
+  "settings": []
+}

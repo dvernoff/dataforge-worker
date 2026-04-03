@@ -1,0 +1,18 @@
+{
+  "id": "feature-data-pipeline",
+  "name": "Data Pipeline",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "type": "feature",
+  "description": "Visual data pipeline builder with Source, Transform, and Destination nodes",
+  "icon": "git-branch",
+  "default_enabled": false,
+  "settings": [
+    {
+      "key": "max_pipelines",
+      "label": "Max Pipelines per Project",
+      "type": "number",
+      "default": 20
+    }
+  ]
+}

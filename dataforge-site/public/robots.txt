@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://dataforge.me/sitemap-index.xml

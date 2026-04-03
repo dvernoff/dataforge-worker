@@ -1,0 +1,155 @@
+{
+  "meta": {
+    "title": "DataForge — Self-hosted Database & API Platform",
+    "description": "Visual database management, API builder, webhooks, plugins. Self-hosted, free, with S&box game authentication. Deploy in 5 minutes with Docker.",
+    "ogTitle": "DataForge",
+    "ogDescription": "Self-hosted database & API platform"
+  },
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "docs": "Docs",
+    "wiki": "Wiki",
+    "wikiTooltip": "Coming soon",
+    "getAccess": "Get access"
+  },
+  "hero": {
+    "title": "DataForge",
+    "subtitle": "Platform for database management and API building. Visual table designer, endpoints, webhooks — without writing code.",
+    "cta": "Get access",
+    "docs": "Documentation",
+    "marquee": "Create databases · Build APIs · Automate backups · Connect plugins · Real-time sync · Visual query builder · S&box game auth · Deploy worldwide"
+  },
+  "features": {
+    "sectionTitle": "What is DataForge",
+    "sectionSubtitle": "Everything you need to build, manage, and scale your backend — visually.",
+    "tables": {
+      "title": "Tables",
+      "description": "Create and manage PostgreSQL tables visually. Add columns, indexes, foreign keys — no SQL needed."
+    },
+    "api": {
+      "title": "API Builder",
+      "description": "Design REST and GraphQL endpoints in a visual editor. Set auth, caching, rate limits — all from UI."
+    },
+    "webhooks": {
+      "title": "Webhooks",
+      "description": "Trigger HTTP calls when data changes. Auto-retry on failure. Full delivery logs."
+    },
+    "automations": {
+      "title": "Automations",
+      "description": "Cron jobs, visual flow builder, scheduled tasks. Connect Telegram, Email, Discord."
+    },
+    "security": {
+      "title": "Security",
+      "description": "2FA, IP whitelist, row-level security, field encryption, DDoS protection via BunnyCDN."
+    },
+    "sbox": {
+      "title": "S&box Auth",
+      "description": "Built-in authentication for S&box game players via Facepunch API. Session-based, zero config."
+    },
+    "distributed": {
+      "title": "Distributed",
+      "description": "Deploy worker nodes worldwide. Each node is autonomous with own database, cache, and plugins."
+    },
+    "analytics": {
+      "title": "Analytics",
+      "description": "Request analytics, error tracking, health monitoring, uptime dashboard — all built-in."
+    },
+    "free": {
+      "title": "Free",
+      "description": "Self-hosted. No vendor lock-in. Your server, your data, your rules. Free forever."
+    }
+  },
+  "architecture": {
+    "sectionTitle": "How it works",
+    "sectionSubtitle": "Simple, distributed architecture. BunnyCDN handles traffic, workers process requests independently.",
+    "client": "Client",
+    "cdn": "BunnyCDN",
+    "worker": "Worker Node",
+    "controlPlane": "Control Plane",
+    "api": "API",
+    "database": "Database",
+    "cache": "Cache",
+    "plugins": "Plugins",
+    "uiOnly": "UI only"
+  },
+  "plugins": {
+    "sectionTitle": "Plugins",
+    "sectionSubtitle": "Extend DataForge with built-in plugins. Connect services, add auth providers, manage storage.",
+    "sboxAuth": { "title": "S&box Auth", "description": "Game player authentication" },
+    "telegram": { "title": "Telegram Bot", "description": "Notifications & commands" },
+    "email": { "title": "Email SMTP", "description": "Transactional emails" },
+    "discord": { "title": "Discord", "description": "Bot integration" },
+    "s3": { "title": "S3 Storage", "description": "Cloud file storage" },
+    "localStorage": { "title": "Local Storage", "description": "On-server file storage" },
+    "oauth": { "title": "OAuth Google", "description": "Google sign-in" },
+    "uptime": { "title": "Uptime Ping", "description": "Health monitoring" },
+    "cron": { "title": "Cron Helper", "description": "Scheduled tasks" }
+  },
+  "openSource": {
+    "sectionTitle": "Free. Forever.",
+    "sectionSubtitle": "Self-hosted platform. Deploy on your server in 5 minutes with Docker. No subscriptions, data limits, or vendor lock-in.",
+    "github": "GitHub",
+    "docs": "Documentation"
+  },
+  "links": {
+    "sectionTitle": "Resources",
+    "documentation": "Documentation",
+    "documentationDesc": "Full guides and API reference",
+    "wiki": "Wiki",
+    "wikiDesc": "Coming soon",
+    "community": "Community",
+    "communityDesc": "Join our Telegram chat",
+    "github": "GitHub",
+    "githubDesc": "Source code and issues"
+  },
+  "footer": {
+    "tagline": "Self-hosted database platform",
+    "copyright": "© 2025 DataForge",
+    "builtWith": "Built with Astro"
+  },
+  "pricing": {
+    "title": "Pricing",
+    "subtitle": "Simple. Transparent. Free.",
+    "planName": "Free (self-hosted)",
+    "planDescription": "Everything included. No limits on data. You host it, you own it.",
+    "deploy": "Deploy now",
+    "features": {
+      "projects": "Unlimited projects",
+      "tables": "Unlimited tables",
+      "records": "Unlimited records",
+      "endpoints": "Unlimited API endpoints",
+      "plugins": "All plugins included",
+      "sbox": "S&box Auth built-in",
+      "multiNode": "Multi-node deployment",
+      "api": "Full API (REST + GraphQL)",
+      "websocket": "WebSocket realtime",
+      "dashboard": "Dashboard builder",
+      "flow": "Flow builder",
+      "backups": "Backups & export",
+      "security": "2FA, RLS, encryption"
+    },
+    "limitsTitle": "Default Rate Limits",
+    "limitsSubtitle": "All limits are configurable by the admin through the UI panel. No hardcoded restrictions.",
+    "limitsHeaders": {
+      "parameter": "Parameter",
+      "default": "Default",
+      "configurable": "Configurable"
+    },
+    "limits": {
+      "apiRequests": { "param": "API requests per IP", "default": "100/sec", "config": "From UI" },
+      "requestBody": { "param": "Max request body", "default": "10 MB", "config": "From UI" },
+      "tablesPerProject": { "param": "Max tables per project", "default": "50", "config": "From UI (quotas)" },
+      "recordsPerTable": { "param": "Max records per table", "default": "100,000", "config": "From UI (quotas)" },
+      "endpointsPerProject": { "param": "Max endpoints per project", "default": "50", "config": "From UI (quotas)" },
+      "fileStorage": { "param": "Max file storage", "default": "500 MB", "config": "From UI (quotas)" },
+      "bruteForce": { "param": "Brute force lockout", "default": "5 attempts / 15 min", "config": "From UI" },
+      "webhookRetry": { "param": "Webhook retry", "default": "3 attempts", "config": "Built-in" },
+      "cacheTTL": { "param": "Cache TTL", "default": "Per endpoint", "config": "From UI" }
+    }
+  },
+  "pricingMeta": {
+    "title": "Pricing — DataForge",
+    "description": "DataForge pricing: free, self-hosted, no limits. Deploy your own database platform with Docker."
+  }
+}

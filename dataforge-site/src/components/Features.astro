@@ -1,0 +1,44 @@
+---
+import type { Locale } from '../i18n';
+import { t } from '../i18n';
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const i = t(locale);
+
+const features = [
+  { icon: '📊', ...i.features.tables },
+  { icon: '🔌', ...i.features.api },
+  { icon: '🔗', ...i.features.webhooks },
+  { icon: '⏰', ...i.features.automations },
+  { icon: '🛡️', ...i.features.security },
+  { icon: '🎮', ...i.features.sbox },
+  { icon: '🌍', ...i.features.distributed },
+  { icon: '📈', ...i.features.analytics },
+  { icon: '🆓', ...i.features.free },
+];
+---
+
+<section id="features" class="py-20 sm:py-28">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6">
+    <!-- Section header -->
+    <div class="text-center mb-14 reveal">
+      <h2 class="text-2xl sm:text-3xl font-bold text-text-primary mb-3">{i.features.sectionTitle}</h2>
+      <p class="text-text-secondary text-sm sm:text-base max-w-lg mx-auto">{i.features.sectionSubtitle}</p>
+    </div>
+
+    <!-- Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger">
+      {features.map((f) => (
+        <div class="reveal card-hover glow rounded-xl border border-border-default bg-bg-card p-5">
+          <div class="text-2xl mb-3">{f.icon}</div>
+          <h3 class="text-sm font-bold text-text-primary mb-1.5">{f.title}</h3>
+          <p class="text-xs text-text-secondary leading-relaxed line-clamp-2">{f.description}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

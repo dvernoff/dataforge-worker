@@ -1,0 +1,193 @@
+services:
+  postgres-control:
+    image: postgres:16-alpine
+    container_name: df-postgres-control
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dataforge
+      POSTGRES_PASSWORD: df_control_2024
+      POSTGRES_DB: dataforge_control
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_control:/var/lib/postgresql/data
+      - ./config/postgres-control.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dataforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    shm_size: 256mb
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  postgres-worker:
+    image: postgres:16-alpine
+    container_name: df-postgres-worker
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dataforge
+      POSTGRES_PASSWORD: df_worker_2024
+      POSTGRES_DB: dataforge_worker
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_worker:/var/lib/postgresql/data
+      - ./config/postgres-worker.conf:/etc/postgresql/postgresql.conf:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dataforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    shm_size: 512mb
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  redis:
+    image: redis:7-alpine
+    container_name: df-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  control-backend:
+    build:
+      context: .
+      dockerfile: control-plane/backend/Dockerfile
+    container_name: df-control-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://dataforge:df_control_2024@postgres-control:5432/dataforge_control
+      DATABASE_POOL_MIN: 5
+      DATABASE_POOL_MAX: 30
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-super-secret-access-key-change-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super-secret-refresh-key-change-in-production}
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
+      BCRYPT_ROUNDS: 12
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@dataforge.local}
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-Admin123!@#}"
+      ADMIN_NAME: Superadmin
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
+      WORKER_NODE_API_KEY: ${WORKER_NODE_API_KEY:-default-worker-api-key-change-in-production}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      RATE_LIMIT_MAX: 200
+      RATE_LIMIT_WINDOW: 60000
+    depends_on:
+      postgres-control:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  control-frontend:
+    build:
+      context: .
+      dockerfile: control-plane/frontend/Dockerfile
+    container_name: df-control-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  worker-backend:
+    build:
+      context: .
+      dockerfile: worker-node/backend/Dockerfile
+    container_name: df-worker-backend
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+    environment:
+      NODE_ENV: production
+      PORT: 4001
+      DATABASE_URL: postgresql://dataforge:df_worker_2024@postgres-worker:5432/dataforge_worker
+      DATABASE_POOL_MIN: 10
+      DATABASE_POOL_MAX: 50
+      REDIS_URL: redis://redis:6379
+      CONTROL_PLANE_URL: http://control-backend:4000
+      NODE_API_KEY: ${WORKER_NODE_API_KEY:-default-worker-api-key-change-in-production}
+      NODE_ID: worker-local-1
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      CORS_ORIGIN: "*"
+      RATE_LIMIT_MAX: 500
+      RATE_LIMIT_WINDOW: 60000
+    depends_on:
+      postgres-worker:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  nginx-control:
+    image: nginx:alpine
+    container_name: df-nginx-control
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./control-plane/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_cache_cp:/var/cache/nginx/cp
+    depends_on:
+      - control-backend
+      - control-frontend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  nginx-worker:
+    image: nginx:alpine
+    container_name: df-nginx-worker
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./worker-node/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_cache_worker:/var/cache/nginx/worker
+    depends_on:
+      - worker-backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  pg_control:
+  pg_worker:
+  redis_data:
+  nginx_cache_cp:
+  nginx_cache_worker:

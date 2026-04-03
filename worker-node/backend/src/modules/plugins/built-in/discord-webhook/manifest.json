@@ -1,0 +1,17 @@
+{
+  "id": "discord-webhook",
+  "name": "Discord Webhook",
+  "description": "Send messages and embeds to Discord channels via webhooks.",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "icon": "message-circle",
+  "settings": [
+    {
+      "key": "webhook_url",
+      "label": "Webhook URL",
+      "type": "password",
+      "required": true,
+      "placeholder": "https://discord.com/api/webhooks/..."
+    }
+  ]
+}

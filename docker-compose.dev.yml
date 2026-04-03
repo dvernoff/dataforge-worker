@@ -1,0 +1,213 @@
+# ═══════════════════════════════════════════
+# DataForge — Development (hot-reload)
+# ═══════════════════════════════════════════
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d                        — Start all
+#   docker compose -f docker-compose.dev.yml restart worker               — Restart Worker
+#   docker compose -f docker-compose.dev.yml restart control-plane        — Restart CP backend
+#   docker compose -f docker-compose.dev.yml restart frontend             — Restart Frontend
+#   docker compose -f docker-compose.dev.yml logs -f worker               — Worker logs
+#   docker compose -f docker-compose.dev.yml logs -f control-plane worker — Both backends
+#   docker compose -f docker-compose.dev.yml down                         — Stop all
+#
+
+services:
+  # ── Infrastructure ──
+
+  postgres-control:
+    image: postgres:16-alpine
+    container_name: dataforge-dev-postgres-control
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dataforge
+      POSTGRES_PASSWORD: df_control_2024
+      POSTGRES_DB: dataforge_control
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_control_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dataforge"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  postgres-worker:
+    image: postgres:16-alpine
+    container_name: dataforge-dev-postgres-worker
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dataforge
+      POSTGRES_PASSWORD: df_worker_2024
+      POSTGRES_DB: dataforge_worker
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_worker_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dataforge"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: dataforge-dev-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # ── Migrations (run once, then exit) ──
+
+  migrate-control-plane:
+    image: node:20-alpine
+    container_name: dataforge-dev-migrate-control-plane
+    working_dir: /app/control-plane/backend
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./control-plane/backend:/app/control-plane/backend
+      - control_plane_node_modules:/app/control-plane/backend/node_modules
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://dataforge:df_control_2024@postgres-control:5432/dataforge_control
+    command: >
+      sh -c "npm install --prefer-offline --no-audit 2>/dev/null;
+             npx knex migrate:latest --esm 2>/dev/null || node --import tsx/esm node_modules/knex/bin/cli.js migrate:latest;
+             npx knex seed:run --esm 2>/dev/null || node --import tsx/esm node_modules/knex/bin/cli.js seed:run;
+             echo '[MIGRATE] Control Plane done!'"
+    depends_on:
+      postgres-control:
+        condition: service_healthy
+    profiles: [migrate]
+
+  migrate-worker:
+    image: node:20-alpine
+    container_name: dataforge-dev-migrate-worker
+    working_dir: /app/worker-node/backend
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./worker-node/backend:/app/worker-node/backend
+      - worker_node_modules:/app/worker-node/backend/node_modules
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://dataforge:df_worker_2024@postgres-worker:5432/dataforge_worker
+    command: >
+      sh -c "npm install --prefer-offline --no-audit 2>/dev/null;
+             npx knex migrate:latest --esm 2>/dev/null || node --import tsx/esm node_modules/knex/bin/cli.js migrate:latest;
+             echo '[MIGRATE] Worker done!'"
+    depends_on:
+      postgres-worker:
+        condition: service_healthy
+    profiles: [migrate]
+
+  control-plane:
+    image: node:20-alpine
+    container_name: dataforge-dev-control-plane
+    restart: unless-stopped
+    working_dir: /app/control-plane/backend
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./control-plane/backend:/app/control-plane/backend
+      - control_plane_node_modules:/app/control-plane/backend/node_modules
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: "4000"
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://dataforge:df_control_2024@postgres-control:5432/dataforge_control
+      REDIS_URL: redis://redis:6379
+      WORKER_NODE_API_KEY: dev_worker_api_key_change_in_production_64chars_ccccccccccccccccccc
+      JWT_ACCESS_SECRET: dev_access_secret_change_in_production_64chars_aaaaaaaaaaaaaaaaaaaaaa
+      JWT_REFRESH_SECRET: dev_refresh_secret_change_in_production_64chars_bbbbbbbbbbbbbbbbbbbbb
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
+      BCRYPT_ROUNDS: "12"
+      ADMIN_EMAIL: admin@dataforge.local
+      ADMIN_PASSWORD: "Admin123!@#"
+      ADMIN_NAME: Superadmin
+      SECRETS_ENCRYPTION_KEY: dev_secrets_key_32chars_minimum!!
+      CORS_ORIGIN: http://localhost:3000
+      RATE_LIMIT_MAX: "200"
+      RATE_LIMIT_WINDOW: "60000"
+    command: >
+      sh -c "npm install --prefer-offline --no-audit 2>/dev/null;
+             npx tsx --watch src/index.ts"
+    depends_on:
+      postgres-control:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Worker Node (hot-reload) ──
+
+  worker:
+    image: node:20-alpine
+    container_name: dataforge-dev-worker
+    restart: unless-stopped
+    working_dir: /app/worker-node/backend
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./worker-node/backend:/app/worker-node/backend
+      - worker_node_modules:/app/worker-node/backend/node_modules
+    ports:
+      - "4001:4001"
+    environment:
+      NODE_ENV: development
+      PORT: "4001"
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://dataforge:df_worker_2024@postgres-worker:5432/dataforge_worker
+      REDIS_URL: redis://redis:6379
+      NODE_API_KEY: dev_worker_api_key_change_in_production_64chars_ccccccccccccccccccc
+      CONTROL_PLANE_URL: http://control-plane:4000
+      NODE_ID: worker-dev-1
+      CORS_ORIGIN: "*"
+      RATE_LIMIT_MAX: "200"
+      RATE_LIMIT_WINDOW: "60000"
+    command: >
+      sh -c "npm install --prefer-offline --no-audit 2>/dev/null;
+             npx tsx --watch src/index.ts"
+    depends_on:
+      postgres-worker:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Frontend (Vite dev server) ──
+
+  frontend:
+    image: node:20-alpine
+    container_name: dataforge-dev-frontend
+    restart: unless-stopped
+    working_dir: /app/control-plane/frontend
+    volumes:
+      - ./shared:/app/shared:ro
+      - ./control-plane/frontend:/app/control-plane/frontend
+      - frontend_node_modules:/app/control-plane/frontend/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      API_PROXY_TARGET: http://control-plane:4000
+      VITE_CP_URL: http://localhost:4000
+    command: >
+      sh -c "npm install --prefer-offline --no-audit 2>/dev/null;
+             npx vite --host 0.0.0.0 --port 3000"
+    depends_on:
+      - control-plane
+
+volumes:
+  pg_control_dev:
+  pg_worker_dev:
+  redis_dev:
+  control_plane_node_modules:
+  worker_node_modules:
+  frontend_node_modules:
