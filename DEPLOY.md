@@ -19,7 +19,7 @@ git add .
 git commit -m "Initial commit"
 
 # Add remote and push
-git remote add origin https://github.com/YOUR_USERNAME/dataforge.git
+git remote add origin https://github.com/dvernoff/dataforge.git
 git branch -M main
 git push -u origin main
 ```
@@ -34,7 +34,7 @@ Use `git subtree` to split it out:
 cd C:\Users\autht\OneDrive\Desktop\BASE\Github\dataforge
 
 # Add worker remote
-git remote add worker https://github.com/YOUR_USERNAME/dataforge-worker.git
+git remote add worker https://github.com/dvernoff/dataforge-worker.git
 
 # Push worker-node/ folder as its own repo
 git subtree push --prefix=worker-node worker main
@@ -50,7 +50,7 @@ git subtree push --prefix=worker-node worker main
 ```bash
 cd C:\Users\autht\OneDrive\Desktop\BASE\Github\dataforge
 
-git remote add site https://github.com/YOUR_USERNAME/dataforge-site.git
+git remote add site https://github.com/dvernoff/dataforge-site.git
 git subtree push --prefix=dataforge-site site main
 ```
 
@@ -62,7 +62,7 @@ git tag v0.1.0
 git push origin v0.1.0
 
 # In worker repo (after subtree push)
-cd /tmp && git clone https://github.com/YOUR_USERNAME/dataforge-worker.git
+cd /tmp && git clone https://github.com/dvernoff/dataforge-worker.git
 cd dataforge-worker
 git tag v0.1.0
 git push origin v0.1.0

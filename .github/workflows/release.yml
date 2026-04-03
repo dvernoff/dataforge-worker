@@ -27,7 +27,7 @@ jobs:
         run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Build & push CP Backend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: control-plane/backend/Dockerfile
@@ -39,7 +39,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push CP Frontend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: control-plane/frontend/Dockerfile
@@ -51,7 +51,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push Worker
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: worker-node/backend/Dockerfile
