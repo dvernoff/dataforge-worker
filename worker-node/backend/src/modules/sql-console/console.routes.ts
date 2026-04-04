@@ -90,9 +90,9 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
 
   // DELETE /api/projects/:projectId/sql/saved/:queryId
   app.delete('/:projectId/sql/saved/:queryId', async (request, reply) => {
-    const { queryId } = request.params as { queryId: string };
+    const { projectId, queryId } = request.params as { projectId: string; queryId: string };
     const userId = request.userId;
-    await app.db('saved_queries').where({ id: queryId, user_id: userId }).delete();
+    await app.db('saved_queries').where({ id: queryId, user_id: userId, project_id: projectId }).delete();
     return reply.status(204).send();
   });
 

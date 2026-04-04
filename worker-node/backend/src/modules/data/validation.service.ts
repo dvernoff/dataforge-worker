@@ -101,12 +101,12 @@ export class ValidationService {
     return rule;
   }
 
-  async deleteRule(id: string): Promise<void> {
-    const rule = await this.db('validation_rules').where({ id }).first();
+  async deleteRule(id: string, projectId: string): Promise<void> {
+    const rule = await this.db('validation_rules').where({ id, project_id: projectId }).first();
     if (!rule) {
       throw new AppError(404, 'Validation rule not found');
     }
-    await this.db('validation_rules').where({ id }).delete();
+    await this.db('validation_rules').where({ id, project_id: projectId }).delete();
     this.invalidateRulesCache(rule.project_id, rule.table_name);
   }
 

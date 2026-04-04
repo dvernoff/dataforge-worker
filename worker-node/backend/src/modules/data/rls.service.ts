@@ -40,8 +40,8 @@ export class RLSService {
     return rule;
   }
 
-  async deleteRule(id: string) {
-    const deleted = await this.db('rls_rules').where({ id }).delete();
+  async deleteRule(id: string, projectId: string) {
+    const deleted = await this.db('rls_rules').where({ id, project_id: projectId }).delete();
     if (!deleted) {
       throw Object.assign(new Error('RLS rule not found'), { statusCode: 404 });
     }

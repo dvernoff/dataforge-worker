@@ -120,7 +120,7 @@ export class CronService {
 
     const newActive = !job.is_active;
     const [updated] = await this.db('cron_jobs')
-      .where({ id: jobId })
+      .where({ id: jobId, project_id: projectId })
       .update({ is_active: newActive })
       .returning('*');
 
@@ -142,7 +142,14 @@ export class CronService {
     return this.executeJob(job);
   }
 
-  async getRuns(jobId: string, limit = 50) {
+  async getRuns(jobId: string, projectId: string, limit = 50) {
+    // Verify the cron job belongs to the project before returning runs
+    const job = await this.db('cron_jobs')
+      .where({ id: jobId, project_id: projectId })
+      .select('id')
+      .first();
+    if (!job) throw new AppError(404, 'Cron job not found');
+
     return this.db('cron_job_runs')
       .where({ cron_job_id: jobId })
       .orderBy('started_at', 'desc')

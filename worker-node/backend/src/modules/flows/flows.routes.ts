@@ -44,7 +44,7 @@ export async function flowsRoutes(app: FastifyInstance) {
   app.get('/:projectId/flows/:flowId', async (request) => {
     const { projectId, flowId } = request.params as { projectId: string; flowId: string };
     const flow = await flowsService.findById(flowId, projectId);
-    const runs = await flowsService.getRuns(flowId, 20);
+    const runs = await flowsService.getRuns(flowId, projectId, 20);
     return { flow, runs };
   });
 
@@ -75,7 +75,7 @@ export async function flowsRoutes(app: FastifyInstance) {
   app.get('/:projectId/flows/:flowId/runs', async (request) => {
     const { projectId, flowId } = request.params as { projectId: string; flowId: string };
     const query = request.query as Record<string, string>;
-    const runs = await flowsService.getRuns(flowId, Number(query.limit ?? 50));
+    const runs = await flowsService.getRuns(flowId, projectId, Number(query.limit ?? 50));
     return { runs };
   });
 }

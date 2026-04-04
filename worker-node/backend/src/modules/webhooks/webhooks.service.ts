@@ -123,7 +123,14 @@ export class WebhooksService {
     if (!deleted) throw new AppError(404, 'Webhook not found');
   }
 
-  async getLogs(webhookId: string, limit = 50) {
+  async getLogs(webhookId: string, projectId: string, limit = 50) {
+    // Verify the webhook belongs to the project before returning logs
+    const webhook = await this.db('webhooks')
+      .where({ id: webhookId, project_id: projectId })
+      .select('id')
+      .first();
+    if (!webhook) throw new AppError(404, 'Webhook not found');
+
     return this.db('webhook_logs')
       .where({ webhook_id: webhookId })
       .orderBy('sent_at', 'desc')

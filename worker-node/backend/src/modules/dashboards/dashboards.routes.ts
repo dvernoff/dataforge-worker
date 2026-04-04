@@ -44,15 +44,15 @@ export async function dashboardsRoutes(app: FastifyInstance) {
 
   // GET /:projectId/dashboards/:dashboardId
   app.get('/:projectId/dashboards/:dashboardId', async (request) => {
-    const { dashboardId } = request.params as { dashboardId: string };
-    const dashboard = await dashboardsService.getById(dashboardId);
+    const { projectId, dashboardId } = request.params as { projectId: string; dashboardId: string };
+    const dashboard = await dashboardsService.getById(dashboardId, projectId);
     if (!dashboard) throw new AppError(404, 'Dashboard not found');
     return { dashboard };
   });
 
   // PUT /:projectId/dashboards/:dashboardId
   app.put('/:projectId/dashboards/:dashboardId', async (request) => {
-    const { dashboardId } = request.params as { dashboardId: string };
+    const { projectId, dashboardId } = request.params as { projectId: string; dashboardId: string };
     const body = z.object({
       name: z.string().min(1).max(255).optional(),
       description: z.string().optional(),
@@ -62,21 +62,25 @@ export async function dashboardsRoutes(app: FastifyInstance) {
       public_slug: z.string().max(100).nullable().optional(),
     }).parse(request.body);
 
-    const dashboard = await dashboardsService.update(dashboardId, body as any);
+    const dashboard = await dashboardsService.update(dashboardId, projectId, body as any);
+    if (!dashboard) throw new AppError(404, 'Dashboard not found');
     return { dashboard };
   });
 
   // DELETE /:projectId/dashboards/:dashboardId
   app.delete('/:projectId/dashboards/:dashboardId', async (request, reply) => {
-    const { dashboardId } = request.params as { dashboardId: string };
-    await dashboardsService.delete(dashboardId);
+    const { projectId, dashboardId } = request.params as { projectId: string; dashboardId: string };
+    await dashboardsService.delete(dashboardId, projectId);
     return reply.status(204).send();
   });
 
   // POST /:projectId/dashboards/:dashboardId/execute
   app.post('/:projectId/dashboards/:dashboardId/execute', async (request) => {
-    const { dashboardId } = request.params as { dashboardId: string };
+    const { projectId, dashboardId } = request.params as { projectId: string; dashboardId: string };
     const dbSchema = resolveProjectSchema(request);
+    // Verify dashboard belongs to project before executing
+    const dashboard = await dashboardsService.getById(dashboardId, projectId);
+    if (!dashboard) throw new AppError(404, 'Dashboard not found');
     const results = await dashboardsService.executeAllWidgets(dashboardId, dbSchema);
     return { results };
   });

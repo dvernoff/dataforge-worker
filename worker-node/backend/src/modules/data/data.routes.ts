@@ -373,7 +373,8 @@ export async function dataRoutes(app: FastifyInstance) {
   // DELETE /api/projects/:projectId/rls/:ruleId — delete rule
   app.delete('/:projectId/rls/:ruleId', async (request, reply) => {
     const { ruleId } = request.params as { ruleId: string };
-    await rlsService.deleteRule(ruleId);
+    const projectId = resolveProjectId(request);
+    await rlsService.deleteRule(ruleId, projectId);
     return reply.status(204).send();
   });
 
@@ -409,7 +410,8 @@ export async function dataRoutes(app: FastifyInstance) {
   // DELETE /api/projects/:projectId/tables/:tableName/validations/:ruleId
   app.delete('/:projectId/tables/:tableName/validations/:ruleId', async (request, reply) => {
     const { ruleId } = request.params as { ruleId: string };
-    await validationService.deleteRule(ruleId);
+    const projectId = resolveProjectId(request);
+    await validationService.deleteRule(ruleId, projectId);
     return reply.status(204).send();
   });
 

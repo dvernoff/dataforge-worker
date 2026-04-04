@@ -77,7 +77,7 @@ export async function cronRoutes(app: FastifyInstance) {
   app.get('/:projectId/cron/:jobId/runs', async (request) => {
     const { projectId, jobId } = request.params as { projectId: string; jobId: string };
     const query = request.query as Record<string, string>;
-    const runs = await cronService.getRuns(jobId, Number(query.limit ?? 50));
+    const runs = await cronService.getRuns(jobId, projectId, Number(query.limit ?? 50));
     return { runs };
   });
 }

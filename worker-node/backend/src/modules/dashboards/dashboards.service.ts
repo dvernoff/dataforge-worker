@@ -19,8 +19,10 @@ export class DashboardsService {
       .orderBy('created_at', 'desc');
   }
 
-  async getById(dashboardId: string) {
-    return this.db('custom_dashboards').where({ id: dashboardId }).first();
+  async getById(dashboardId: string, projectId?: string) {
+    const query = this.db('custom_dashboards').where({ id: dashboardId });
+    if (projectId) query.andWhere({ project_id: projectId });
+    return query.first();
   }
 
   async create(input: {
@@ -40,7 +42,7 @@ export class DashboardsService {
     return dashboard;
   }
 
-  async update(dashboardId: string, input: {
+  async update(dashboardId: string, projectId: string, input: {
     name?: string;
     description?: string;
     widgets?: Widget[];
@@ -49,14 +51,17 @@ export class DashboardsService {
     public_slug?: string | null;
   }) {
     const [dashboard] = await this.db('custom_dashboards')
-      .where({ id: dashboardId })
+      .where({ id: dashboardId, project_id: projectId })
       .update(input)
       .returning('*');
     return dashboard;
   }
 
-  async delete(dashboardId: string) {
-    await this.db('custom_dashboards').where({ id: dashboardId }).delete();
+  async delete(dashboardId: string, projectId: string) {
+    const deleted = await this.db('custom_dashboards')
+      .where({ id: dashboardId, project_id: projectId })
+      .delete();
+    if (!deleted) throw new Error('Dashboard not found');
   }
 
   async executeWidget(widget: Widget, dbSchema: string, timeoutMs = 10_000): Promise<Record<string, unknown>> {

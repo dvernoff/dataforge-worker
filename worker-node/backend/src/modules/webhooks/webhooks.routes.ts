@@ -55,9 +55,9 @@ export async function webhookRoutes(app: FastifyInstance) {
   });
 
   app.get('/:projectId/webhooks/:webhookId/logs', async (request) => {
-    const { webhookId } = request.params as { webhookId: string };
+    const { projectId, webhookId } = request.params as { projectId: string; webhookId: string };
     const query = request.query as Record<string, string>;
-    const logs = await webhooksService.getLogs(webhookId, Number(query.limit ?? 50));
+    const logs = await webhooksService.getLogs(webhookId, projectId, Number(query.limit ?? 50));
     return { logs };
   });
 }
