@@ -454,7 +454,8 @@ export async function dataRoutes(app: FastifyInstance) {
   // DELETE /api/projects/:projectId/tables/:tableName/data/:recordId/comments/:commentId
   app.delete('/:projectId/tables/:tableName/data/:recordId/comments/:commentId', async (request, reply) => {
     const { commentId } = request.params as { commentId: string };
-    await commentsService.delete(commentId);
+    const projectId = resolveProjectId(request);
+    await commentsService.delete(commentId, projectId);
     return reply.status(204).send();
   });
 
