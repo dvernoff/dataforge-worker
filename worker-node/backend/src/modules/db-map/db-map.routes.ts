@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 
 function resolveProjectSchema(request: any): string {
@@ -10,6 +11,7 @@ function resolveProjectSchema(request: any): string {
 
 export async function dbMapRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   // GET /api/projects/:projectId/db-map
   app.get('/:projectId/db-map', async (request) => {

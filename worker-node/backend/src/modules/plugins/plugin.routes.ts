@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { PluginManager } from './plugin.manager.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 
 export async function pluginRoutes(app: FastifyInstance) {
   const pluginManager = new PluginManager(app.db);
@@ -10,6 +11,7 @@ export async function pluginRoutes(app: FastifyInstance) {
   (app as unknown as Record<string, unknown>).pluginManager = pluginManager;
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('editor'));
 
   // List all plugins with enabled status
   app.get('/:projectId/plugins', async (request) => {

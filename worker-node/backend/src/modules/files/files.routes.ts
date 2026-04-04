@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import multipart from '@fastify/multipart';
 import { FilesService } from './files.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 
 export async function filesRoutes(app: FastifyInstance) {
@@ -15,6 +16,7 @@ export async function filesRoutes(app: FastifyInstance) {
   const filesService = new FilesService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   // POST /api/projects/:projectId/files/upload — upload file
   app.post('/:projectId/files/upload', async (request) => {

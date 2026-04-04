@@ -33,6 +33,9 @@ const envSchema = z.object({
   WEBHOOK_MAX_RETRIES: z.coerce.number().default(3),
 
   ENCRYPTION_KEY: z.string().optional(),
+
+  // Secret shared between Control Plane and Worker for /internal/* routes
+  INTERNAL_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

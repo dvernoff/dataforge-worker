@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireInternalCaller } from '../../middleware/worker-rbac.middleware.js';
 import { z } from 'zod';
 import os from 'os';
 import * as fs from 'fs';
@@ -7,6 +8,7 @@ import * as path from 'path';
 
 export async function internalRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireInternalCaller());
 
   // POST /internal/projects — create project schema on worker DB
   app.post('/projects', async (request, reply) => {

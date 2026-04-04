@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { CronService } from './cron.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { z } from 'zod';
 
 export async function cronRoutes(app: FastifyInstance) {
   const cronService = new CronService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('admin'));
 
   // List cron jobs
   app.get('/:projectId/cron', async (request) => {

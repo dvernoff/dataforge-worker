@@ -3,6 +3,7 @@ import { SchemaService } from './schema.service.js';
 import { ComputedColumnService } from './computed.service.js';
 import { VersioningService } from './versioning.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { z } from 'zod';
 import { AppError } from '../../middleware/error-handler.js';
 
@@ -72,6 +73,7 @@ export async function schemaRoutes(app: FastifyInstance) {
   const versioningService = new VersioningService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   // GET /api/projects/:projectId/tables
   app.get('/:projectId/tables', async (request) => {

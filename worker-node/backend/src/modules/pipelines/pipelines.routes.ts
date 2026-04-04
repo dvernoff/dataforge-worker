@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { z } from 'zod';
 
@@ -11,6 +12,7 @@ function resolveProjectSchema(request: any): string {
 
 export async function pipelinesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('admin'));
 
   // Auto-create pipelines table in project schema
   async function ensurePipelinesTable(schema: string) {

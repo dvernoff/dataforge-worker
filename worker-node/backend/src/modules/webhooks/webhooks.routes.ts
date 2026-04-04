@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { WebhooksService } from './webhooks.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { z } from 'zod';
 
 export async function webhookRoutes(app: FastifyInstance) {
   const webhooksService = new WebhooksService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   app.get('/:projectId/webhooks', async (request) => {
     const { projectId } = request.params as { projectId: string };

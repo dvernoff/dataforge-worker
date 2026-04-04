@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { FlowsService } from './flows.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { z } from 'zod';
 
 export async function flowsRoutes(app: FastifyInstance) {
   const flowsService = new FlowsService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('admin'));
 
   // List flows
   app.get('/:projectId/flows', async (request) => {

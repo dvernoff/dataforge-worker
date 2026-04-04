@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { z } from 'zod';
 
@@ -100,6 +101,7 @@ async function logAiUsage(db: any, userId: string, projectId: string, action: st
 
 export async function aiRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('admin'));
 
   app.post('/:projectId/ai/schema', async (request) => {
     const { projectId } = request.params as { projectId: string };

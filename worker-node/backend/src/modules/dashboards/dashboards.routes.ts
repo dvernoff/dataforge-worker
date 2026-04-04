@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { DashboardsService } from './dashboards.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { z } from 'zod';
 
@@ -14,6 +15,7 @@ export async function dashboardsRoutes(app: FastifyInstance) {
   const dashboardsService = new DashboardsService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('editor'));
 
   // GET /:projectId/dashboards
   app.get('/:projectId/dashboards', async (request) => {

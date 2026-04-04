@@ -3,6 +3,7 @@ import { BuilderService } from './builder.service.js';
 import { Executor } from './executor.js';
 import { CacheService } from './cache.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { z } from 'zod';
 
@@ -20,6 +21,7 @@ export async function apiBuilderRoutes(app: FastifyInstance) {
 
   app.register(async (protectedRoutes) => {
     protectedRoutes.addHook('preHandler', nodeAuthMiddleware);
+    protectedRoutes.addHook('preHandler', requireWorkerRole('viewer'));
 
     // GET /api/projects/:projectId/endpoints
     protectedRoutes.get('/:projectId/endpoints', async (request) => {
