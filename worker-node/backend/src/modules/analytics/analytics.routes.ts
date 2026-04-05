@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 
 export async function analyticsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   // GET /:projectId/analytics/summary
   app.get('/:projectId/analytics/summary', async (request) => {

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { GraphQLService } from './graphql.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 
 function resolveProjectSchema(request: any): string {
@@ -13,6 +14,7 @@ export async function graphqlProxyRoutes(app: FastifyInstance) {
   const graphqlService = new GraphQLService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   // POST /api/projects/:projectId/graphql — proxied from CP
   app.post('/:projectId/graphql', async (request, reply) => {

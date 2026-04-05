@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { CronService } from './cron.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { z } from 'zod';
 
 export async function cronRoutes(app: FastifyInstance) {
   const cronService = new CronService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('admin'));
 
   // List cron jobs
   app.get('/:projectId/cron', async (request) => {
@@ -75,7 +77,7 @@ export async function cronRoutes(app: FastifyInstance) {
   app.get('/:projectId/cron/:jobId/runs', async (request) => {
     const { projectId, jobId } = request.params as { projectId: string; jobId: string };
     const query = request.query as Record<string, string>;
-    const runs = await cronService.getRuns(jobId, Number(query.limit ?? 50));
+    const runs = await cronService.getRuns(jobId, projectId, Number(query.limit ?? 50));
     return { runs };
   });
 }

@@ -30,13 +30,8 @@ export class CacheService {
   }
 
   async invalidateByEndpoint(projectSlug: string, endpointId: string): Promise<void> {
-    // Try exact slug match first, then wildcard fallback
     const pattern = `cache:${projectSlug}:${endpointId}:*`;
-    let keys = await this.redis.keys(pattern);
-    if (keys.length === 0) {
-      // Fallback: match any slug for this endpoint
-      keys = await this.redis.keys(`cache:*:${endpointId}:*`);
-    }
+    const keys = await this.redis.keys(pattern);
     if (keys.length > 0) {
       await this.redis.del(...keys);
     }

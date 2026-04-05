@@ -25,8 +25,11 @@ export class CommentsService {
     return comment;
   }
 
-  async delete(id: string) {
-    await this.db('record_comments').where({ id }).delete();
+  async delete(id: string, projectId: string) {
+    const deleted = await this.db('record_comments')
+      .where({ id, project_id: projectId })
+      .delete();
+    if (!deleted) throw new Error('Comment not found');
   }
 
   async getCount(projectId: string, tableName: string, recordId: string): Promise<number> {

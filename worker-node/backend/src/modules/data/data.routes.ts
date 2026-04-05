@@ -7,6 +7,7 @@ import { CommentsService } from './comments.service.js';
 import { CacheService } from '../api-builder/cache.service.js';
 import { CacheInvalidationService } from '../api-builder/cache-invalidation.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { getQuotaHelpers } from '../../middleware/quota-enforcement.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { z } from 'zod';
@@ -32,6 +33,7 @@ export async function dataRoutes(app: FastifyInstance) {
   const commentsService = new CommentsService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   // GET /api/projects/:projectId/tables/:tableName/data
   app.get('/:projectId/tables/:tableName/data', async (request) => {
@@ -371,7 +373,8 @@ export async function dataRoutes(app: FastifyInstance) {
   // DELETE /api/projects/:projectId/rls/:ruleId — delete rule
   app.delete('/:projectId/rls/:ruleId', async (request, reply) => {
     const { ruleId } = request.params as { ruleId: string };
-    await rlsService.deleteRule(ruleId);
+    const projectId = resolveProjectId(request);
+    await rlsService.deleteRule(ruleId, projectId);
     return reply.status(204).send();
   });
 
@@ -407,7 +410,8 @@ export async function dataRoutes(app: FastifyInstance) {
   // DELETE /api/projects/:projectId/tables/:tableName/validations/:ruleId
   app.delete('/:projectId/tables/:tableName/validations/:ruleId', async (request, reply) => {
     const { ruleId } = request.params as { ruleId: string };
-    await validationService.deleteRule(ruleId);
+    const projectId = resolveProjectId(request);
+    await validationService.deleteRule(ruleId, projectId);
     return reply.status(204).send();
   });
 
@@ -450,7 +454,8 @@ export async function dataRoutes(app: FastifyInstance) {
   // DELETE /api/projects/:projectId/tables/:tableName/data/:recordId/comments/:commentId
   app.delete('/:projectId/tables/:tableName/data/:recordId/comments/:commentId', async (request, reply) => {
     const { commentId } = request.params as { commentId: string };
-    await commentsService.delete(commentId);
+    const projectId = resolveProjectId(request);
+    await commentsService.delete(commentId, projectId);
     return reply.status(204).send();
   });
 

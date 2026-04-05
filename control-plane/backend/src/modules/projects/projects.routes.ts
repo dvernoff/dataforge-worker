@@ -7,6 +7,7 @@ import { AppError } from '../../middleware/error-handler.js';
 import { logAudit } from '../audit/audit.middleware.js';
 import { ProxyService } from '../proxy/proxy.service.js';
 import { QuotasService } from '../quotas/quotas.service.js';
+import { env } from '../../config/env.js';
 import { z } from 'zod';
 
 export async function projectRoutes(app: FastifyInstance) {
@@ -26,6 +27,7 @@ export async function projectRoutes(app: FastifyInstance) {
         headers: {
           'Content-Type': 'application/json',
           'X-Node-Api-Key': worker.apiKey,
+          ...(env.INTERNAL_SECRET ? { 'X-Internal-Secret': env.INTERNAL_SECRET } : {}),
         },
         body: JSON.stringify({
           id: project.id,
@@ -158,7 +160,10 @@ export async function projectRoutes(app: FastifyInstance) {
       const worker = await proxyService.getWorkerForProject(projectId);
       await fetch(`${worker.url.replace(/\/$/, '')}/internal/projects/${projectId}`, {
         method: 'DELETE',
-        headers: { 'X-Node-Api-Key': worker.apiKey },
+        headers: {
+          'X-Node-Api-Key': worker.apiKey,
+          ...(env.INTERNAL_SECRET ? { 'X-Internal-Secret': env.INTERNAL_SECRET } : {}),
+        },
       });
     } catch (err) {
       app.log.warn({ err, projectId }, 'Failed to delete project on Worker Node');

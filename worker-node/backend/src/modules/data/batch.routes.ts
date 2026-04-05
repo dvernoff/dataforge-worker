@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { BatchService } from './batch.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { z } from 'zod';
 
@@ -24,6 +25,7 @@ export async function batchRoutes(app: FastifyInstance) {
   const batchService = new BatchService(app.db);
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   // POST /api/projects/:projectId/batch
   app.post('/:projectId/batch', async (request) => {

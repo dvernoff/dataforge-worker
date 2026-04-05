@@ -4,6 +4,7 @@ import { ProxyService } from '../proxy/proxy.service.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { requireRole } from '../../middleware/rbac.middleware.js';
 import { logAudit } from '../audit/audit.middleware.js';
+import { env } from '../../config/env.js';
 import { z } from 'zod';
 
 async function syncTokenToWorker(
@@ -21,6 +22,7 @@ async function syncTokenToWorker(
       headers: {
         'Content-Type': 'application/json',
         'X-Node-Api-Key': worker.apiKey,
+        ...(env.INTERNAL_SECRET ? { 'X-Internal-Secret': env.INTERNAL_SECRET } : {}),
       },
       body: JSON.stringify({
         action,

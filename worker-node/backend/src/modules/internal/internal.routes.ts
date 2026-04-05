@@ -1,12 +1,31 @@
-import type { FastifyInstance } from 'fastify';
-import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { env } from '../../config/env.js';
 import { z } from 'zod';
 import os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
+/**
+ * Dedicated auth for /internal/* routes.
+ * Checks NODE_API_KEY + INTERNAL_SECRET. Does NOT run project validation
+ * because internal routes may create/delete projects that don't exist yet.
+ */
+async function internalAuthMiddleware(request: FastifyRequest, reply: FastifyReply) {
+  // Validate NODE_API_KEY
+  const apiKey = request.headers['x-node-api-key'] as string;
+  if (!apiKey || apiKey !== env.NODE_API_KEY) {
+    return reply.status(401).send({ error: 'Unauthorized: invalid node API key' });
+  }
+
+  // Validate INTERNAL_SECRET (if configured)
+  const internalSecret = request.headers['x-internal-secret'] as string;
+  if (env.INTERNAL_SECRET && internalSecret !== env.INTERNAL_SECRET) {
+    return reply.status(403).send({ error: 'Forbidden: internal access only' });
+  }
+}
+
 export async function internalRoutes(app: FastifyInstance) {
-  app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', internalAuthMiddleware);
 
   // POST /internal/projects — create project schema on worker DB
   app.post('/projects', async (request, reply) => {

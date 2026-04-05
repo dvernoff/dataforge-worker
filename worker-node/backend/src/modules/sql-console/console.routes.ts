@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ConsoleService } from './console.service.js';
 import { AISQLService } from './ai.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { getQuotaHelpers } from '../../middleware/quota-enforcement.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { z } from 'zod';
@@ -17,6 +18,7 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
   const aiService = new AISQLService();
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   // POST /api/projects/:projectId/sql/execute
   app.post('/:projectId/sql/execute', async (request) => {
@@ -88,9 +90,9 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
 
   // DELETE /api/projects/:projectId/sql/saved/:queryId
   app.delete('/:projectId/sql/saved/:queryId', async (request, reply) => {
-    const { queryId } = request.params as { queryId: string };
+    const { projectId, queryId } = request.params as { projectId: string; queryId: string };
     const userId = request.userId;
-    await app.db('saved_queries').where({ id: queryId, user_id: userId }).delete();
+    await app.db('saved_queries').where({ id: queryId, user_id: userId, project_id: projectId }).delete();
     return reply.status(204).send();
   });
 

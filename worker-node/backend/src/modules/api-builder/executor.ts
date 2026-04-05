@@ -244,6 +244,15 @@ export class Executor {
         const sort = query.sort ?? (config.default_sort as string) ?? 'created_at';
         const order = (query.order ?? 'desc') as 'asc' | 'desc';
 
+        // Validate sort field to prevent SQL injection — only allow safe column names
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(sort)) {
+          throw new AppError(400, 'Invalid sort field');
+        }
+        // Validate order direction
+        if (order !== 'asc' && order !== 'desc') {
+          throw new AppError(400, 'Invalid sort order');
+        }
+
         const [{ count }] = await countQ.count('* as count');
         const data = await q.orderBy(sort, order).offset(offset).limit(limit);
 

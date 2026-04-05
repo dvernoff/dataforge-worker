@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ExplorerService } from './explorer.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { z } from 'zod';
 
@@ -22,6 +23,7 @@ export async function explorerRoutes(app: FastifyInstance) {
   const explorerService = new ExplorerService();
 
   app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('viewer'));
 
   // POST /:projectId/explorer/pivot — execute pivot query
   app.post('/:projectId/explorer/pivot', async (request) => {

@@ -184,7 +184,10 @@ export class QuotasService {
       if (!row?.url) return defaults;
 
       const res = await fetch(`${String(row.url).replace(/\/$/, '')}/internal/projects/${projectId}/usage`, {
-        headers: { 'X-Node-Api-Key': env.WORKER_NODE_API_KEY },
+        headers: {
+          'X-Node-Api-Key': env.WORKER_NODE_API_KEY,
+          ...(env.INTERNAL_SECRET ? { 'X-Internal-Secret': env.INTERNAL_SECRET } : {}),
+        },
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) return defaults;

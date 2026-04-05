@@ -167,7 +167,14 @@ export class FlowsService {
     }
   }
 
-  async getRuns(flowId: string, limit = 50) {
+  async getRuns(flowId: string, projectId: string, limit = 50) {
+    // Verify the flow belongs to the project before returning runs
+    const flow = await this.db('flows')
+      .where({ id: flowId, project_id: projectId })
+      .select('id')
+      .first();
+    if (!flow) throw new AppError(404, 'Flow not found');
+
     return this.db('flow_runs')
       .where({ flow_id: flowId })
       .orderBy('started_at', 'desc')
