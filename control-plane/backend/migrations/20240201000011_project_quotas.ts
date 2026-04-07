@@ -55,11 +55,16 @@ export async function up(knex: Knex): Promise<void> {
   }).returning('id');
 
   if (plan) {
-    await knex.raw(`
-      UPDATE projects SET plan_id = ?
-      WHERE node_id IN (SELECT id FROM nodes WHERE owner_id IS NULL)
-         OR node_id IS NULL
-    `, [plan.id]);
+    const hasOwnerCol = await knex.schema.hasColumn('nodes', 'owner_id');
+    if (hasOwnerCol) {
+      await knex.raw(`
+        UPDATE projects SET plan_id = ?
+        WHERE node_id IN (SELECT id FROM nodes WHERE owner_id IS NULL)
+           OR node_id IS NULL
+      `, [plan.id]);
+    } else {
+      await knex('projects').update({ plan_id: plan.id });
+    }
   }
 }
 
