@@ -32,38 +32,31 @@ export class FilesService {
     columnName: string,
     file: { filename: string; mimetype: string; data: Buffer }
   ): Promise<FileRecord> {
-    // Validate file extension
     const fileExt = path.extname(file.filename).toLowerCase();
     if (FilesService.BLOCKED_EXTENSIONS.includes(fileExt)) {
       throw new AppError(400, 'File type not allowed');
     }
 
-    // Validate path parameters to prevent path traversal
     if (!/^[a-zA-Z0-9_-]+$/.test(tableName) || !/^[a-zA-Z0-9_-]+$/.test(String(recordId))) {
       throw new AppError(400, 'Invalid path parameters');
     }
 
-    // Create directory structure
     const dir = path.join(this.baseDir, projectId, tableName, recordId);
     const resolvedDir = path.resolve(dir);
     const resolvedBase = path.resolve(this.baseDir);
 
-    // Verify the resolved path is still under baseDir
     if (!resolvedDir.startsWith(resolvedBase)) {
       throw new AppError(400, 'Invalid path');
     }
 
     fs.mkdirSync(dir, { recursive: true });
 
-    // Generate unique filename
     const ext = path.extname(file.filename);
     const storageName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
     const storagePath = path.join(dir, storageName);
 
-    // Write file to disk
     fs.writeFileSync(storagePath, file.data);
 
-    // Save metadata to DB
     const [record] = await this.db('files')
       .insert({
         project_id: projectId,
@@ -106,12 +99,10 @@ export class FilesService {
       throw new AppError(404, 'File not found');
     }
 
-    // Remove from disk
     if (fs.existsSync(record.storage_path)) {
       fs.unlinkSync(record.storage_path);
     }
 
-    // Remove from DB
     await this.db('files').where({ id: fileId }).delete();
   }
 

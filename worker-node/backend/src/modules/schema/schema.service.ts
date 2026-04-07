@@ -8,7 +8,6 @@ import { PG_TYPE_MAP } from './schema.types.js';
 export class SchemaService {
   constructor(private db: Knex) {}
 
-  // ─── List Tables ──────────────────────────────────────────
   async listTables(schema: string) {
     const result = await this.db.raw(`
       SELECT
@@ -20,7 +19,6 @@ export class SchemaService {
       ORDER BY t.table_name
     `, [schema]);
 
-    // Get row counts for each table
     const tables = [];
     for (const row of result.rows) {
       try {
@@ -40,9 +38,7 @@ export class SchemaService {
     return tables;
   }
 
-  // ─── Get Table Info ───────────────────────────────────────
   async getTableInfo(schema: string, tableName: string) {
-    // Columns
     const columns = await this.db.raw(`
       SELECT
         c.column_name as name,
@@ -56,7 +52,6 @@ export class SchemaService {
       ORDER BY c.ordinal_position
     `, [schema, tableName]);
 
-    // Primary keys
     const pks = await this.db.raw(`
       SELECT kcu.column_name
       FROM information_schema.table_constraints tc
@@ -67,7 +62,6 @@ export class SchemaService {
     `, [schema, tableName]);
     const pkColumns = new Set(pks.rows.map((r: { column_name: string }) => r.column_name));
 
-    // Unique constraints
     const uniques = await this.db.raw(`
       SELECT kcu.column_name
       FROM information_schema.table_constraints tc
@@ -87,14 +81,12 @@ export class SchemaService {
       is_primary: pkColumns.has(col.name as string),
       is_unique: uniqueColumns.has(col.name as string),
     }));
-    // id first, then user columns, then timestamps at the end
     const columnList = [
       ...allCols.filter((c: { name: string }) => c.name === 'id'),
       ...allCols.filter((c: { name: string }) => c.name !== 'id' && !TAIL_COLS.has(c.name)),
       ...allCols.filter((c: { name: string }) => TAIL_COLS.has(c.name)),
     ];
 
-    // Foreign keys
     const fks = await this.db.raw(`
       SELECT
         tc.constraint_name,
@@ -113,7 +105,6 @@ export class SchemaService {
       WHERE tc.table_schema = ? AND tc.table_name = ? AND tc.constraint_type = 'FOREIGN KEY'
     `, [schema, tableName]);
 
-    // Indexes
     const indexes = await this.db.raw(`
       SELECT
         i.relname as name,
@@ -132,16 +123,14 @@ export class SchemaService {
       GROUP BY i.relname, am.amname, ix.indisunique
     `, [schema, tableName]);
 
-    // Row count
     let rowCount = 0;
     try {
       const countRes = await this.db.raw(
         `SELECT COUNT(*)::int as count FROM "${schema}"."${tableName}"`
       );
       rowCount = countRes.rows[0].count;
-    } catch { /* table may not exist yet */ }
+    } catch {}
 
-    // Normalize index columns: pg array_agg may return a string like "{col1,col2}" depending on driver
     const normalizedIndexes = indexes.rows.map((idx: any) => ({
       ...idx,
       columns: Array.isArray(idx.columns)
@@ -158,7 +147,6 @@ export class SchemaService {
     };
   }
 
-  // ─── Create Table ─────────────────────────────────────────
   async createTable(schema: string, def: TableDefinition): Promise<string> {
     const parts: string[] = [];
 
@@ -167,7 +155,6 @@ export class SchemaService {
     }
 
     for (const col of def.columns) {
-      // Skip id if auto-pk
       if (col.name === 'id' && def.add_uuid_pk) continue;
       parts.push(this.buildColumnSQL(col));
     }
@@ -181,7 +168,6 @@ export class SchemaService {
 
     await this.db.raw(sql);
 
-    // Create updated_at trigger if timestamps
     if (def.add_timestamps) {
       await this.db.raw(`
         CREATE OR REPLACE FUNCTION "${schema}".update_updated_at_column()
@@ -203,7 +189,6 @@ export class SchemaService {
     return sql;
   }
 
-  // ─── Alter Table (columns) ────────────────────────────────
   async alterColumns(schema: string, tableName: string, changes: AlterColumnDef[]): Promise<string[]> {
     const sqls: string[] = [];
 
@@ -252,7 +237,7 @@ export class SchemaService {
             sqls.push(sql);
             await this.execAlterSql(sql, change.name);
           }
-          continue; // already executed
+          continue;
         }
         case 'drop':
           sql = `ALTER TABLE "${schema}"."${tableName}" DROP COLUMN IF EXISTS "${change.name}" CASCADE`;
@@ -280,7 +265,6 @@ export class SchemaService {
       const code = pgErr.code;
       const msg = pgErr.message ?? '';
 
-      // Cannot cast existing data to the new type
       if (code === '42804' || code === '22P02' || msg.includes('cannot be cast')) {
         throw Object.assign(
           new AppError(400, `Cannot convert column "${columnName}" to ${targetType ?? 'the requested type'}`),
@@ -288,7 +272,6 @@ export class SchemaService {
         );
       }
 
-      // Column has NULL values but trying to SET NOT NULL
       if (code === '23502' || msg.includes('contains null values')) {
         throw Object.assign(
           new AppError(400, `Column "${columnName}" contains NULL values`),
@@ -296,7 +279,6 @@ export class SchemaService {
         );
       }
 
-      // Dependent objects (indexes, FK, views)
       if (code === '2BP01') {
         throw Object.assign(
           new AppError(400, `Column "${columnName}" has dependent objects`),
@@ -304,7 +286,6 @@ export class SchemaService {
         );
       }
 
-      // Column doesn't exist
       if (code === '42703') {
         throw Object.assign(
           new AppError(404, `Column "${columnName}" does not exist`),
@@ -312,7 +293,6 @@ export class SchemaService {
         );
       }
 
-      // Duplicate column name
       if (code === '42701') {
         throw Object.assign(
           new AppError(409, `Column "${columnName}" already exists`),
@@ -320,7 +300,6 @@ export class SchemaService {
         );
       }
 
-      // Unique constraint violation when adding unique
       if (code === '23505') {
         throw Object.assign(
           new AppError(400, `Column "${columnName}" has duplicate values`),
@@ -328,12 +307,10 @@ export class SchemaService {
         );
       }
 
-      // Re-throw anything else with the PG message
       throw new AppError(400, `Column "${columnName}": ${msg}`);
     }
   }
 
-  // ─── Drop Table ───────────────────────────────────────────
   async dropTable(schema: string, tableName: string, projectId?: string): Promise<string[]> {
     const deleted: string[] = [];
 
@@ -356,7 +333,7 @@ export class SchemaService {
         try {
           const count = await promise;
           if (count > 0) deleted.push(`${count} ${name}`);
-        } catch { /* table may not exist */ }
+        } catch {}
       }
     }
 
@@ -364,7 +341,6 @@ export class SchemaService {
     return deleted;
   }
 
-  // ─── Foreign Keys ─────────────────────────────────────────
   async addForeignKey(schema: string, tableName: string, fk: ForeignKeyDef) {
     const constraintName = fk.constraint_name ?? `fk_${tableName}_${fk.source_column}_${fk.target_table}`;
     const sql = `
@@ -402,7 +378,6 @@ export class SchemaService {
     );
   }
 
-  // ─── Indexes ──────────────────────────────────────────────
   async addIndex(schema: string, tableName: string, idx: IndexDef) {
     const idxName = idx.name ?? `idx_${tableName}_${idx.columns.join('_')}`;
     const unique = idx.is_unique ? 'UNIQUE' : '';
@@ -410,9 +385,7 @@ export class SchemaService {
 
     let cols: string;
     if (idx.type === 'gin' || idx.type === 'gist') {
-      // Ensure pg_trgm extension for text columns with GIN/GiST
       await this.db.raw('CREATE EXTENSION IF NOT EXISTS pg_trgm');
-      // Check column types to decide operator class
       const colTypes = await this.db.raw(
         `SELECT column_name, data_type FROM information_schema.columns
          WHERE table_schema = ? AND table_name = ?`,
@@ -438,7 +411,6 @@ export class SchemaService {
     await this.db.raw(`DROP INDEX IF EXISTS "${schema}"."${indexName}"`);
   }
 
-  // ─── Preview SQL ──────────────────────────────────────────
   previewCreateTable(schema: string, def: TableDefinition): string {
     const parts: string[] = [];
 
@@ -459,7 +431,6 @@ export class SchemaService {
     return `CREATE TABLE "${schema}"."${def.name}" (\n${parts.join(',\n')}\n);`;
   }
 
-  // ─── Helpers ──────────────────────────────────────────────
   private buildColumnSQL(col: ColumnDef): string {
     const pgType = PG_TYPE_MAP[col.type] ?? 'TEXT';
     let sql = `"${col.name}" ${pgType}`;

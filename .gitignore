@@ -18,7 +18,7 @@ tmp/
 pg_control/
 pg_worker/
 redis_data/
-backups/
+/backups/
 
 # OS
 *.swp

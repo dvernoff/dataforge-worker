@@ -11,6 +11,7 @@ const heartbeatSchema = z.object({
   disk_free_gb: z.number().optional(),
   active_connections: z.number().optional(),
   request_count: z.number().optional(),
+  current_version: z.string().max(20).optional(),
 });
 
 export async function heartbeatRoutes(app: FastifyInstance) {

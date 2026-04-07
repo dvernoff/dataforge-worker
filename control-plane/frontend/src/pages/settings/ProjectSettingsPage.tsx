@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { api } from '@/api/client';
+import { ProjectQuotasTab } from '@/pages/project/ProjectQuotasTab';
 
 export function ProjectSettingsPage() {
   const { t } = useTranslation('settings');
@@ -114,6 +115,13 @@ export function ProjectSettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Project Quotas */}
+      {project && (
+        <div className="mb-6">
+          <ProjectQuotasTab projectId={project.id} />
+        </div>
+      )}
 
       {/* Cache Management */}
       <Card className="mb-6">

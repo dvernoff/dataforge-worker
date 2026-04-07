@@ -15,7 +15,8 @@
     "cpu": "CPU",
     "ram": "RAM",
     "disk": "Disk",
-    "lastHeartbeat": "Last Heartbeat"
+    "lastHeartbeat": "Last Heartbeat",
+    "version": "Version"
   },
   "status": {
     "online": "Online",
@@ -74,6 +75,8 @@
   "noSystemNodes": "No system nodes configured",
   "created": "Node created",
   "deleted": "Node deleted",
+  "triggerUpdate": "Trigger Update",
+  "updateTriggered": "Update triggered successfully",
   "metrics": {
     "cpu": "CPU Usage",
     "ram": "RAM Usage",

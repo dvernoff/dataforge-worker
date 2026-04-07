@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   Plus, Server, Trash2, Copy, Check, Loader2, CheckCircle,
-  Terminal, Globe, Clock, AlertCircle,
+  Terminal, Globe, Clock, AlertCircle, Download, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,6 +37,7 @@ interface PersonalNode {
   disk_free_gb?: number;
   current_version?: string;
   update_mode?: string;
+  update_status?: 'idle' | 'updating' | 'failed';
   projects_count?: number;
   last_heartbeat: string | null;
   created_at: string;
@@ -151,6 +152,16 @@ export function MyNodesPage() {
       setSetupDialogToken(res.setup_token);
       setSetupDialogCopied(false);
       setSetupDialogOs('linux');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (id: string) =>
+      api.post<{ status: string }>(`/nodes/personal/${id}/update`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['personal-nodes'] });
+      toast.success(t('myNodes.updateTriggered'));
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -275,6 +286,32 @@ export function MyNodesPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {node.status === 'online' && node.update_status === 'updating' && (
+                          <Badge variant="outline" className="text-blue-600 border-blue-500/30 gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {t('myNodes.updating')}
+                          </Badge>
+                        )}
+                        {node.status === 'online' && node.update_status === 'failed' && (
+                          <Badge variant="destructive" className="gap-1">
+                            {t('myNodes.updateFailed')}
+                          </Badge>
+                        )}
+                        {node.status === 'online' && (!node.update_status || node.update_status === 'idle' || node.update_status === 'failed') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateMutation.mutate(node.id)}
+                            disabled={updateMutation.isPending}
+                          >
+                            {updateMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4 mr-2" />
+                            )}
+                            {t('myNodes.update')}
+                          </Button>
+                        )}
                         {node.status === 'offline' && node.url && (
                           <Button
                             variant="outline"
@@ -309,8 +346,9 @@ export function MyNodesPage() {
                         <span className="font-medium">{node.projects_count ?? 0}</span>
                       </div>
                       <div className="flex items-center gap-2">
+                        <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-muted-foreground">{t('myNodes.version')}:</span>
-                        <span className="font-medium">{node.current_version || '-'}</span>
+                        <span className="font-medium font-mono">{node.current_version || '-'}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock className="h-3.5 w-3.5 text-muted-foreground" />

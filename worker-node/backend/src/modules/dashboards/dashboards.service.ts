@@ -7,7 +7,7 @@ export interface Widget {
   title: string;
   sql?: string;
   config?: Record<string, unknown>;
-  content?: string; // for text widgets (markdown)
+  content?: string;
 }
 
 export class DashboardsService {
@@ -69,19 +69,16 @@ export class DashboardsService {
       return { data: null };
     }
 
-    // Validate SELECT only
     const normalized = widget.sql.trim().toUpperCase();
     if (!normalized.startsWith('SELECT') && !normalized.startsWith('WITH')) {
       return { error: 'Only SELECT queries allowed in widgets' };
     }
 
-    // Block cross-schema access
     try { validateSchemaAccess(widget.sql, dbSchema); } catch {
       return { error: 'Cross-schema access is not allowed in dashboard widgets' };
     }
 
     try {
-      // Execute with schema scoping in a read-only transaction
       const result = await this.db.transaction(async (trx) => {
         await trx.raw(`SET LOCAL search_path TO ?, 'public'`, [dbSchema]);
         await trx.raw(`SET LOCAL statement_timeout = ${Math.max(1000, Math.min(timeoutMs, 120000))}`);

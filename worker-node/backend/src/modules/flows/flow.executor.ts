@@ -4,11 +4,11 @@ import { validateSchemaAccess } from '../../utils/sql-guard.js';
 
 export interface FlowNode {
   id: string;
-  type: string; // action_sql, action_http, action_webhook, action_transform, condition
+  type: string;
   config: Record<string, unknown>;
-  next?: string | null;         // next node id (for linear flow)
-  trueBranch?: string | null;   // for condition nodes
-  falseBranch?: string | null;  // for condition nodes
+  next?: string | null;
+  trueBranch?: string | null;
+  falseBranch?: string | null;
 }
 
 export interface FlowContext {
@@ -39,21 +39,17 @@ export class FlowExecutor {
 
   private async executeSql(node: FlowNode, context: FlowContext, projectSchema: string, timeoutMs = 30_000): Promise<{ result: unknown; nextNodeId: string | null }> {
     let query = String(node.config.query ?? '');
-    // Simple variable interpolation: {{variableName}}
     query = this.interpolate(query, context);
 
-    // Validate: SELECT only
     const normalized = query.trim().toUpperCase();
     if (!normalized.startsWith('SELECT') && !normalized.startsWith('WITH')) {
       throw new Error('Only SELECT queries are allowed in flow SQL nodes');
     }
 
-    // Always use the project's schema — ignore node.config.schema to prevent cross-schema access
     if (!projectSchema || !/^[a-z_][a-z0-9_]*$/.test(projectSchema)) {
       throw new Error('Invalid or missing project schema');
     }
 
-    // Block cross-schema access
     validateSchemaAccess(query, projectSchema);
 
     const result = await this.db.transaction(async (trx) => {
@@ -117,8 +113,6 @@ export class FlowExecutor {
 
   private async executeTransform(node: FlowNode, context: FlowContext): Promise<{ result: unknown; nextNodeId: string | null }> {
     const expression = String(node.config.expression ?? '');
-    // Simple safe transform: supports basic mapping and filtering via JSON path-like syntax
-    // For security, we use a limited evaluator rather than eval()
     let result: unknown;
 
     try {
@@ -167,7 +161,6 @@ export class FlowExecutor {
     const operator = String(node.config.operator ?? 'eq');
     const value = node.config.value;
 
-    // Get the value to compare from context
     const inputKey = String(node.config.input ?? '');
     const inputData = inputKey ? context.results[inputKey] : context.results;
     let fieldValue: unknown;

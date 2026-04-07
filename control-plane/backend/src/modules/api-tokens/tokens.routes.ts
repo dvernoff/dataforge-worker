@@ -17,12 +17,12 @@ async function syncTokenToWorker(
 ) {
   try {
     const worker = await proxyService.getWorkerForProject(projectId);
-    await fetch(`${worker.url.replace(/\/$/, '')}/internal/tokens/sync`, {
+    const res = await fetch(`${worker.url.replace(/\/$/, '')}/internal/tokens/sync`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Node-Api-Key': worker.apiKey,
-        ...(env.INTERNAL_SECRET ? { 'X-Internal-Secret': env.INTERNAL_SECRET } : {}),
+        'x-node-api-key': worker.apiKey,
+        ...(env.INTERNAL_SECRET ? { 'x-internal-secret': env.INTERNAL_SECRET } : {}),
       },
       body: JSON.stringify({
         action,
@@ -35,8 +35,11 @@ async function syncTokenToWorker(
         } : {}),
       }),
     });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      log.error(`Token sync failed (${res.status}): ${text} for project ${projectId}`);
+    }
   } catch (err) {
-    // Log but don't fail the request — token is created in CP DB regardless
     log.error(err, `Failed to sync token to worker for project ${projectId}`);
   }
 }

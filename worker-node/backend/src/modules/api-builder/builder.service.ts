@@ -23,7 +23,6 @@ export class BuilderService {
   constructor(private db: Knex) {}
 
   async create(projectId: string, userId: string, input: CreateEndpointInput) {
-    // Check for duplicate method+path
     const existing = await this.db('api_endpoints')
       .where({ project_id: projectId, method: input.method, path: input.path })
       .whereNull('deprecated_at')
@@ -61,7 +60,6 @@ export class BuilderService {
   async createNewVersion(endpointId: string, projectId: string) {
     const existing = await this.findById(endpointId, projectId);
 
-    // Deprecate the old version and update its path to avoid unique constraint conflict
     const oldVersion = existing.version ?? 1;
     await this.db('api_endpoints')
       .where({ id: endpointId, project_id: projectId })
@@ -70,7 +68,6 @@ export class BuilderService {
         path: `${existing.path}__v${oldVersion}`,
       });
 
-    // Create new version
     const [newEndpoint] = await this.db('api_endpoints')
       .insert({
         project_id: existing.project_id,

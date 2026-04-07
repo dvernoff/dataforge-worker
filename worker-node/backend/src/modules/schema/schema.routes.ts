@@ -75,14 +75,12 @@ export async function schemaRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
-  // GET /api/projects/:projectId/tables
   app.get('/:projectId/tables', async (request) => {
     const dbSchema = resolveProjectSchema(request);
     const tables = await schemaService.listTables(dbSchema);
     return { tables };
   });
 
-  // GET /api/projects/:projectId/tables/:tableName
   app.get('/:projectId/tables/:tableName', async (request) => {
     const { tableName } = request.params as { tableName: string };
     const dbSchema = resolveProjectSchema(request);
@@ -90,7 +88,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { table };
   });
 
-  // POST /api/projects/:projectId/tables — create table
   app.post('/:projectId/tables', async (request) => {
     const body = createTableSchema.parse(request.body);
     const dbSchema = resolveProjectSchema(request);
@@ -98,7 +95,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sql };
   });
 
-  // POST /api/projects/:projectId/tables/:tableName/preview — preview SQL
   app.post('/:projectId/tables/preview', async (request) => {
     const body = createTableSchema.parse(request.body);
     const dbSchema = resolveProjectSchema(request);
@@ -106,7 +102,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { sql };
   });
 
-  // PUT /api/projects/:projectId/tables/:tableName/columns — alter columns
   app.put('/:projectId/tables/:tableName/columns', async (request) => {
     const { tableName } = request.params as { tableName: string };
     const body = alterColumnsSchema.parse(request.body);
@@ -115,7 +110,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sqls };
   });
 
-  // DELETE /api/projects/:projectId/tables/:tableName — drop table + cleanup related resources
   app.delete('/:projectId/tables/:tableName', async (request) => {
     const { tableName } = request.params as { tableName: string };
     const dbSchema = resolveProjectSchema(request);
@@ -124,7 +118,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, cleaned: deleted };
   });
 
-  // POST /api/projects/:projectId/tables/:tableName/foreign-keys
   app.post('/:projectId/tables/:tableName/foreign-keys', async (request) => {
     const { tableName } = request.params as { tableName: string };
     const body = foreignKeySchema.parse(request.body);
@@ -133,7 +126,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sql };
   });
 
-  // DELETE /api/projects/:projectId/tables/:tableName/foreign-keys/:constraintName
   app.delete('/:projectId/tables/:tableName/foreign-keys/:constraintName', async (request, reply) => {
     const { tableName, constraintName } = request.params as {
       tableName: string; constraintName: string;
@@ -143,7 +135,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  // POST /api/projects/:projectId/tables/:tableName/indexes
   app.post('/:projectId/tables/:tableName/indexes', async (request) => {
     const { tableName } = request.params as { tableName: string };
     const body = indexDefSchema.parse(request.body);
@@ -152,7 +143,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sql };
   });
 
-  // DELETE /api/projects/:projectId/tables/:tableName/indexes/:indexName
   app.delete('/:projectId/tables/:tableName/indexes/:indexName', async (request, reply) => {
     const { indexName } = request.params as { indexName: string };
     const dbSchema = resolveProjectSchema(request);
@@ -160,9 +150,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  // ─── Computed Columns ───────────────────────────────────
-
-  // POST /api/projects/:projectId/tables/:tableName/computed — add computed column
   app.post('/:projectId/tables/:tableName/computed', async (request) => {
     const { tableName } = request.params as { tableName: string };
     const body = computedColumnSchema.parse(request.body);
@@ -173,7 +160,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sql };
   });
 
-  // DELETE /api/projects/:projectId/tables/:tableName/computed/:columnName — drop computed column
   app.delete('/:projectId/tables/:tableName/computed/:columnName', async (request, reply) => {
     const { tableName, columnName } = request.params as { tableName: string; columnName: string };
     const dbSchema = resolveProjectSchema(request);
@@ -181,23 +167,18 @@ export async function schemaRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  // ─── Schema Versioning ──────────────────────────────────
-
-  // GET /api/projects/:projectId/schema-versions — list versions
   app.get('/:projectId/schema-versions', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const versions = await versioningService.listVersions(projectId);
     return { versions };
   });
 
-  // GET /api/projects/:projectId/schema-versions/:versionId — get version detail
   app.get('/:projectId/schema-versions/:versionId', async (request) => {
     const { versionId } = request.params as { versionId: string };
     const version = await versioningService.getVersion(versionId);
     return { version };
   });
 
-  // POST /api/projects/:projectId/schema-versions — create snapshot
   app.post('/:projectId/schema-versions', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const body = createVersionSchema.parse(request.body);
@@ -209,7 +190,6 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { version };
   });
 
-  // POST /api/projects/:projectId/schema-versions/:versionId/rollback — rollback
   app.post('/:projectId/schema-versions/:versionId/rollback', {
     config: { rawBody: false },
     schema: { body: { type: 'object', additionalProperties: true } },

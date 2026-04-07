@@ -57,7 +57,6 @@ export class S3StoragePlugin {
     const stream = response.Body;
     if (!stream) throw new Error('No body in S3 response');
 
-    // Convert stream to buffer
     const chunks: Uint8Array[] = [];
     for await (const chunk of stream as AsyncIterable<Uint8Array>) {
       chunks.push(chunk);

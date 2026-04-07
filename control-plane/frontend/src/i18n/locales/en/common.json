@@ -124,7 +124,8 @@
     "myNodes": "My Nodes",
     "myProjects": "Projects",
     "personalNodes": "Personal Nodes",
-    "personal": "Personal"
+    "personal": "Personal",
+    "projectPlans": "Project Plans"
   },
   "playground": {
     "collections": "Collections",
@@ -245,6 +246,7 @@
     "aiUsage": "AI Usage (Today)",
     "aiRequestsToday": "AI Requests Today",
     "aiTokensToday": "AI Tokens Today",
-    "performanceLimits": "Performance Limits"
+    "performanceLimits": "Performance Limits",
+    "resourcesMovedNote": "Resource quotas are now managed per-project in project settings."
   }
 }

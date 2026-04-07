@@ -1,62 +1,22 @@
 import type { Knex } from 'knex';
 import type Redis from 'ioredis';
-import { env } from '../../config/env.js';
 
 const QUOTA_FIELDS = [
   'max_projects',
-  'max_tables',
-  'max_records',
-  'max_api_requests',
-  'max_storage_mb',
-  'max_endpoints',
-  'max_webhooks',
-  'max_files',
-  'max_backups',
-  'max_cron',
   'max_ai_requests_per_day',
   'max_ai_tokens_per_day',
-  'max_query_timeout_ms',
-  'max_concurrent_requests',
-  'max_rows_per_query',
-  'max_export_rows',
 ] as const;
 
 const HARDCODED_DEFAULTS: Record<string, number> = {
   max_projects: 5,
-  max_tables: 20,
-  max_records: 100000,
-  max_api_requests: 10000,
-  max_storage_mb: 1000,
-  max_endpoints: 50,
-  max_webhooks: 20,
-  max_files: 500,
-  max_backups: 10,
-  max_cron: 10,
   max_ai_requests_per_day: 50,
   max_ai_tokens_per_day: 100000,
-  max_query_timeout_ms: 30000,
-  max_concurrent_requests: 10,
-  max_rows_per_query: 1000,
-  max_export_rows: 10000,
 };
 
 export interface QuotaInput {
   max_projects?: number;
-  max_tables?: number;
-  max_records?: number;
-  max_api_requests?: number;
-  max_storage_mb?: number;
-  max_endpoints?: number;
-  max_webhooks?: number;
-  max_files?: number;
-  max_backups?: number;
-  max_cron?: number;
   max_ai_requests_per_day?: number;
   max_ai_tokens_per_day?: number;
-  max_query_timeout_ms?: number;
-  max_concurrent_requests?: number;
-  max_rows_per_query?: number;
-  max_export_rows?: number;
 }
 
 export class QuotasService {
@@ -169,81 +129,13 @@ export class QuotasService {
     }
   }
 
-  /** Fetch usage stats from a worker node for a specific project */
-  private async fetchWorkerProjectUsage(projectId: string): Promise<{
-    tables: number; records: number; storage_mb: number; files: number;
-    cron: number; endpoints: number; webhooks: number;
-  }> {
-    const defaults = { tables: 0, records: 0, storage_mb: 0, files: 0, cron: 0, endpoints: 0, webhooks: 0 };
-    try {
-      const row = await this.db('projects as p')
-        .join('nodes as n', 'p.node_id', 'n.id')
-        .where('p.id', projectId)
-        .select('n.url')
-        .first();
-      if (!row?.url) return defaults;
-
-      const res = await fetch(`${String(row.url).replace(/\/$/, '')}/internal/projects/${projectId}/usage`, {
-        headers: {
-          'X-Node-Api-Key': env.WORKER_NODE_API_KEY,
-          ...(env.INTERNAL_SECRET ? { 'X-Internal-Secret': env.INTERNAL_SECRET } : {}),
-        },
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!res.ok) return defaults;
-      return await res.json() as typeof defaults;
-    } catch {
-      return defaults;
-    }
-  }
-
-  /** Calculate current usage for a user across all their projects */
   async getUserUsage(userId: string) {
-    const userProjects = await this.db('project_members')
-      .where({ user_id: userId })
-      .select('project_id');
-    const projectIds = userProjects.map(p => p.project_id);
+    const projectsCount = await this.db('projects')
+      .where({ created_by: userId })
+      .count('* as count')
+      .first()
+      .then(r => Number(r?.count ?? 0));
 
-    const projectsCount = projectIds.length;
-
-    // CP-side counts: backups
-    let backupsCount = 0;
-    let backupSizeMb = 0;
-    if (projectIds.length > 0) {
-      try {
-        const backupStats = await this.db('backups')
-          .whereIn('project_id', projectIds)
-          .select(
-            this.db.raw('COUNT(*)::int as count'),
-            this.db.raw('COALESCE(SUM(file_size), 0)::bigint as total_bytes')
-          )
-          .first();
-        backupsCount = backupStats?.count ?? 0;
-        backupSizeMb = Math.round(Number(backupStats?.total_bytes ?? 0) / 1024 / 1024 * 100) / 100;
-      } catch { /* backups table may not exist */ }
-    }
-
-    // Worker-side counts: aggregate across all user's projects
-    let tables = 0, records = 0, storageMb = 0, files = 0, cron = 0, endpoints = 0, webhooks = 0;
-    if (projectIds.length > 0) {
-      const usageResults = await Promise.all(
-        projectIds.map(pid => this.fetchWorkerProjectUsage(pid))
-      );
-      for (const u of usageResults) {
-        tables += u.tables;
-        records += u.records;
-        storageMb += u.storage_mb;
-        files += u.files;
-        cron += u.cron;
-        endpoints += u.endpoints;
-        webhooks += u.webhooks;
-      }
-    }
-
-    // Total storage = worker schema/files + backup files
-    const totalStorageMb = Math.round((storageMb + backupSizeMb) * 100) / 100;
-
-    // AI usage for today
     let aiRequests = 0;
     let aiTokens = 0;
     try {
@@ -265,15 +157,6 @@ export class QuotasService {
 
     return {
       projects: projectsCount,
-      tables,
-      records,
-      api_requests: 0,
-      storage_mb: totalStorageMb,
-      endpoints,
-      webhooks,
-      files,
-      backups: backupsCount,
-      cron,
       ai_requests_today: aiRequests,
       ai_tokens_today: aiTokens,
     };
@@ -287,32 +170,27 @@ export class QuotasService {
    */
   async checkCreateQuota(
     userId: string,
-    resourceType: 'tables' | 'endpoints' | 'webhooks' | 'cron' | 'files' | 'backups' | 'projects',
+    resourceType: 'projects',
   ): Promise<string | null> {
-    const quotaFieldMap: Record<string, string> = {
-      tables: 'max_tables',
-      endpoints: 'max_endpoints',
-      webhooks: 'max_webhooks',
-      cron: 'max_cron',
-      files: 'max_files',
-      backups: 'max_backups',
-      projects: 'max_projects',
-    };
+    const field = 'max_projects';
+    if (resourceType !== 'projects') return null;
 
-    const field = quotaFieldMap[resourceType];
-    if (!field) return null;
-
-    // Check Redis cache first (avoid expensive usage calculation)
     const cacheKey = `quota-check:${userId}:${resourceType}`;
-    const cached = await this.redis.get(cacheKey);
-    if (cached === 'ok') return null;
-    if (cached?.startsWith('blocked:')) return cached.slice(8);
+
+    if (this.redis) {
+      try {
+        const cached = await this.redis.get(cacheKey);
+        if (cached === 'ok') return null;
+        if (cached?.startsWith('blocked:')) return cached.slice(8);
+      } catch { /* Redis unavailable, skip cache */ }
+    }
 
     const { quota } = await this.getEffectiveQuota(userId);
     const limit = quota[field];
     if (!limit || limit <= 0) {
-      // 0 = unlimited
-      await this.redis.set(cacheKey, 'ok', 'EX', 10);
+      if (this.redis) {
+        try { await this.redis.set(cacheKey, 'ok', 'EX', 10); } catch { /* ignore */ }
+      }
       return null;
     }
 
@@ -321,11 +199,15 @@ export class QuotasService {
 
     if (current >= limit) {
       const msg = `Quota exceeded: ${resourceType} (${current}/${limit})`;
-      await this.redis.set(cacheKey, `blocked:${msg}`, 'EX', 10);
+      if (this.redis) {
+        try { await this.redis.set(cacheKey, `blocked:${msg}`, 'EX', 10); } catch { /* ignore */ }
+      }
       return msg;
     }
 
-    await this.redis.set(cacheKey, 'ok', 'EX', 10);
+    if (this.redis) {
+      try { await this.redis.set(cacheKey, 'ok', 'EX', 10); } catch { /* ignore */ }
+    }
     return null;
   }
 }

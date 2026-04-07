@@ -124,7 +124,8 @@
     "myNodes": "Мои ноды",
     "myProjects": "Проекты",
     "personalNodes": "Личные ноды",
-    "personal": "Личное"
+    "personal": "Личное",
+    "projectPlans": "Планы проектов"
   },
   "playground": {
     "collections": "Коллекции",
@@ -245,6 +246,7 @@
     "aiUsage": "Использование ИИ (Сегодня)",
     "aiRequestsToday": "AI запросов сегодня",
     "aiTokensToday": "AI токенов сегодня",
-    "performanceLimits": "Лимиты производительности"
+    "performanceLimits": "Лимиты производительности",
+    "resourcesMovedNote": "Ресурсные квоты теперь управляются на уровне проекта в настройках проекта."
   }
 }

@@ -296,6 +296,46 @@
     "regenerating": "Генерация...",
     "tokenReady": "Выполните эту команду на сервере. Токен действителен 1 час.",
     "pendingSetup": "Ожидает настройки",
-    "pendingSetupDesc": "Нода создана, но ещё не подключена. Получите команду установки для настройки."
+    "pendingSetupDesc": "Нода создана, но ещё не подключена. Получите команду установки для настройки.",
+    "update": "Обновить",
+    "updating": "Обновление...",
+    "updateFailed": "Ошибка обновления",
+    "updateTriggered": "Обновление запущено"
+  },
+  "projectQuotas": {
+    "title": "Квоты проекта",
+    "source": {
+      "plan": "План",
+      "override": "Переопределение",
+      "default": "По умолчанию",
+      "personal_node": "Личная нода"
+    },
+    "unlimited": "Безлимитно",
+    "changePlan": "Изменить план",
+    "selectPlan": "Выберите план",
+    "planChanged": "План успешно изменён",
+    "usage": "Использование",
+    "limit": "Лимит",
+    "groups": {
+      "resources": "Ресурсы",
+      "apiAutomation": "API и автоматизация",
+      "backups": "Бэкапы",
+      "performance": "Производительность"
+    },
+    "fields": {
+      "max_tables": "Таблицы",
+      "max_records": "Записи",
+      "max_storage_mb": "Хранилище (МБ)",
+      "max_files": "Файлы",
+      "max_api_requests": "API запросов / день",
+      "max_endpoints": "Эндпоинты",
+      "max_webhooks": "Вебхуки",
+      "max_cron": "Крон задачи",
+      "max_backups": "Бэкапы",
+      "max_query_timeout_ms": "Таймаут запроса",
+      "max_concurrent_requests": "Одновр. запросов",
+      "max_rows_per_query": "Строк в запросе",
+      "max_export_rows": "Строк экспорта"
+    }
   }
 }

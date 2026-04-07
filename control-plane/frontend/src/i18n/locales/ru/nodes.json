@@ -15,7 +15,8 @@
     "cpu": "CPU",
     "ram": "RAM",
     "disk": "Диск",
-    "lastHeartbeat": "Последний heartbeat"
+    "lastHeartbeat": "Последний heartbeat",
+    "version": "Версия"
   },
   "status": {
     "online": "Онлайн",
@@ -74,6 +75,8 @@
   "systemNodes": "Системные ноды",
   "userNodes": "Пользовательские ноды",
   "noSystemNodes": "Системные ноды не настроены",
+  "triggerUpdate": "Обновить",
+  "updateTriggered": "Обновление запущено",
   "metrics": {
     "cpu": "Использование CPU",
     "ram": "Использование RAM",

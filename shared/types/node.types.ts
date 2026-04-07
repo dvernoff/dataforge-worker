@@ -22,6 +22,7 @@ export interface WorkerNode {
   is_system?: boolean;
   current_version?: string | null;
   update_mode?: string;
+  update_status?: 'idle' | 'updating' | 'failed';
   setup_token?: string | null;
   setup_token_expires?: string | null;
 }
@@ -51,6 +52,7 @@ export interface HeartbeatPayload {
   disk_free_gb?: number;
   active_connections: number;
   request_count: number;
+  current_version?: string;
 }
 
 export const PROXY_HEADERS = {

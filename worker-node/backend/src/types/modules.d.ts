@@ -1,4 +1,3 @@
-// Worker Node request context — attached by nodeAuthMiddleware
 declare module 'fastify' {
   interface FastifyRequest {
     projectId: string;
@@ -14,8 +13,6 @@ declare module 'fastify' {
     };
   }
 }
-
-// Type declarations for optional dependencies not in package.json
 
 declare module '@fastify/websocket' {
   import type { FastifyPluginCallback } from 'fastify';

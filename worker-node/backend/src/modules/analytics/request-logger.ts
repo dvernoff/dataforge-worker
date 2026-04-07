@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 
 export function registerRequestLogger(app: FastifyInstance) {
   app.addHook('onResponse', async (request, reply) => {
-    // Only log /api/v1/* requests (external API calls)
     if (!request.url.startsWith('/api/v1/')) return;
 
     const projectId = request.projectId as string | undefined;
@@ -24,7 +23,6 @@ export function registerRequestLogger(app: FastifyInstance) {
         error: reply.statusCode >= 400 ? `HTTP ${reply.statusCode}` : null,
       });
     } catch {
-      // Don't let logging failures affect the response
     }
   });
 }

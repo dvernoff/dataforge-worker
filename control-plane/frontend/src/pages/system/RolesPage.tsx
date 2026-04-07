@@ -29,42 +29,22 @@ const COLOR_PRESETS = [
 const QUOTA_GROUPS = [
   {
     key: 'resources',
-    fields: ['max_projects', 'max_tables', 'max_records', 'max_storage_mb', 'max_files'],
-  },
-  {
-    key: 'apiAutomation',
-    fields: ['max_api_requests', 'max_endpoints', 'max_webhooks', 'max_cron'],
-  },
-  {
-    key: 'backups',
-    fields: ['max_backups'],
+    fields: ['max_projects'],
   },
   {
     key: 'ai',
     fields: ['max_ai_requests_per_day', 'max_ai_tokens_per_day'],
   },
-  {
-    key: 'performance',
-    fields: ['max_query_timeout_ms', 'max_concurrent_requests', 'max_rows_per_query', 'max_export_rows'],
-  },
 ] as const;
 
 const QUOTA_DEFAULTS: Record<string, number> = {
-  max_projects: 10, max_tables: 50, max_records: 10000, max_api_requests: 1000,
-  max_storage_mb: 500, max_endpoints: 20, max_webhooks: 10, max_files: 100,
-  max_backups: 5, max_cron: 5, max_ai_requests_per_day: 50, max_ai_tokens_per_day: 100000,
-  max_query_timeout_ms: 30000, max_concurrent_requests: 10, max_rows_per_query: 1000, max_export_rows: 10000,
+  max_projects: 10, max_ai_requests_per_day: 50, max_ai_tokens_per_day: 100000,
 };
 
 function formatQuotaSummary(role: Role) {
   const parts: string[] = [];
   if (role.max_projects) parts.push(`${role.max_projects} proj`);
-  if (role.max_tables) parts.push(`${role.max_tables} tbl`);
-  if (role.max_api_requests) {
-    const v = role.max_api_requests >= 1000 ? `${(role.max_api_requests / 1000).toFixed(0)}K` : String(role.max_api_requests);
-    parts.push(`${v} API`);
-  }
-  if (role.max_storage_mb) parts.push(`${role.max_storage_mb} MB`);
+  if (role.max_ai_requests_per_day) parts.push(`${role.max_ai_requests_per_day} AI/day`);
   return parts.join(', ');
 }
 

@@ -28,6 +28,7 @@ export interface HeartbeatPayload {
   disk_total_gb?: number;
   disk_free_gb?: number;
   active_projects?: number;
+  current_version?: string;
 }
 
 export class NodesService {
@@ -52,6 +53,13 @@ export class NodesService {
       await this.db.schema.alterTable('nodes', (t) => {
         t.float('disk_total_gb').defaultTo(0);
         t.float('disk_free_gb').defaultTo(0);
+      });
+    }
+    // Add update_status column for tracking update progress
+    const hasUpdateStatus = await this.db.schema.hasColumn('nodes', 'update_status');
+    if (!hasUpdateStatus) {
+      await this.db.schema.alterTable('nodes', (t) => {
+        t.string('update_status', 20).defaultTo('idle');
       });
     }
     // Add encrypted API key column for proxy forwarding
@@ -283,6 +291,15 @@ export class NodesService {
     if (payload.disk_total_gb !== undefined) updateData.disk_total_gb = payload.disk_total_gb;
     if (payload.disk_free_gb !== undefined) updateData.disk_free_gb = payload.disk_free_gb;
 
+    // Store version and reset update_status when version changes
+    if (payload.current_version) {
+      const currentNode = await this.db('nodes').where({ id: nodeId }).select('current_version', 'update_status').first();
+      updateData.current_version = payload.current_version;
+      if (currentNode && currentNode.current_version !== payload.current_version && currentNode.update_status === 'updating') {
+        updateData.update_status = 'idle';
+      }
+    }
+
     const [node] = await this.db('nodes')
       .where({ id: nodeId })
       .update(updateData)
@@ -301,6 +318,50 @@ export class NodesService {
       return decrypt(node.api_key_encrypted);
     } catch {
       return null;
+    }
+  }
+
+  async triggerUpdate(nodeId: string): Promise<{ status: string }> {
+    const node = await this.db('nodes').where({ id: nodeId }).first();
+    if (!node) throw Object.assign(new Error('Node not found'), { statusCode: 404 });
+    if (node.status !== 'online') throw Object.assign(new Error('Node is offline'), { statusCode: 409 });
+    if (!node.url) throw Object.assign(new Error('Node URL not configured'), { statusCode: 409 });
+
+    const apiKey = await this.getDecryptedApiKey(nodeId);
+    if (!apiKey) throw Object.assign(new Error('Cannot decrypt node API key'), { statusCode: 500 });
+
+    // Mark node as updating
+    await this.db('nodes').where({ id: nodeId }).update({
+      update_status: 'updating',
+      updated_at: new Date(),
+    });
+
+    try {
+      const res = await fetch(`${node.url}/internal/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-node-api-key': apiKey,
+        },
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        await this.db('nodes').where({ id: nodeId }).update({
+          update_status: 'failed',
+          updated_at: new Date(),
+        });
+        throw Object.assign(new Error((body as Record<string, string>).error || 'Update trigger failed'), { statusCode: 502 });
+      }
+
+      return { status: 'update_triggered' };
+    } catch (err) {
+      if ((err as { statusCode?: number }).statusCode) throw err;
+      await this.db('nodes').where({ id: nodeId }).update({
+        update_status: 'failed',
+        updated_at: new Date(),
+      });
+      throw Object.assign(new Error('Failed to reach worker'), { statusCode: 502 });
     }
   }
 

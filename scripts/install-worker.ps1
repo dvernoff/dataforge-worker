@@ -79,6 +79,7 @@ function RandomHex($bytes) {
 $DbPassword = RandomHex 24
 $RedisPassword = RandomHex 16
 $JwtSecret = RandomHex 32
+$WatchtowerToken = RandomHex 32
 
 # ── Detect worker URL ────────────────────────────────
 
@@ -170,6 +171,10 @@ POSTGRES_DB=dataforge_worker
 
 # Redis password
 REDIS_PASSWORD=$RedisPassword
+
+# Watchtower (auto-update)
+WATCHTOWER_TOKEN=$WatchtowerToken
+WATCHTOWER_URL=http://watchtower:8080
 "@
 
 Set-Content -Path ".env" -Value $envContent -Encoding UTF8
@@ -268,15 +273,27 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:${PORT}/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
   watchtower:
     image: containrrr/watchtower
     restart: unless-stopped
     volumes:
       - //var/run/docker.sock:/var/run/docker.sock
-    command: --interval 300 --cleanup
+    command: --label-enable --http-api-update --cleanup --rolling-restart --stop-timeout 30s --interval 86400
     environment:
       - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_HTTP_API_UPDATE=true
+      - WATCHTOWER_HTTP_API_TOKEN=${WATCHTOWER_TOKEN}
+      - WATCHTOWER_ROLLING_RESTART=true
+      - WATCHTOWER_CLEANUP=true
 
 volumes:
   pgdata:

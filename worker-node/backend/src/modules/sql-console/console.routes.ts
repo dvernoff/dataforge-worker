@@ -20,20 +20,17 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
-  // POST /api/projects/:projectId/sql/execute
   app.post('/:projectId/sql/execute', async (request) => {
     const body = z.object({ query: z.string().min(1).max(50000) }).parse(request.body);
     const dbSchema = resolveProjectSchema(request);
     const { queryTimeout, reportViolation } = getQuotaHelpers(request);
 
-    // Use role from CP proxy header (CP already resolved the role)
     const userRole = request.userRole ?? 'editor';
     const role = userRole === 'admin' || userRole === 'superadmin' ? 'admin' : 'editor';
 
     const timeoutMs = queryTimeout > 0 ? queryTimeout : 30000;
     const result = await consoleService.execute(dbSchema, body.query, role, timeoutMs);
 
-    // Log slow queries that approach the timeout
     if (result.duration_ms > timeoutMs * 0.8) {
       reportViolation('quota.slow_query', {
         query: body.query.substring(0, 200),
@@ -46,15 +43,12 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     return result;
   });
 
-  // POST /api/projects/:projectId/sql/explain
   app.post('/:projectId/sql/explain', async (request) => {
     const body = z.object({ query: z.string().min(1) }).parse(request.body);
     const dbSchema = resolveProjectSchema(request);
     return consoleService.explain(dbSchema, body.query);
   });
 
-  // ─── Saved Queries ────────────────────────────────────────
-  // GET /api/projects/:projectId/sql/saved
   app.get('/:projectId/sql/saved', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const userId = request.userId;
@@ -67,7 +61,6 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     return { queries };
   });
 
-  // POST /api/projects/:projectId/sql/saved
   app.post('/:projectId/sql/saved', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const userId = request.userId;
@@ -88,7 +81,6 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     return { query: saved };
   });
 
-  // DELETE /api/projects/:projectId/sql/saved/:queryId
   app.delete('/:projectId/sql/saved/:queryId', async (request, reply) => {
     const { projectId, queryId } = request.params as { projectId: string; queryId: string };
     const userId = request.userId;
@@ -96,8 +88,6 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  // ─── Database Explorer ────────────────────────────────────
-  // GET /api/projects/:projectId/sql/explorer
   app.get('/:projectId/sql/explorer', async (request) => {
     const dbSchema = resolveProjectSchema(request);
 
@@ -120,13 +110,9 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     return { tables: tables.rows };
   });
 
-  // ─── AI SQL ────────────────────────────────────────────────
-
-  // AI Quota check helper — ensures user hasn't exceeded daily limits
   async function checkAiQuota(userId: string): Promise<void> {
-    // Ensure ai_usage_log table exists
     const hasTable = await app.db.schema.hasTable('ai_usage_log');
-    if (!hasTable) return; // No table = no enforcement yet
+    if (!hasTable) return;
 
     const today = new Date().toISOString().split('T')[0];
     const usage = await app.db('ai_usage_log')
@@ -138,7 +124,6 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
       )
       .first();
 
-    // Try to get user quota limits
     let maxRequests = 50;
     let maxTokens = 100000;
     try {
@@ -159,7 +144,7 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
           }
         }
       }
-    } catch { /* ignore quota lookup errors */ }
+    } catch { }
 
     if ((usage?.requests ?? 0) >= maxRequests) {
       throw new AppError(429, 'Daily AI request limit exceeded');
@@ -169,7 +154,6 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     }
   }
 
-  // Log AI usage helper
   async function logAiUsage(userId: string, projectId: string, action: string, model: string, inputTokens: number, outputTokens: number) {
     try {
       const hasTable = await app.db.schema.hasTable('ai_usage_log');
@@ -182,7 +166,7 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
         input_tokens: inputTokens,
         output_tokens: outputTokens,
       });
-    } catch { /* ignore logging errors */ }
+    } catch { }
   }
 
   async function getSchemaContext(dbSchema: string): Promise<string> {
@@ -206,7 +190,6 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     ).join('\n');
   }
 
-  // POST /:projectId/sql/ai/generate
   app.post('/:projectId/sql/ai/generate', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const userId = request.userId ?? 'unknown';
@@ -215,14 +198,12 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     const dbSchema = resolveProjectSchema(request);
     const schemaContext = await getSchemaContext(dbSchema);
     const sql = await aiService.generateSQL(schemaContext, body.prompt);
-    // Estimate tokens (~4 chars per token)
     const inputTokens = Math.ceil((schemaContext.length + body.prompt.length) / 4);
     const outputTokens = Math.ceil(sql.length / 4);
     await logAiUsage(userId, projectId, 'sql.generate', 'claude-sonnet-4', inputTokens, outputTokens);
     return { sql, estimated_tokens: inputTokens + outputTokens };
   });
 
-  // POST /:projectId/sql/ai/explain
   app.post('/:projectId/sql/ai/explain', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const userId = request.userId ?? 'unknown';
@@ -235,7 +216,6 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     return { explanation, estimated_tokens: inputTokens + outputTokens };
   });
 
-  // POST /:projectId/sql/ai/optimize
   app.post('/:projectId/sql/ai/optimize', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const userId = request.userId ?? 'unknown';
@@ -250,7 +230,6 @@ export async function sqlConsoleRoutes(app: FastifyInstance) {
     return { result, estimated_tokens: inputTokens + outputTokens };
   });
 
-  // POST /:projectId/sql/ai/fix
   app.post('/:projectId/sql/ai/fix', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const userId = request.userId ?? 'unknown';

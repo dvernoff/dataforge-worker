@@ -20,7 +20,7 @@ export class UptimePingPlugin {
     try {
       const response = await fetch(config.ping_url, {
         method: 'GET',
-        signal: AbortSignal.timeout(10000), // 10s timeout
+        signal: AbortSignal.timeout(10000),
       });
 
       return {
@@ -54,7 +54,6 @@ export class UptimePingPlugin {
 
     this.timers.set(key, timer);
 
-    // Do an immediate first ping
     this.ping(config).then(callback);
   }
 

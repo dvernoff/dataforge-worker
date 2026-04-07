@@ -28,6 +28,7 @@ import { secretsRoutes } from './modules/secrets/secrets.routes.js';
 import { settingsRoutes } from './modules/settings/settings.routes.js';
 import { cpPluginsRoutes } from './modules/plugins/cp-plugins.routes.js';
 import { rolesRoutes } from './modules/roles/roles.routes.js';
+import { projectPlansRoutes, projectQuotasRoutes } from './modules/project-quotas/project-quotas.routes.js';
 
 const app = Fastify({
   logger: {
@@ -80,6 +81,8 @@ await app.register(secretsRoutes, { prefix: '/api/projects' });
 await app.register(settingsRoutes, { prefix: '/api/system' });
 await app.register(cpPluginsRoutes, { prefix: '/api/cp-plugins' });
 await app.register(rolesRoutes, { prefix: '/api/system/roles' });
+await app.register(projectPlansRoutes, { prefix: '/api/system/project-plans' });
+await app.register(projectQuotasRoutes, { prefix: '/api/projects' });
 
 // Public registration settings (no auth required)
 app.get('/api/system/settings/public', async () => {

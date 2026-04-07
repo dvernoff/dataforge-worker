@@ -27,7 +27,6 @@ export async function batchRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
-  // POST /api/projects/:projectId/batch
   app.post('/:projectId/batch', async (request) => {
     const dbSchema = resolveProjectSchema(request);
     const body = batchBodySchema.parse(request.body);

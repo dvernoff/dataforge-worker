@@ -33,10 +33,8 @@ export class DataService {
   async findAll(schema: string, tableName: string, params: QueryParams) {
     const baseQuery = this.db(`${schema}.${tableName}`);
 
-    // Apply filters
     let query = baseQuery.clone();
 
-    // Soft delete filter
     try {
       const hasDeletedAt = await this.db.raw(
         `SELECT 1 FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = 'deleted_at'`,
@@ -44,25 +42,20 @@ export class DataService {
       );
       if (hasDeletedAt.rows.length > 0) {
         if (params.only_deleted) {
-          // Show ONLY deleted records
           query = query.whereNotNull('deleted_at');
         } else if (!params.include_deleted) {
-          // Default: exclude deleted records
           query = query.whereNull('deleted_at');
         }
-        // include_deleted=true without only_deleted: show all (no filter)
       }
-    } catch { /* column check failed, skip soft delete filter */ }
+    } catch {}
 
     if (params.filters && params.filters.length > 0) {
       query = applyFilters(query, params.filters);
     }
 
-    // Full-text search — search across provided columns, or auto-detect searchable ones
     if (params.search) {
       let searchCols = params.searchColumns ?? [];
 
-      // Auto-detect: only text, varchar, numeric, and enum-like columns (skip uuid, timestamp, boolean, jsonb)
       if (searchCols.length === 0) {
         const SEARCHABLE_TYPES = new Set([
           'text', 'character varying', 'character', 'name', 'citext',
@@ -91,12 +84,10 @@ export class DataService {
       }
     }
 
-    // Count total
     const countQuery = query.clone();
     const [{ count }] = await countQuery.count('* as count');
     const total = Number(count);
 
-    // Sort — validate sort field against actual table columns
     const sortField = params.sort ?? 'created_at';
     const columnsResult = await this.db.raw(
       `SELECT column_name FROM information_schema.columns WHERE table_schema = ? AND table_name = ?`,
@@ -108,7 +99,6 @@ export class DataService {
     }
     query = query.orderBy(sortField, params.order);
 
-    // Paginate
     const offset = (params.page - 1) * params.limit;
     query = query.offset(offset).limit(params.limit);
 
@@ -138,7 +128,6 @@ export class DataService {
   }
 
   async update(schema: string, tableName: string, id: string, data: Record<string, unknown>) {
-    // Remove id and timestamps from update data
     const { id: _id, created_at: _ca, updated_at: _ua, ...updateData } = data;
 
     const [row] = await this.db(`${schema}.${tableName}`)
@@ -218,7 +207,6 @@ export class DataService {
     return { updated };
   }
 
-  // ─── Import ───────────────────────────────────────────────
   async importRecords(schema: string, tableName: string, records: Record<string, unknown>[]) {
     const batchSize = 500;
     let inserted = 0;
@@ -230,7 +218,6 @@ export class DataService {
         await this.db(`${schema}.${tableName}`).insert(batch);
         inserted += batch.length;
       } catch (err) {
-        // Try individual inserts for error reporting
         for (let j = 0; j < batch.length; j++) {
           try {
             await this.db(`${schema}.${tableName}`).insert(batch[j]);
@@ -245,7 +232,6 @@ export class DataService {
     return { inserted, errors, total: records.length };
   }
 
-  // ─── Export ───────────────────────────────────────────────
   async exportRecords(schema: string, tableName: string, filters?: FilterCondition[], maxRows?: number) {
     let query = this.db(`${schema}.${tableName}`);
     if (filters && filters.length > 0) {
@@ -257,7 +243,6 @@ export class DataService {
     return query.orderBy('created_at', 'desc');
   }
 
-  // ─── Get text columns for search ─────────────────────────
   async getTextColumns(schema: string, tableName: string): Promise<string[]> {
     const result = await this.db.raw(`
       SELECT column_name

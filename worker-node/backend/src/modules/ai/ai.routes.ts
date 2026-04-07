@@ -74,7 +74,7 @@ async function checkAiQuota(db: any, userId: string): Promise<void> {
         maxTokens = userQuota.max_ai_tokens_per_day ?? maxTokens;
       }
     }
-  } catch { /* ignore */ }
+  } catch { }
 
   if ((usage?.requests ?? 0) >= maxRequests) {
     throw new AppError(429, 'Daily AI request limit exceeded');
@@ -96,7 +96,7 @@ async function logAiUsage(db: any, userId: string, projectId: string, action: st
       input_tokens: inputTokens,
       output_tokens: outputTokens,
     });
-  } catch { /* ignore */ }
+  } catch { }
 }
 
 export async function aiRoutes(app: FastifyInstance) {
@@ -151,7 +151,6 @@ Rules:
 
     let result;
     try {
-      // Try to extract JSON from potential markdown code fences
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       result = JSON.parse(jsonMatch?.[0] ?? raw);
     } catch {
@@ -172,7 +171,6 @@ Rules:
 
     const dbSchema = resolveProjectSchema(request);
 
-    // Collect schema info
     const columnsResult = await app.db.raw(`
       SELECT column_name, data_type, is_nullable, column_default
       FROM information_schema.columns
@@ -180,24 +178,20 @@ Rules:
       ORDER BY ordinal_position
     `, [dbSchema, tableName]);
 
-    // Sample data
     const sampleResult = await app.db.raw(
       `SELECT * FROM "${dbSchema}"."${tableName}" LIMIT 100`
     );
 
-    // Row count
     const countResult = await app.db.raw(
       `SELECT COUNT(*)::int as count FROM "${dbSchema}"."${tableName}"`
     );
 
-    // Existing indexes
     const indexesResult = await app.db.raw(`
       SELECT indexname, indexdef
       FROM pg_indexes
       WHERE schemaname = ? AND tablename = ?
     `, [dbSchema, tableName]);
 
-    // NULL counts per column
     const columns = columnsResult.rows;
     const nullCounts: Record<string, number> = {};
     for (const col of columns) {
@@ -206,7 +200,7 @@ Rules:
           `SELECT COUNT(*)::int as cnt FROM "${dbSchema}"."${tableName}" WHERE "${col.column_name}" IS NULL`
         );
         nullCounts[col.column_name] = nc.rows[0]?.cnt ?? 0;
-      } catch { /* skip */ }
+      } catch { }
     }
 
     const totalRows = countResult.rows[0]?.count ?? 0;
@@ -315,7 +309,6 @@ CRITICAL RULES:
     const sql = parsed.sql ?? '';
     const explanation = parsed.explanation ?? '';
 
-    // Safety check: reject non-SELECT queries
     const normalizedSql = sql.trim().toUpperCase();
     const forbiddenKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT', 'REVOKE'];
     for (const keyword of forbiddenKeywords) {
@@ -328,7 +321,6 @@ CRITICAL RULES:
       throw new AppError(400, 'Only SELECT queries are allowed');
     }
 
-    // Execute the query
     let data;
     try {
       const result = await app.db.raw(sql);

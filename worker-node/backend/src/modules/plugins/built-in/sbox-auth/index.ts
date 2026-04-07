@@ -20,10 +20,6 @@ interface SboxTokenResponse {
 export class SboxAuthPlugin {
   constructor(private db: Knex) {}
 
-  /**
-   * Validate an S&box token via the Facepunch API, then create or update the player's
-   * session in the database. Returns the session key and player info.
-   */
   async handleLogin(
     schema: string,
     config: SboxAuthConfig,
@@ -33,7 +29,6 @@ export class SboxAuthPlugin {
       throw Object.assign(new Error('Token is required'), { statusCode: 400 });
     }
 
-    // Validate token with Facepunch API
     const tokenData = await this.validateToken(body.token);
 
     if (!tokenData.SteamId) {
@@ -49,12 +44,10 @@ export class SboxAuthPlugin {
 
     const tableName = schema ? `${schema}.${config.session_table}` : config.session_table;
 
-    // Check if player exists
     const existing = await this.db(tableName)
       .where(config.steam_id_column, steamId)
       .first();
 
-    // Whitelist allowed extra fields — reject system fields to prevent privilege escalation
     const allowedExtra: Record<string, unknown> = {};
     if (body.extra && typeof body.extra === 'object') {
       const systemFields = [config.steam_id_column, config.session_key_column, 'id', 'created_at', 'updated_at', 'is_admin', 'role', 'balance'];
@@ -66,7 +59,6 @@ export class SboxAuthPlugin {
     }
 
     if (existing) {
-      // Update existing player with new session key
       await this.db(tableName)
         .where(config.steam_id_column, steamId)
         .update({
@@ -78,7 +70,6 @@ export class SboxAuthPlugin {
       return { session_key: sessionKey, steam_id: steamId, is_new_player: false };
     }
 
-    // Insert new player
     await this.db(tableName)
       .insert({
         [config.steam_id_column]: steamId,
@@ -91,9 +82,6 @@ export class SboxAuthPlugin {
     return { session_key: sessionKey, steam_id: steamId, is_new_player: true };
   }
 
-  /**
-   * Check if a session key is valid and return the associated player data.
-   */
   async handleSessionCheck(
     schema: string,
     config: SboxAuthConfig,
@@ -113,14 +101,10 @@ export class SboxAuthPlugin {
       return null;
     }
 
-    // Return player data without the session key for security
     const { [config.session_key_column]: _sessionKey, ...playerData } = player;
     return playerData;
   }
 
-  /**
-   * Destroy a player's session by clearing their session key.
-   */
   async handleLogout(
     schema: string,
     config: SboxAuthConfig,
@@ -139,9 +123,6 @@ export class SboxAuthPlugin {
     return updated > 0;
   }
 
-  /**
-   * Validate a token against the Facepunch authentication API.
-   */
   private async validateToken(token: string): Promise<SboxTokenResponse> {
     try {
       const response = await fetch(FACEPUNCH_VALIDATE_URL, {
@@ -170,9 +151,6 @@ export class SboxAuthPlugin {
     }
   }
 
-  /**
-   * Generate a cryptographically secure session key.
-   */
   private generateSessionKey(): string {
     return randomBytes(32).toString('hex');
   }

@@ -14,7 +14,6 @@ export async function pipelinesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('admin'));
 
-  // Auto-create pipelines table in project schema
   async function ensurePipelinesTable(schema: string) {
     const exists = await app.db.raw(`
       SELECT EXISTS (
@@ -55,7 +54,6 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     }
   }
 
-  // GET /api/projects/:projectId/pipelines
   app.get('/:projectId/pipelines', async (request) => {
     const dbSchema = resolveProjectSchema(request);
     await ensurePipelinesTable(dbSchema);
@@ -63,7 +61,6 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     return { pipelines };
   });
 
-  // GET /api/projects/:projectId/pipelines/:id
   app.get('/:projectId/pipelines/:id', async (request) => {
     const { id } = request.params as { id: string };
     const dbSchema = resolveProjectSchema(request);
@@ -73,7 +70,6 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     return { pipeline };
   });
 
-  // POST /api/projects/:projectId/pipelines
   app.post('/:projectId/pipelines', async (request) => {
     const dbSchema = resolveProjectSchema(request);
     await ensurePipelinesTable(dbSchema);
@@ -101,7 +97,6 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     return { pipeline };
   });
 
-  // PUT /api/projects/:projectId/pipelines/:id
   app.put('/:projectId/pipelines/:id', async (request) => {
     const { id } = request.params as { id: string };
     const dbSchema = resolveProjectSchema(request);
@@ -133,7 +128,6 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     return { pipeline };
   });
 
-  // DELETE /api/projects/:projectId/pipelines/:id
   app.delete('/:projectId/pipelines/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     const dbSchema = resolveProjectSchema(request);
@@ -144,7 +138,6 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  // POST /api/projects/:projectId/pipelines/:id/run
   app.post('/:projectId/pipelines/:id/run', async (request) => {
     const { id } = request.params as { id: string };
     const dbSchema = resolveProjectSchema(request);
@@ -153,7 +146,6 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     const pipeline = await app.db(`${dbSchema}.pipelines`).where({ id }).first();
     if (!pipeline) throw new AppError(404, 'Pipeline not found');
 
-    // Create a run record
     const [run] = await app.db(`${dbSchema}.pipeline_runs`)
       .insert({
         pipeline_id: id,
@@ -180,7 +172,6 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     return { run: { ...run, status: 'completed' } };
   });
 
-  // GET /api/projects/:projectId/pipelines/:id/runs
   app.get('/:projectId/pipelines/:id/runs', async (request) => {
     const { id } = request.params as { id: string };
     const dbSchema = resolveProjectSchema(request);

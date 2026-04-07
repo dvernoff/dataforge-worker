@@ -34,8 +34,10 @@ const envSchema = z.object({
 
   ENCRYPTION_KEY: z.string().optional(),
 
-  // Secret shared between Control Plane and Worker for /internal/* routes
   INTERNAL_SECRET: z.string().optional(),
+
+  WATCHTOWER_TOKEN: z.string().optional(),
+  WATCHTOWER_URL: z.string().default('http://watchtower:8080'),
 });
 
 const parsed = envSchema.safeParse(process.env);

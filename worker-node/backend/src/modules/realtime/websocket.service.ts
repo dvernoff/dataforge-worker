@@ -28,7 +28,7 @@ const RATE_LIMIT_MAX_MESSAGES = 20;
 
 export class WebSocketService {
   private channels = new Map<string, Set<ChannelSubscription>>();
-  private connectionCount = new Map<string, number>(); // projectSlug -> count
+  private connectionCount = new Map<string, number>();
   private static instance: WebSocketService | null = null;
 
   static getInstance(): WebSocketService {
@@ -93,7 +93,7 @@ export class WebSocketService {
 
     const payload = JSON.stringify(message);
     for (const sub of subs) {
-      if (sub.socket.readyState === 1) { // WebSocket.OPEN
+      if (sub.socket.readyState === 1) {
         sub.socket.send(payload);
       }
     }
@@ -108,9 +108,7 @@ export class WebSocketService {
       timestamp: new Date().toISOString(),
     };
 
-    // Broadcast to project channel
     this.broadcast(`project:${projectId}`, message);
-    // Broadcast to table-specific channel
     this.broadcast(`table:${projectId}:${tableName}`, message);
   }
 
@@ -123,27 +121,15 @@ export class WebSocketService {
   }
 }
 
-/**
- * WebSocket routes for real-time data subscriptions.
- * Endpoint: /ws/v1/:projectSlug
- *
- * Auth: Bearer token or session cookie verified on connect.
- * Channels: client sends { action: "subscribe", channel: "table:users" }
- * Events: INSERT/UPDATE/DELETE broadcasted to subscribers.
- * Rate limit: max 20 messages per second per client.
- * Quota: max_websocket_connections per project (default 100).
- */
 export async function websocketRoutes(app: FastifyInstance) {
   const wsService = WebSocketService.getInstance();
 
-  // Main project WebSocket endpoint
   app.get('/ws/v1/:projectSlug', { websocket: true } as Record<string, unknown>, async (request: unknown, reply: unknown) => {
     const socket = (request as Record<string, unknown>).socket as WebSocket;
     const req = request as FastifyRequest<{ Params: { projectSlug: string }; Querystring: Record<string, string> }>;
     const projectSlug = (req.params as Record<string, string>).projectSlug ?? '';
     const query = (req.query ?? {}) as Record<string, string>;
 
-    // Auth: check for token in query or authorization header
     const token = query.token ?? '';
     const authHeader = ((req.headers as Record<string, string | undefined>) ?? {}).authorization ?? '';
     const authMode = query.auth_mode ?? 'api_token';
@@ -154,7 +140,6 @@ export async function websocketRoutes(app: FastifyInstance) {
       return;
     }
 
-    // Verify the API token against the database
     if (authMode === 'api_token') {
       const actualToken = token || authHeader.replace('Bearer ', '');
       if (actualToken) {
@@ -181,7 +166,6 @@ export async function websocketRoutes(app: FastifyInstance) {
       }
     }
 
-    // Check connection quota - use server-side config, NOT client-controlled
     const maxConnections = 100;
     const currentCount = wsService.getProjectConnectionCount(projectSlug);
     if (currentCount >= maxConnections) {
@@ -192,11 +176,9 @@ export async function websocketRoutes(app: FastifyInstance) {
 
     wsService['incrementProjectConnections'](projectSlug);
 
-    // Rate limiter state per client
     let messageTimestamps: number[] = [];
     const clientChannels = new Set<string>();
 
-    // Send connected confirmation
     socket.send(JSON.stringify({
       type: 'connected',
       projectSlug,
@@ -206,7 +188,6 @@ export async function websocketRoutes(app: FastifyInstance) {
     socket.on('message', (...args: unknown[]) => {
       const raw = args[0];
 
-      // Rate limit check
       const now = Date.now();
       messageTimestamps = messageTimestamps.filter(ts => now - ts < RATE_LIMIT_WINDOW_MS);
       if (messageTimestamps.length >= RATE_LIMIT_MAX_MESSAGES) {
@@ -225,7 +206,6 @@ export async function websocketRoutes(app: FastifyInstance) {
               return;
             }
 
-            // Validate channel format: table:{name} or project:{slug}
             const validPattern = /^(table|project):[a-zA-Z0-9_-]+$/;
             if (!validPattern.test(msg.channel)) {
               socket.send(JSON.stringify({ type: 'error', message: 'Invalid channel format. Use table:{name} or project:{slug}' }));
@@ -237,7 +217,6 @@ export async function websocketRoutes(app: FastifyInstance) {
               return;
             }
 
-            // Prefix channel with project for isolation
             const fullChannel = `${msg.channel.split(':')[0]}:${projectSlug}:${msg.channel.split(':')[1]}`;
             wsService.subscribe(fullChannel, socket, projectSlug);
             clientChannels.add(fullChannel);
@@ -283,7 +262,6 @@ export async function websocketRoutes(app: FastifyInstance) {
 
     socket.on('close', () => {
       wsService['decrementProjectConnections'](projectSlug);
-      // Clean up all subscriptions for this socket
       for (const ch of clientChannels) {
         wsService.unsubscribe(ch, socket);
       }

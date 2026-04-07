@@ -19,7 +19,6 @@ interface EndpointDef {
   validation_schema?: Record<string, unknown> | null;
 }
 
-// System columns that should never be set by API consumers
 const SYSTEM_COLUMNS = new Set(['id', 'created_at', 'updated_at', 'deleted_at']);
 
 export class Executor {
@@ -33,7 +32,6 @@ export class Executor {
     body: Record<string, unknown> | null,
     timeoutMs = 30_000,
   ) {
-    // Validate body against validation_schema if defined
     if (body && endpoint.validation_schema) {
       this.validateBody(body, endpoint.validation_schema);
     }
@@ -54,10 +52,6 @@ export class Executor {
     return result;
   }
 
-  /**
-   * Validate request body against the endpoint's validation_schema.
-   * Schema format: { fieldName: { required?: boolean, type?: string, min?: number, max?: number, pattern?: string } }
-   */
   private validateBody(body: Record<string, unknown>, schema: Record<string, unknown>) {
     const rules = schema as Record<string, {
       required?: boolean;
@@ -73,7 +67,6 @@ export class Executor {
       if (!rule || typeof rule !== 'object') continue;
       const value = body[field];
 
-      // Required check
       if (rule.required && (value === undefined || value === null || value === '')) {
         errors.push(`Field '${field}' is required`);
         continue;
@@ -81,7 +74,6 @@ export class Executor {
 
       if (value === undefined || value === null) continue;
 
-      // Type check
       if (rule.type) {
         const actualType = typeof value;
         if (rule.type === 'number' && actualType !== 'number') {
@@ -93,7 +85,6 @@ export class Executor {
         }
       }
 
-      // Min/max for numbers
       if (typeof value === 'number') {
         if (rule.min !== undefined && value < rule.min) {
           errors.push(`Field '${field}' must be >= ${rule.min}`);
@@ -103,7 +94,6 @@ export class Executor {
         }
       }
 
-      // Min/max for string length
       if (typeof value === 'string') {
         if (rule.min !== undefined && value.length < rule.min) {
           errors.push(`Field '${field}' must be at least ${rule.min} characters`);
@@ -113,14 +103,12 @@ export class Executor {
         }
       }
 
-      // Pattern
       if (rule.pattern && typeof value === 'string') {
         try {
           if (!new RegExp(rule.pattern).test(value)) {
             errors.push(`Field '${field}' does not match pattern`);
           }
         } catch {
-          // Invalid regex — skip
         }
       }
     }
@@ -171,7 +159,6 @@ export class Executor {
       return this.applyResponseConfig(data as Record<string, unknown>, rc);
     }
 
-    // For paginated results: filter the data array inside
     if (typeof data === 'object' && data !== null && 'data' in (data as object)) {
       const paginated = data as { data: unknown[]; pagination: unknown };
       return {
@@ -187,10 +174,6 @@ export class Executor {
     return data;
   }
 
-  /**
-   * Parse filter query params: filter[column]=value, filter[column][op]=value
-   * Supported ops: eq, neq, gt, gte, lt, lte, like, ilike, in, is_null
-   */
   private applyFilters(qb: Knex.QueryBuilder, queryParams: Record<string, string>) {
     const SAFE_OPS: Record<string, string> = {
       eq: '=', neq: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=',
@@ -223,8 +206,15 @@ export class Executor {
   ) {
     const config = endpoint.source_config;
     const tableName = config.table as string;
-    const operation = config.operation as string;
+    const rawOp = config.operation as string;
     const fullTable = `${schema}.${tableName}`;
+
+    const OP_ALIASES: Record<string, string> = {
+      list: 'find',
+      get: 'findOne',
+      read: 'findOne',
+    };
+    const operation = OP_ALIASES[rawOp] ?? rawOp;
 
     let result: unknown;
 
@@ -237,18 +227,15 @@ export class Executor {
         const q = this.db(fullTable);
         const countQ = this.db(fullTable);
 
-        // Apply filters: ?filter[column]=value or ?filter[column][op]=value
         this.applyFilters(q, query);
         this.applyFilters(countQ, query);
 
         const sort = query.sort ?? (config.default_sort as string) ?? 'created_at';
         const order = (query.order ?? 'desc') as 'asc' | 'desc';
 
-        // Validate sort field to prevent SQL injection — only allow safe column names
         if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(sort)) {
           throw new AppError(400, 'Invalid sort field');
         }
-        // Validate order direction
         if (order !== 'asc' && order !== 'desc') {
           throw new AppError(400, 'Invalid sort order');
         }
@@ -314,7 +301,6 @@ export class Executor {
         throw new AppError(400, `Unsupported operation: ${operation}`);
     }
 
-    // Apply response_config filtering to the result
     return this.filterResponse(result, endpoint.response_config);
   }
 
@@ -326,7 +312,6 @@ export class Executor {
     body: Record<string, unknown> | null,
     timeoutMs = 30_000,
   ) {
-    // Validate schema name
     if (!/^[a-z_][a-z0-9_]*$/.test(schema)) {
       throw new AppError(400, 'Invalid schema name');
     }
@@ -334,7 +319,6 @@ export class Executor {
     const config = endpoint.source_config;
     const sql = config.query as string;
 
-    // Replace {{param}} placeholders with parameterized query bindings
     const allParams: Record<string, unknown> = { ...params, ...query, ...(body as Record<string, unknown> ?? {}) };
     let paramIndex = 0;
     const paramValues: unknown[] = [];
@@ -347,10 +331,9 @@ export class Executor {
       return `$${paramIndex}`;
     });
 
-    // Block cross-schema access before execution
     validateSchemaAccess(parameterizedSql, schema);
 
-    // Use a transaction with SET LOCAL for safe search_path scoping + timeout
+
     const clamped = Math.max(1000, Math.min(timeoutMs, 120_000));
     const result = await this.db.transaction(async (trx) => {
       await trx.raw(`SET LOCAL statement_timeout = ${clamped}`);

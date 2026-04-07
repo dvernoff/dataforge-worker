@@ -343,5 +343,51 @@
     },
     "deleteWarningUsers": "Эта роль назначена {{count}} пользователю(ям). Они будут отвязаны. Вы уверены?",
     "cannotDeleteDefault": "Нельзя удалить роль по умолчанию. Сначала измените роль по умолчанию в настройках."
+  },
+  "projectPlans": {
+    "title": "Планы проектов",
+    "addPlan": "Создать план",
+    "editPlan": "Редактировать план",
+    "deletePlan": "Удалить план",
+    "planName": "Название плана",
+    "planColor": "Цвет",
+    "planDescription": "Описание",
+    "noPlans": "Нет планов проектов",
+    "noPlansDesc": "Создайте план для определения ресурсных квот проектов.",
+    "created": "План создан",
+    "updated": "План обновлён",
+    "deleted": "План удалён",
+    "confirmDelete": {
+      "title": "Удалить план",
+      "desc": "Вы уверены, что хотите удалить этот план? {{count}} проект(ов) потеряют привязку к плану.",
+      "confirm": "Удалить план"
+    },
+    "headers": {
+      "name": "Название",
+      "projects": "Проекты",
+      "description": "Описание",
+      "created": "Создан"
+    },
+    "quotaGroups": {
+      "resources": "Ресурсы",
+      "apiAutomation": "API и автоматизация",
+      "backups": "Бэкапы",
+      "performance": "Производительность"
+    },
+    "quotaFields": {
+      "max_tables": "Макс. таблиц",
+      "max_records": "Макс. записей",
+      "max_storage_mb": "Макс. хранилище (МБ)",
+      "max_files": "Макс. файлов",
+      "max_api_requests": "Макс. API запросов / день",
+      "max_endpoints": "Макс. эндпоинтов",
+      "max_webhooks": "Макс. вебхуков",
+      "max_cron": "Макс. крон задач",
+      "max_backups": "Макс. бэкапов",
+      "max_query_timeout_ms": "Таймаут запроса (мс)",
+      "max_concurrent_requests": "Макс. одновр. запросов",
+      "max_rows_per_query": "Макс. строк в запросе",
+      "max_export_rows": "Макс. строк экспорта"
+    }
   }
 }

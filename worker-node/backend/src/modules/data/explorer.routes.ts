@@ -25,7 +25,6 @@ export async function explorerRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
-  // POST /:projectId/explorer/pivot — execute pivot query
   app.post('/:projectId/explorer/pivot', async (request) => {
     const dbSchema = resolveProjectSchema(request);
     const config = pivotSchema.parse(request.body);
@@ -34,7 +33,6 @@ export async function explorerRoutes(app: FastifyInstance) {
     return result;
   });
 
-  // GET /:projectId/explorer/tables — list tables with column info
   app.get('/:projectId/explorer/tables', async (request) => {
     const dbSchema = resolveProjectSchema(request);
     const tables = await explorerService.listTables(app.db, dbSchema);

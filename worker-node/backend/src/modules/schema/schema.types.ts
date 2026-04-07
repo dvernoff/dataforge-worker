@@ -40,7 +40,6 @@ export interface AlterColumnDef {
   is_unique?: boolean;
 }
 
-// Map of user-facing types to PostgreSQL types
 export const PG_TYPE_MAP: Record<string, string> = {
   text: 'TEXT',
   integer: 'INTEGER',

@@ -34,7 +34,6 @@ export class WebhooksService {
     retry_count?: number;
     is_active?: boolean;
   }) {
-    // Validate that the table exists in the project's schema
     await this.validateTableInProjectSchema(projectId, input.table_name);
 
     const [webhook] = await this.db('webhooks')
@@ -61,7 +60,6 @@ export class WebhooksService {
       .where({ project_id: projectId })
       .orderBy('created_at', 'desc');
 
-    // Get recent stats for each webhook
     const result = [];
     for (const wh of webhooks) {
       const [stats] = await this.db('webhook_logs')
@@ -92,7 +90,6 @@ export class WebhooksService {
   }
 
   async update(id: string, projectId: string, input: Record<string, unknown>) {
-    // Validate table_name against the project's schema if it's being changed
     if (input.table_name !== undefined) {
       await this.validateTableInProjectSchema(projectId, String(input.table_name));
     }
@@ -124,7 +121,6 @@ export class WebhooksService {
   }
 
   async getLogs(webhookId: string, projectId: string, limit = 50) {
-    // Verify the webhook belongs to the project before returning logs
     const webhook = await this.db('webhooks')
       .where({ id: webhookId, project_id: projectId })
       .select('id')

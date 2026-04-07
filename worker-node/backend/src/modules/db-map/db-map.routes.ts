@@ -13,11 +13,9 @@ export async function dbMapRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
-  // GET /api/projects/:projectId/db-map
   app.get('/:projectId/db-map', async (request) => {
     const dbSchema = resolveProjectSchema(request);
 
-    // Get tables with row counts
     const tablesResult = await app.db.raw(`
       SELECT
         t.table_name,
@@ -38,7 +36,6 @@ export async function dbMapRoutes(app: FastifyInstance) {
       ORDER BY t.table_name
     `, [dbSchema]);
 
-    // Get foreign key relationships
     const fksResult = await app.db.raw(`
       SELECT
         tc.table_name as source_table,

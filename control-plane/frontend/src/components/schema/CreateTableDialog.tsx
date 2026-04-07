@@ -76,7 +76,7 @@ export function CreateTableDialog({ open, onOpenChange, projectId }: Props) {
         createCrudEndpoints(projectId, tableName).then(() => {
           queryClient.invalidateQueries({ queryKey: ['endpoints', projectId] });
           toast.success(t('createDialog.endpointsCreated'));
-        }).catch(() => {});
+        }).catch((err: Error) => toast.error(err.message));
       }
       resetForm();
       onOpenChange(false);

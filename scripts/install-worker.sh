@@ -67,6 +67,7 @@ log "Installing to: $INSTALL_DIR"
 DB_PASSWORD=$(openssl rand -hex 24)
 REDIS_PASSWORD=$(openssl rand -hex 16)
 JWT_SECRET=$(openssl rand -hex 32)
+WATCHTOWER_TOKEN=$(openssl rand -hex 32)
 
 # ── Detect worker URL ────────────────────────────────
 
@@ -126,6 +127,10 @@ POSTGRES_DB=dataforge_worker
 
 # Redis password
 REDIS_PASSWORD=${REDIS_PASSWORD}
+
+# Watchtower (auto-update)
+WATCHTOWER_TOKEN=${WATCHTOWER_TOKEN}
+WATCHTOWER_URL=http://watchtower:8080
 EOF
 
 log "Environment file written: .env"
@@ -172,15 +177,27 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:${PORT}/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
   watchtower:
     image: containrrr/watchtower
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 300 --cleanup
+    command: --label-enable --http-api-update --cleanup --rolling-restart --stop-timeout 30s --interval 86400
     environment:
       - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_HTTP_API_UPDATE=true
+      - WATCHTOWER_HTTP_API_TOKEN=${WATCHTOWER_TOKEN}
+      - WATCHTOWER_ROLLING_RESTART=true
+      - WATCHTOWER_CLEANUP=true
 
 volumes:
   pgdata:

@@ -16,7 +16,6 @@ export async function graphqlProxyRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
-  // POST /api/projects/:projectId/graphql — proxied from CP
   app.post('/:projectId/graphql', async (request, reply) => {
     const dbSchema = resolveProjectSchema(request);
     const body = request.body as Record<string, unknown>;

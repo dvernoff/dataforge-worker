@@ -6,7 +6,7 @@ import {
   FolderKanban, UserCog, FileText, Globe, LogOut, ChevronDown, Archive,
   Braces, Code, Activity, AlertTriangle, BarChart3, Search,
   Clock, Zap, Puzzle, Lock, LayoutDashboard, BookOpen, Map, PlayCircle,
-  GitBranch, HardDrive, Radio,
+  GitBranch, HardDrive, Radio, Layers,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup,
@@ -96,6 +96,7 @@ export function AppSidebar() {
     { label: t('nav.allProjects'), icon: FolderKanban, path: '/system/projects' },
     { label: t('nav.allUsers'), icon: UserCog, path: '/system/users' },
     { label: t('nav.roles'), icon: Shield, path: '/system/roles' },
+    { label: t('nav.projectPlans'), icon: Layers, path: '/system/project-plans' },
     { label: t('nav.systemLogs'), icon: FileText, path: '/system/logs' },
     { label: t('nav.health'), icon: Activity, path: '/system/health' },
     { label: t('nav.errors'), icon: AlertTriangle, path: '/system/errors' },

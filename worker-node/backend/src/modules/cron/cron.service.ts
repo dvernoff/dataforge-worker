@@ -95,7 +95,6 @@ export class CronService {
 
     if (!job) throw new AppError(404, 'Cron job not found');
 
-    // Reschedule
     this.stop(jobId);
     if (job.is_active) {
       this.scheduleJob(job);
@@ -143,7 +142,6 @@ export class CronService {
   }
 
   async getRuns(jobId: string, projectId: string, limit = 50) {
-    // Verify the cron job belongs to the project before returning runs
     const job = await this.db('cron_jobs')
       .where({ id: jobId, project_id: projectId })
       .select('id')
@@ -207,7 +205,6 @@ export class CronService {
     try {
       let result: unknown;
 
-      // Resolve project schema for SQL scoping — always use the project's own schema
       const project = await this.db('projects').where({ id: job.project_id }).select('db_schema').first();
       if (!project?.db_schema) {
         throw new Error('Project has no database schema assigned');
@@ -271,7 +268,6 @@ export class CronService {
     const query = config.query as string;
     if (!query) throw new Error('SQL query is required');
 
-    // Block destructive DDL — cron can do SELECT/INSERT/UPDATE/DELETE but not DROP/ALTER/TRUNCATE/CREATE
     const cleaned = query
       .replace(/--[^\n]*/g, '')
       .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -284,12 +280,10 @@ export class CronService {
       }
     }
 
-    // Validate schema name
     if (!VALID_SCHEMA_RE.test(projectSchema)) {
       throw new Error('Invalid project schema name');
     }
 
-    // Block cross-schema access — cron jobs can only access their own project schema
     validateSchemaAccess(query, projectSchema);
 
     const result = await this.db.transaction(async (trx) => {

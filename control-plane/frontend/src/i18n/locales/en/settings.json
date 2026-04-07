@@ -296,6 +296,46 @@
     "regenerating": "Generating...",
     "tokenReady": "Run this command on your server. Token expires in 1 hour.",
     "pendingSetup": "Waiting for setup",
-    "pendingSetupDesc": "This node was created but hasn't been connected yet. Get the install command to set it up."
+    "pendingSetupDesc": "This node was created but hasn't been connected yet. Get the install command to set it up.",
+    "update": "Update",
+    "updating": "Updating...",
+    "updateFailed": "Update Failed",
+    "updateTriggered": "Update triggered successfully"
+  },
+  "projectQuotas": {
+    "title": "Project Quotas",
+    "source": {
+      "plan": "Plan",
+      "override": "Override",
+      "default": "Default",
+      "personal_node": "Personal Node"
+    },
+    "unlimited": "Unlimited",
+    "changePlan": "Change plan",
+    "selectPlan": "Select plan",
+    "planChanged": "Plan changed successfully",
+    "usage": "Usage",
+    "limit": "Limit",
+    "groups": {
+      "resources": "Resources",
+      "apiAutomation": "API & Automation",
+      "backups": "Backups",
+      "performance": "Performance"
+    },
+    "fields": {
+      "max_tables": "Tables",
+      "max_records": "Records",
+      "max_storage_mb": "Storage (MB)",
+      "max_files": "Files",
+      "max_api_requests": "API Requests / Day",
+      "max_endpoints": "Endpoints",
+      "max_webhooks": "Webhooks",
+      "max_cron": "Cron Jobs",
+      "max_backups": "Backups",
+      "max_query_timeout_ms": "Query Timeout",
+      "max_concurrent_requests": "Concurrent Requests",
+      "max_rows_per_query": "Rows per Query",
+      "max_export_rows": "Export Rows"
+    }
   }
 }

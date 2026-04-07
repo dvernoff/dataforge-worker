@@ -64,7 +64,6 @@ export class OpenAPIService {
     const fields = responseConfig?.fields;
 
     for (const col of columns) {
-      // If response_config.fields exists, check if field is enabled
       if (fields && typeof fields === 'object' && !Array.isArray(fields)) {
         const cfg = fields[col.name];
         if (cfg && cfg.enabled === false) continue;
@@ -116,7 +115,6 @@ export class OpenAPIService {
       .where({ project_id: projectId, is_active: true })
       .select('*');
 
-    // Cache table columns
     const columnCache = new Map<string, ColumnInfo[]>();
     const getColumns = async (table: string) => {
       if (!columnCache.has(table)) {
@@ -157,7 +155,6 @@ export class OpenAPIService {
       const pathKey = ep.path.replace(/:(\w+)/g, '{$1}');
       const method = ep.method.toLowerCase();
 
-      // Get columns for table-based endpoints
       let columns: ColumnInfo[] = [];
       if (ep.source_type === 'table' && table) {
         columns = await getColumns(table);
@@ -167,7 +164,6 @@ export class OpenAPIService {
         ? this.buildRowSchema(columns, responseConfig)
         : { type: 'object' };
 
-      // --- Summary & description ---
       const summary = ep.description || `${ep.method} ${ep.path}`;
       const descParts: string[] = [];
       if (ep.source_type === 'table') {
@@ -192,15 +188,11 @@ export class OpenAPIService {
         deprecated: !!ep.deprecated_at,
       };
 
-      // --- Auth ---
       if (ep.auth_type === 'api_token') {
         op.security = [{ ApiKeyAuth: [] }];
       }
 
-      // --- Parameters ---
       const parameters: Record<string, unknown>[] = [];
-
-      // Path params
       const pathParamMatches = ep.path.match(/:(\w+)/g) || [];
       for (const p of pathParamMatches) {
         const name = p.slice(1);
@@ -217,7 +209,6 @@ export class OpenAPIService {
         });
       }
 
-      // Query params for find operation
       if (operation === 'find') {
         parameters.push(
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 }, description: 'Page number (starts at 1)' },
@@ -225,7 +216,6 @@ export class OpenAPIService {
           { name: 'sort', in: 'query', schema: { type: 'string' }, description: 'Column name to sort by' },
           { name: 'order', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'] }, description: 'Sort direction' },
         );
-        // Filter params
         for (const col of columns) {
           parameters.push({
             name: `filter[${col.name}]`,
@@ -237,7 +227,6 @@ export class OpenAPIService {
         }
       }
 
-      // Custom SQL params
       if (ep.source_type === 'custom_sql') {
         const query = config?.query ?? '';
         const sqlParams = (query.match(/\{\{(\w+)\}\}/g) || []).map((m: string) => m.replace(/\{|\}/g, ''));
@@ -245,7 +234,7 @@ export class OpenAPIService {
         const pathParamNames = pathParamMatches.map((p: string) => p.slice(1));
 
         for (const param of uniqueParams) {
-          if (pathParamNames.includes(param)) continue; // already added as path param
+          if (pathParamNames.includes(param)) continue;
           parameters.push({
             name: param,
             in: 'query',
@@ -258,7 +247,6 @@ export class OpenAPIService {
 
       if (parameters.length) op.parameters = parameters;
 
-      // --- Request Body ---
       if (['POST', 'PUT', 'PATCH'].includes(ep.method) && ep.source_type === 'table' && columns.length > 0) {
         const bodySchema = operation === 'create'
           ? this.buildCreateBodySchema(columns)
@@ -277,7 +265,6 @@ export class OpenAPIService {
         };
       }
 
-      // --- Responses ---
       const responses: Record<string, unknown> = {};
 
       if (operation === 'find') {
@@ -328,14 +315,12 @@ export class OpenAPIService {
         responses['400'] = { description: 'Record ID required' };
         responses['404'] = { description: 'Record not found' };
       } else {
-        // Custom SQL or unknown
         responses['200'] = {
           description: 'Query result',
           content: { 'application/json': { schema: { type: 'array', items: { type: 'object' } } } },
         };
       }
 
-      // Common error responses
       if (ep.auth_type === 'api_token') {
         responses['401'] = { description: 'API key missing, invalid, or expired' };
       }
@@ -344,7 +329,6 @@ export class OpenAPIService {
         responses['429'] = { description: `Rate limit exceeded (${rateLimit.max} requests / ${Math.round((rateLimit.window ?? 60000) / 1000)}s)` };
       }
 
-      // Cache headers
       if (ep.cache_enabled) {
         const headers: Record<string, unknown> = {
           'X-Cache': { schema: { type: 'string', enum: ['HIT', 'MISS'] }, description: 'Cache hit or miss' },
@@ -360,7 +344,6 @@ export class OpenAPIService {
       paths[pathKey][method] = op;
     }
 
-    // GraphQL endpoint
     paths['/graphql'] = {
       post: {
         summary: 'GraphQL endpoint',

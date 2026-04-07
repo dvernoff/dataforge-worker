@@ -45,7 +45,6 @@ function pgTypeToGraphQL(dataType: string, udtName: string): string {
 }
 
 function sanitizeName(name: string): string {
-  // Convert table_name to TableName for GraphQL type
   return name
     .split(/[_\-\s]+/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -61,7 +60,6 @@ export class GraphQLService {
   constructor(private db: Knex) {}
 
   async generateSchema(schema: string): Promise<string> {
-    // Get all tables in the schema
     const tablesResult = await this.db.raw(`
       SELECT table_name
       FROM information_schema.tables
@@ -83,7 +81,6 @@ export class GraphQLService {
     const mutationFields: string[] = [];
     const inputTypes: string[] = [];
 
-    // Add scalar JSON type
     typeDefs.push('scalar JSON');
 
     for (const table of tables) {
@@ -100,7 +97,6 @@ export class GraphQLService {
       const typeName = sanitizeName(table.table_name);
       const fieldName = camelCase(table.table_name);
 
-      // Build type
       const typeFields = columns.map((col) => {
         const gqlType = pgTypeToGraphQL(col.data_type, col.udt_name);
         const nullable = col.is_nullable === 'YES' ? '' : '!';
@@ -108,7 +104,6 @@ export class GraphQLService {
       });
       typeDefs.push(`  type ${typeName} {\n${typeFields.join('\n')}\n  }`);
 
-      // Build input type (exclude id, created_at, updated_at, deleted_at)
       const skipFields = new Set(['id', 'created_at', 'updated_at', 'deleted_at']);
       const inputFields = columns
         .filter((col) => !skipFields.has(col.column_name))
@@ -118,11 +113,9 @@ export class GraphQLService {
         });
       inputTypes.push(`  input ${typeName}Input {\n${inputFields.join('\n')}\n  }`);
 
-      // Query fields
       queryFields.push(`    ${fieldName}(limit: Int, offset: Int, where: JSON): [${typeName}!]!`);
       queryFields.push(`    ${fieldName}ById(id: String!): ${typeName}`);
 
-      // Mutation fields
       mutationFields.push(`    create${typeName}(data: ${typeName}Input!): ${typeName}!`);
       mutationFields.push(`    update${typeName}(id: String!, data: ${typeName}Input!): ${typeName}!`);
       mutationFields.push(`    delete${typeName}(id: String!): Boolean!`);
@@ -156,7 +149,6 @@ export class GraphQLService {
       const typeName = sanitizeName(table.table_name);
       const fullTable = `${schema}.${table.table_name}`;
 
-      // Query: list with optional limit, offset, where
       Query[fieldName] = async (_: unknown, args: { limit?: number; offset?: number; where?: Record<string, unknown> }) => {
         let q = db(fullTable);
         if (args.where) {
@@ -170,27 +162,22 @@ export class GraphQLService {
         return q.orderBy('created_at', 'desc');
       };
 
-      // Query: by ID
       Query[`${fieldName}ById`] = async (_: unknown, args: { id: string }) => {
         return db(fullTable).where({ id: args.id }).first();
       };
 
-      // Mutation: create
       Mutation[`create${typeName}`] = async (_: unknown, args: { data: Record<string, unknown> }) => {
-        // Convert camelCase keys back to snake_case for DB
         const data = camelToSnake(args.data);
         const [row] = await db(fullTable).insert(data).returning('*');
         return row;
       };
 
-      // Mutation: update
       Mutation[`update${typeName}`] = async (_: unknown, args: { id: string; data: Record<string, unknown> }) => {
         const data = camelToSnake(args.data);
         const [row] = await db(fullTable).where({ id: args.id }).update(data).returning('*');
         return row;
       };
 
-      // Mutation: delete
       Mutation[`delete${typeName}`] = async (_: unknown, args: { id: string }) => {
         const deleted = await db(fullTable).where({ id: args.id }).delete();
         return deleted > 0;
@@ -201,27 +188,23 @@ export class GraphQLService {
   }
 
   async executeQuery(schema: string, query: string, variables?: Record<string, unknown>, timeoutMs = 30_000): Promise<unknown> {
-    // We use graphql-js directly since mercurius requires fastify plugin registration
     const { graphql: graphqlExec, buildSchema: buildGraphQLSchema } = await import('graphql');
 
     const schemaDef = await this.generateSchema(schema);
     const resolvers = await this.generateResolvers(schema);
 
-    // Build executable schema
     const gqlSchema = buildGraphQLSchema(schemaDef);
 
-    // Build root value from resolvers
+
     const rootValue = {
       ...resolvers.Query,
       ...resolvers.Mutation,
     };
 
-    // Execute within a transaction to enforce statement_timeout
     const clamped = Math.max(1000, Math.min(timeoutMs, 120_000));
     const result = await this.db.transaction(async (trx) => {
       await trx.raw(`SET LOCAL statement_timeout = ${clamped}`);
 
-      // Rebind resolvers to use the transaction connection
       const txQuery: Record<string, Function> = {};
       const txMutation: Record<string, Function> = {};
       for (const [k, fn] of Object.entries(resolvers.Query)) {

@@ -6,10 +6,9 @@ import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 
 export async function filesRoutes(app: FastifyInstance) {
-  // Register multipart support for file uploads
   await app.register(multipart, {
     limits: {
-      fileSize: 50 * 1024 * 1024, // 50MB max
+      fileSize: 50 * 1024 * 1024,
     },
   });
 
@@ -18,7 +17,6 @@ export async function filesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
-  // POST /api/projects/:projectId/files/upload — upload file
   app.post('/:projectId/files/upload', async (request) => {
     const { projectId } = request.params as { projectId: string };
 
@@ -46,7 +44,6 @@ export async function filesRoutes(app: FastifyInstance) {
     return { file };
   });
 
-  // GET /api/projects/:projectId/files/:fileId — download file
   app.get('/:projectId/files/:fileId', async (request, reply) => {
     const { projectId, fileId } = request.params as { projectId: string; fileId: string };
 
@@ -61,14 +58,12 @@ export async function filesRoutes(app: FastifyInstance) {
     return reply.send(data);
   });
 
-  // DELETE /api/projects/:projectId/files/:fileId — delete file
   app.delete('/:projectId/files/:fileId', async (request, reply) => {
     const { projectId, fileId } = request.params as { projectId: string; fileId: string };
     await filesService.delete(projectId, fileId);
     return reply.status(204).send();
   });
 
-  // GET /api/projects/:projectId/files?table=X&record=Y — list files
   app.get('/:projectId/files', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const query = request.query as Record<string, string>;

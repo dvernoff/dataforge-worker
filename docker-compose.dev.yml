@@ -78,6 +78,10 @@ services:
     environment:
       NODE_ENV: development
       DATABASE_URL: postgresql://dataforge:df_control_2024@postgres-control:5432/dataforge_control
+      WORKER_NODE_API_KEY: dev_worker_api_key_change_in_production_64chars_ccccccccccccccccccc
+      SECRETS_ENCRYPTION_KEY: dev_secrets_key_32chars_minimum!!
+      BCRYPT_ROUNDS: "10"
+      LOCAL_WORKER_URL: http://worker:4001
     command: >
       sh -c "npm install --prefer-offline --no-audit 2>/dev/null;
              npx knex migrate:latest --esm 2>/dev/null || node --import tsx/esm node_modules/knex/bin/cli.js migrate:latest;

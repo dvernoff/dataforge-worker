@@ -6,7 +6,6 @@ export async function analyticsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
-  // GET /:projectId/analytics/summary
   app.get('/:projectId/analytics/summary', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const today = new Date();
@@ -48,7 +47,6 @@ export async function analyticsRoutes(app: FastifyInstance) {
     };
   });
 
-  // GET /:projectId/analytics/requests — paginated list
   app.get('/:projectId/analytics/requests', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const query = request.query as Record<string, string>;
@@ -92,7 +90,6 @@ export async function analyticsRoutes(app: FastifyInstance) {
     };
   });
 
-  // GET /:projectId/analytics/top-endpoints
   app.get('/:projectId/analytics/top-endpoints', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const query = request.query as Record<string, string>;
@@ -121,7 +118,6 @@ export async function analyticsRoutes(app: FastifyInstance) {
     };
   });
 
-  // GET /:projectId/analytics/slow-queries
   app.get('/:projectId/analytics/slow-queries', async (request) => {
     const { projectId } = request.params as { projectId: string };
 

@@ -13,14 +13,6 @@ export class AppError extends Error {
   }
 }
 
-/**
- * Parse PostgreSQL error into a user-friendly message.
- * Returns null if the error is not a recognized PG error.
- */
-/**
- * Fire-and-forget: log quota violation to CP audit log.
- * Shows up in project audit trail so user/admin can see what was blocked.
- */
 function logQuotaViolation(request: FastifyRequest, action: string, details: Record<string, unknown>) {
   const projectId = request.projectId;
   const userId = request.userId;
@@ -61,93 +53,87 @@ function parsePgError(error: PgError): { status: number; message: string } | nul
   const table = error.table ?? '';
 
   switch (code) {
-    // ─── Data Exceptions ────────────────────────────────
-    case '22003': // numeric_value_out_of_range
+    case '22003':
       return {
         status: 400,
         message: `Value out of range for column type. Integer columns support values from -2147483648 to 2147483647. Use bigint for larger numbers.`,
       };
-    case '22001': // string_data_right_truncation
+    case '22001':
       return {
         status: 400,
         message: `Value too long for column${col ? ` "${col}"` : ''}. Reduce the text length or change column type to "text".`,
       };
-    case '22P02': // invalid_text_representation
+    case '22P02':
       return {
         status: 400,
         message: `Invalid value format${detail ? `: ${detail}` : ''}. Check that the value matches the column type.`,
       };
-    case '22007': // invalid_datetime_format
+    case '22007':
       return {
         status: 400,
         message: `Invalid date/time format. Use ISO 8601 format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS.`,
       };
-    case '22008': // datetime_field_overflow
+    case '22008':
       return {
         status: 400,
         message: `Date/time value out of range.`,
       };
 
-    // ─── Integrity Constraint Violations ─────────────────
-    case '23502': // not_null_violation
+    case '23502':
       return {
         status: 400,
         message: `Column "${error.column ?? 'unknown'}" cannot be empty (NOT NULL constraint).`,
       };
-    case '23503': // foreign_key_violation
+    case '23503':
       return {
         status: 400,
         message: detail
           ? `Foreign key violation: ${detail}`
           : `Cannot complete this action — it would violate a foreign key constraint${constraint ? ` "${constraint}"` : ''}.`,
       };
-    case '23505': // unique_violation
+    case '23505':
       return {
         status: 409,
         message: detail
           ? `Duplicate value: ${detail}`
           : `This value already exists (unique constraint${constraint ? ` "${constraint}"` : ''}).`,
       };
-    case '23514': // check_constraint_violation
+    case '23514':
       return {
         status: 400,
         message: `Value violates check constraint${constraint ? ` "${constraint}"` : ''}${table ? ` on table "${table}"` : ''}.`,
       };
 
-    // ─── Schema / DDL Errors ────────────────────────────
-    case '42P07': // duplicate_table
+    case '42P07':
       return { status: 409, message: `Table already exists.` };
-    case '42P01': // undefined_table
+    case '42P01':
       return { status: 404, message: `Table not found.` };
-    case '42703': // undefined_column
+    case '42703':
       return { status: 404, message: `Column not found${detail ? `: ${detail}` : ''}.` };
-    case '42701': // duplicate_column
+    case '42701':
       return { status: 409, message: `Column with this name already exists.` };
-    case '42830': // invalid_foreign_key
+    case '42830':
       return { status: 400, message: `Target column must have a UNIQUE or PRIMARY KEY constraint.` };
-    case '42804': // datatype_mismatch
+    case '42804':
       return { status: 400, message: `Incompatible data types${detail ? `: ${detail}` : ''}.` };
-    case '42710': // duplicate_object
+    case '42710':
       return { status: 409, message: `Object "${constraint || 'unknown'}" already exists.` };
-    case '2BP01': // dependent_objects_still_exist
+    case '2BP01':
       return { status: 400, message: `Cannot drop — dependent objects exist (indexes, foreign keys, or views). Remove them first.` };
 
-    // ─── Query Cancellation (quota timeout) ───────────────
-    case '57014': // query_canceled (statement_timeout)
+    case '57014':
       return { status: 408, message: `Query exceeded time limit and was cancelled. Optimize your query or contact admin to increase quota.` };
-    case '57P01': // admin_shutdown
+    case '57P01':
       return { status: 503, message: `Server is shutting down. Try again later.` };
 
-    // ─── Insufficient Resources ─────────────────────────
-    case '53100': // disk_full
+    case '53100':
       return { status: 507, message: `Disk full. Contact administrator.` };
-    case '53200': // out_of_memory
+    case '53200':
       return { status: 507, message: `Server out of memory. Try a smaller operation.` };
 
-    // ─── Syntax / Access ────────────────────────────────
-    case '42601': // syntax_error
+    case '42601':
       return { status: 400, message: `SQL syntax error. Check your expression.` };
-    case '42501': // insufficient_privilege
+    case '42501':
       return { status: 403, message: `Insufficient permissions for this operation.` };
 
     default:
@@ -165,7 +151,6 @@ export function errorHandler(
       error: error.message,
       details: error.details,
     };
-    // Forward extra fields (errorCode, column, targetType, etc.)
     for (const key of ['errorCode', 'column', 'targetType'] as const) {
       if (key in error) payload[key] = (error as Record<string, unknown>)[key];
     }
@@ -181,7 +166,6 @@ export function errorHandler(
     return;
   }
 
-  // ─── PostgreSQL errors ──────────────────────────────
   const pgErr = error as PgError;
   const pgResult = parsePgError(pgErr);
   if (pgResult) {
@@ -189,13 +173,11 @@ export function errorHandler(
       error: pgResult.message,
       errorCode: `PG_${pgErr.code}`,
     };
-    // Forward useful PG metadata for frontend translation interpolation
     if (pgErr.column) payload.column = pgErr.column;
     if (pgErr.detail) payload.detail = pgErr.detail;
     if (pgErr.constraint) payload.constraint = pgErr.constraint;
     if (pgErr.table) payload.table = pgErr.table;
 
-    // Log quota-related violations to project audit
     if (pgErr.code === '57014') {
       logQuotaViolation(_request, 'quota.query_timeout', {
         path: _request.url,

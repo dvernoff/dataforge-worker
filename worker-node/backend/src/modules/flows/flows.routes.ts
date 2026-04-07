@@ -10,14 +10,12 @@ export async function flowsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('admin'));
 
-  // List flows
   app.get('/:projectId/flows', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const flows = await flowsService.findAll(projectId);
     return { flows };
   });
 
-  // Create flow
   app.post('/:projectId/flows', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const body = z.object({
@@ -40,7 +38,6 @@ export async function flowsRoutes(app: FastifyInstance) {
     return { flow };
   });
 
-  // Get flow detail
   app.get('/:projectId/flows/:flowId', async (request) => {
     const { projectId, flowId } = request.params as { projectId: string; flowId: string };
     const flow = await flowsService.findById(flowId, projectId);
@@ -48,7 +45,6 @@ export async function flowsRoutes(app: FastifyInstance) {
     return { flow, runs };
   });
 
-  // Update flow
   app.put('/:projectId/flows/:flowId', async (request) => {
     const { projectId, flowId } = request.params as { projectId: string; flowId: string };
     const body = request.body as Record<string, unknown>;
@@ -56,14 +52,12 @@ export async function flowsRoutes(app: FastifyInstance) {
     return { flow };
   });
 
-  // Delete flow
   app.delete('/:projectId/flows/:flowId', async (request, reply) => {
     const { projectId, flowId } = request.params as { projectId: string; flowId: string };
     await flowsService.delete(flowId, projectId);
     return reply.status(204).send();
   });
 
-  // Manual trigger
   app.post('/:projectId/flows/:flowId/run', async (request) => {
     const { projectId, flowId } = request.params as { projectId: string; flowId: string };
     const triggerData = request.body ?? {};
@@ -71,7 +65,6 @@ export async function flowsRoutes(app: FastifyInstance) {
     return { result };
   });
 
-  // Run history
   app.get('/:projectId/flows/:flowId/runs', async (request) => {
     const { projectId, flowId } = request.params as { projectId: string; flowId: string };
     const query = request.query as Record<string, string>;

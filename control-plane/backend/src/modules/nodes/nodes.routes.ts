@@ -82,6 +82,16 @@ export async function nodesRoutes(app: FastifyInstance) {
     return { setup_token: setupToken, token_expires: tokenExpires.toISOString() };
   });
 
+  // POST /api/nodes/:nodeId/update — trigger update on a node (superadmin)
+  app.post('/:nodeId/update', {
+    preHandler: [authMiddleware, requireSuperadmin()],
+  }, async (request) => {
+    const { nodeId } = request.params as { nodeId: string };
+    const result = await nodesService.triggerUpdate(nodeId);
+    logAudit(request, 'node.update.trigger', 'node', nodeId);
+    return result;
+  });
+
   // DELETE /api/nodes/:nodeId (soft delete — sets status to offline)
   app.delete('/:nodeId', {
     preHandler: [authMiddleware, requireSuperadmin()],
@@ -130,6 +140,20 @@ export async function nodesRoutes(app: FastifyInstance) {
     const { setupToken, tokenExpires } = await nodesService.regenerateSetupToken(id, request.user.id);
     logAudit(request, 'node.personal.regenerate-token', 'node', id);
     return { setup_token: setupToken, token_expires: tokenExpires.toISOString() };
+  });
+
+  // POST /api/nodes/personal/:id/update — trigger update on personal node
+  app.post('/personal/:id/update', {
+    preHandler: [authMiddleware],
+  }, async (request) => {
+    const { id } = request.params as { id: string };
+    const node = await nodesService.findById(id);
+    if (node.owner_id !== request.user.id) {
+      throw Object.assign(new Error('Not your node'), { statusCode: 403 });
+    }
+    const result = await nodesService.triggerUpdate(id);
+    logAudit(request, 'node.personal.update.trigger', 'node', id);
+    return result;
   });
 
   // DELETE /api/nodes/personal/:id — delete personal node

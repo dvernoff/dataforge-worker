@@ -16,7 +16,6 @@ export class LocalStoragePlugin {
     const fullPath = path.resolve(config.base_path, filePath);
     const dir = path.dirname(fullPath);
 
-    // Security check: ensure the resolved path is within base_path
     const resolvedBase = path.resolve(config.base_path);
     if (!fullPath.startsWith(resolvedBase)) {
       throw new Error('Path traversal not allowed');

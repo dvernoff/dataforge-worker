@@ -20,26 +20,17 @@ const getClient = () => {
   return new Anthropic({ apiKey });
 };
 
-/**
- * Public Natural Language API endpoint
- * POST /api/v1/:projectSlug/natural
- *
- * This is the external-facing route that uses project slug and API token auth.
- */
 export async function naturalPublicRoutes(app: FastifyInstance) {
 
-  // POST /api/v1/:projectSlug/natural
   app.post('/:projectSlug/natural', async (request) => {
     const { projectSlug } = request.params as { projectSlug: string };
 
-    // Auth via Bearer token
     const authHeader = request.headers['authorization'];
     if (!authHeader?.startsWith('Bearer ')) {
       throw new AppError(401, 'Missing or invalid Authorization header. Use Bearer <api_token>.');
     }
     const token = authHeader.slice(7);
 
-    // Verify API token and resolve project
     const tokenRow = await app.db('api_tokens')
       .join('projects', 'api_tokens.project_id', 'projects.id')
       .where('projects.slug', projectSlug)
@@ -58,7 +49,6 @@ export async function naturalPublicRoutes(app: FastifyInstance) {
 
     const dbSchema = tokenRow.db_schema;
 
-    // Get schema context
     const tables = await app.db.raw(`
       SELECT t.table_name,
         json_agg(json_build_object(
@@ -113,7 +103,6 @@ CRITICAL RULES:
     const sql = parsed.sql ?? '';
     const explanation = parsed.explanation ?? '';
 
-    // Safety check
     const normalizedSql = sql.trim().toUpperCase();
     const forbiddenKeywords = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'TRUNCATE', 'CREATE', 'GRANT', 'REVOKE'];
     for (const keyword of forbiddenKeywords) {
@@ -126,7 +115,6 @@ CRITICAL RULES:
       throw new AppError(400, 'Only SELECT queries are allowed');
     }
 
-    // Block cross-schema access in AI-generated SQL
     validateSchemaAccess(sql, dbSchema);
 
     let data;

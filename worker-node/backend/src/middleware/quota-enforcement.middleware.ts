@@ -1,13 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { env } from '../config/env.js';
 
-/**
- * Tracks concurrent requests per user and enforces limits.
- * Only active on shared nodes (quotas.concurrent > 0).
- */
 const concurrentByUser = new Map<string, number>();
 
-/** Report quota violation to CP audit_log */
 async function reportQuotaViolation(
   projectId: string,
   userId: string,
@@ -32,7 +27,7 @@ async function reportQuotaViolation(
       }),
       signal: AbortSignal.timeout(3000),
     }).catch(() => {});
-  } catch { /* fire and forget */ }
+  } catch {}
 }
 
 export async function quotaConcurrencyGuard(request: FastifyRequest, reply: FastifyReply) {
@@ -64,10 +59,8 @@ export async function quotaConcurrencyGuard(request: FastifyRequest, reply: Fast
     }
   };
 
-  // Decrement when response is sent (onResponse) or connection drops (onRequestAbort)
   reply.raw.on('finish', decrement);
   request.raw.on('close', () => {
-    // If the connection was aborted before response finished
     if (!reply.raw.writableFinished) {
       decrement();
     }
@@ -78,14 +71,10 @@ export function getQuotaHelpers(request: FastifyRequest) {
   const { quotas, isSharedNode: isShared, userId, projectId } = request;
 
   return {
-    /** Effective row limit for data list queries. 0 = no limit (personal node). */
     maxRows: (isShared && quotas?.maxRows) ? quotas.maxRows : 0,
-    /** Effective row limit for export. 0 = no limit. */
     maxExport: (isShared && quotas?.maxExport) ? quotas.maxExport : 0,
-    /** Effective statement_timeout in ms. 0 = no limit. */
     queryTimeout: (isShared && quotas?.queryTimeout) ? quotas.queryTimeout : 0,
 
-    /** Log a quota violation to CP audit log */
     reportViolation(action: string, details: Record<string, unknown>) {
       reportQuotaViolation(projectId, userId, action, details);
     },

@@ -18,7 +18,7 @@ import { quotasApi } from '@/api/quotas.api';
 import { projectsApi } from '@/api/projects.api';
 import { api } from '@/api/client';
 import { toast } from 'sonner';
-import { User, Shield, BarChart3, FolderKanban, Server, Bot, Gauge } from 'lucide-react';
+import { User, Shield, BarChart3, FolderKanban, Server, Bot, Info } from 'lucide-react';
 
 export function ProfilePage() {
   const { t } = useTranslation(['common', 'settings', 'system']);
@@ -83,35 +83,11 @@ export function ProfilePage() {
   };
 
   const quotaFields = [
-    'max_projects', 'max_tables', 'max_records', 'max_api_requests',
-    'max_storage_mb', 'max_endpoints', 'max_webhooks', 'max_files',
-    'max_backups', 'max_cron',
-  ];
-
-  const performanceQuotaFields = [
-    'max_query_timeout_ms', 'max_concurrent_requests', 'max_rows_per_query', 'max_export_rows',
+    'max_projects',
   ];
 
   const quotaKeyMap: Record<string, string> = {
     max_projects: 'maxProjects',
-    max_tables: 'maxTables',
-    max_records: 'maxRecords',
-    max_api_requests: 'maxApiRequests',
-    max_storage_mb: 'maxStorageMb',
-    max_endpoints: 'maxEndpoints',
-    max_webhooks: 'maxWebhooks',
-    max_files: 'maxFiles',
-    max_backups: 'maxBackups',
-    max_cron: 'maxCron',
-    max_query_timeout_ms: 'maxQueryTimeoutMs',
-    max_concurrent_requests: 'maxConcurrentRequests',
-    max_rows_per_query: 'maxRowsPerQuery',
-    max_export_rows: 'maxExportRows',
-  };
-
-  const perfFormatValue = (field: string, val: number) => {
-    if (field === 'max_query_timeout_ms') return `${(val / 1000).toFixed(0)}s`;
-    return val.toLocaleString();
   };
 
   const initials = user?.name
@@ -319,22 +295,13 @@ export function ProfilePage() {
                     })}
                   </div>
 
-                  {/* Performance Limits */}
+                  {/* Resource quotas note */}
                   <Separator />
-                  <h4 className="text-sm font-medium flex items-center gap-1.5">
-                    <Gauge className="h-4 w-4" />
-                    {t('common:profile.performanceLimits')}
-                  </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {performanceQuotaFields.map((field) => {
-                      const val = quotaData.quota?.[field] ?? 0;
-                      return (
-                        <div key={field} className="rounded-md border p-3 text-center">
-                          <div className="text-lg font-semibold">{perfFormatValue(field, val)}</div>
-                          <div className="text-xs text-muted-foreground">{t(`system:globalSettings.quotas.${quotaKeyMap[field]}`)}</div>
-                        </div>
-                      );
-                    })}
+                  <div className="flex items-start gap-2 p-3 rounded-md bg-muted/50">
+                    <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-sm text-muted-foreground">
+                      {t('common:profile.resourcesMovedNote')}
+                    </p>
                   </div>
                 </div>
               ) : (

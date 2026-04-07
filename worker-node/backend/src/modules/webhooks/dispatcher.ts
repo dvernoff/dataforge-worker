@@ -25,7 +25,6 @@ export class WebhookDispatcher {
           ...webhook.headers,
         };
 
-        // HMAC signature
         if (webhook.secret) {
           const signature = crypto
             .createHmac('sha256', webhook.secret)
@@ -49,7 +48,6 @@ export class WebhookDispatcher {
 
         if (response.ok) return;
 
-        // Don't retry on 4xx (client errors)
         if (response.status >= 400 && response.status < 500) return;
 
       } catch (err) {
@@ -57,7 +55,6 @@ export class WebhookDispatcher {
         await this.logAttempt(webhook.id, event, payload, 0, (err as Error).message, attempt, duration);
       }
 
-      // Exponential backoff before retry
       if (attempt <= maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
       }

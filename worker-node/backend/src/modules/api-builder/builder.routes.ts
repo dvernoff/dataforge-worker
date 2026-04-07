@@ -13,7 +13,6 @@ async function resolveProject(app: FastifyInstance, projectId: string) {
   return project;
 }
 
-/** CRUD for endpoint definitions (proxied from CP with node-auth) — registered with prefix /api/projects */
 export async function apiBuilderRoutes(app: FastifyInstance) {
   const builderService = new BuilderService(app.db);
   const executor = new Executor(app.db);
@@ -23,21 +22,18 @@ export async function apiBuilderRoutes(app: FastifyInstance) {
     protectedRoutes.addHook('preHandler', nodeAuthMiddleware);
     protectedRoutes.addHook('preHandler', requireWorkerRole('viewer'));
 
-    // GET /api/projects/:projectId/endpoints
     protectedRoutes.get('/:projectId/endpoints', async (request) => {
       const { projectId } = request.params as { projectId: string };
       const endpoints = await builderService.findAll(projectId);
       return { endpoints };
     });
 
-    // GET /api/projects/:projectId/endpoints/:endpointId
     protectedRoutes.get('/:projectId/endpoints/:endpointId', async (request) => {
       const { projectId, endpointId } = request.params as { projectId: string; endpointId: string };
       const endpoint = await builderService.findById(endpointId, projectId);
       return { endpoint };
     });
 
-    // POST /api/projects/:projectId/endpoints
     protectedRoutes.post('/:projectId/endpoints', async (request) => {
       const { projectId } = request.params as { projectId: string };
       const userId = request.userId;
@@ -62,18 +58,15 @@ export async function apiBuilderRoutes(app: FastifyInstance) {
       return { endpoint };
     });
 
-    // PUT /api/projects/:projectId/endpoints/:endpointId
     protectedRoutes.put('/:projectId/endpoints/:endpointId', async (request) => {
       const { projectId, endpointId } = request.params as { projectId: string; endpointId: string };
       const body = request.body as Record<string, unknown>;
 
-      // Always invalidate cached responses on save — ensures stale cache is cleared
       const project = await app.db('projects').where({ id: projectId }).select('slug').first();
       if (project) {
         await cacheService.invalidateByEndpoint(project.slug, endpointId);
       }
 
-      // Reset per-endpoint rate limit counters when rate limit settings change
       if (body.rate_limit !== undefined) {
         const rlKeys = await app.redis.keys(`rl:ep:${endpointId}:*`);
         if (rlKeys.length) await app.redis.del(...rlKeys);
@@ -83,11 +76,9 @@ export async function apiBuilderRoutes(app: FastifyInstance) {
       return { endpoint };
     });
 
-    // DELETE /api/projects/:projectId/endpoints/:endpointId
     protectedRoutes.delete('/:projectId/endpoints/:endpointId', async (request, reply) => {
       const { projectId, endpointId } = request.params as { projectId: string; endpointId: string };
 
-      // Clear cached responses and rate limit counters for deleted endpoint
       const rlKeys = await app.redis.keys(`rl:ep:${endpointId}:*`);
       if (rlKeys.length) await app.redis.del(...rlKeys);
       const project = await app.db('projects').where({ id: projectId }).select('slug').first();
@@ -99,21 +90,18 @@ export async function apiBuilderRoutes(app: FastifyInstance) {
       return reply.status(204).send();
     });
 
-    // POST /api/projects/:projectId/endpoints/:endpointId/toggle
     protectedRoutes.post('/:projectId/endpoints/:endpointId/toggle', async (request) => {
       const { projectId, endpointId } = request.params as { projectId: string; endpointId: string };
       const endpoint = await builderService.toggleActive(endpointId, projectId);
       return { endpoint };
     });
 
-    // POST /api/projects/:projectId/endpoints/:endpointId/version — create new version
     protectedRoutes.post('/:projectId/endpoints/:endpointId/version', async (request) => {
       const { projectId, endpointId } = request.params as { projectId: string; endpointId: string };
       const endpoint = await builderService.createNewVersion(endpointId, projectId);
       return { endpoint };
     });
 
-    // POST /api/projects/:projectId/endpoints/:endpointId/test — test endpoint
     protectedRoutes.post('/:projectId/endpoints/:endpointId/test', async (request) => {
       const { projectId, endpointId } = request.params as { projectId: string; endpointId: string };
       const { params: testParams, query: testQuery, body: testBody } = (request.body as Record<string, unknown>) ?? {};
@@ -147,7 +135,6 @@ export async function apiBuilderRoutes(app: FastifyInstance) {
   });
 }
 
-/** Dynamic API execution — must be registered at root (no prefix) */
 export async function apiDynamicRoutes(app: FastifyInstance) {
   const executor = new Executor(app.db);
   const cacheService = new CacheService(app.redis);
@@ -157,11 +144,9 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
     const wildcardPath = (request.params as Record<string, string>)['*'];
     const path = '/' + wildcardPath;
 
-    // Find project
     const project = await app.db('projects').where({ slug: projectSlug }).first();
     if (!project) return reply.status(404).send({ error: 'Project not found' });
 
-    // Find matching endpoint: exact match first, then pattern match for any :param
     const endpointExact = await app.db('api_endpoints')
       .where({
         project_id: project.id,
@@ -186,7 +171,6 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Endpoint not found' });
     }
 
-    // Extract path parameters by comparing endpoint path pattern with actual path
     const extractedParams: Record<string, string> = {};
     const patternParts = (endpointFinal.path as string).split('/');
     const actualParts = path.split('/');
@@ -196,14 +180,12 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
       }
     }
 
-    // Auth check — verify API token from Redis cache
     if (endpointFinal.auth_type === 'api_token') {
       const apiKey = request.headers['x-api-key'] as string;
       if (!apiKey) {
         return reply.status(401).send({ error: 'API key required' });
       }
 
-      // Hash the API key and look up in Redis cache
       const crypto = await import('crypto');
       const tokenHash = crypto.createHash('sha256').update(apiKey).digest('hex');
       const cached = await app.redis.get(`api_token:${tokenHash}`);
@@ -214,17 +196,14 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
 
       const tokenData = JSON.parse(cached);
 
-      // Verify token belongs to this project
       if (tokenData.project_id !== project.id) {
         return reply.status(401).send({ error: 'Invalid API key' });
       }
 
-      // Check expiry
       if (tokenData.expires_at && new Date(tokenData.expires_at) < new Date()) {
         return reply.status(401).send({ error: 'API key expired' });
       }
 
-      // Check IP allowlist
       if (tokenData.allowed_ips && Array.isArray(tokenData.allowed_ips) && tokenData.allowed_ips.length > 0) {
         const clientIp = request.headers['x-forwarded-for']
           ? (request.headers['x-forwarded-for'] as string).split(',')[0].trim()
@@ -235,7 +214,6 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
       }
     }
 
-    // Per-endpoint rate limiting
     const rl = endpointFinal.rate_limit
       ? (typeof endpointFinal.rate_limit === 'string' ? JSON.parse(endpointFinal.rate_limit) : endpointFinal.rate_limit)
       : null;
@@ -259,7 +237,6 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
       }
     }
 
-    // Cache check
     if (endpointFinal.cache_enabled && request.method === 'GET') {
       const cached = await cacheService.get(
         projectSlug,
@@ -272,7 +249,6 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
       }
     }
 
-    // Execute
     try {
       const result = await executor.execute(
         endpointFinal,
@@ -283,7 +259,6 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
         30_000,
       );
 
-      // Cache result
       if (endpointFinal.cache_enabled && request.method === 'GET') {
         await cacheService.set(
           projectSlug,
@@ -295,7 +270,6 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
         reply.header('X-Cache', 'MISS');
       }
 
-      // Add deprecation warning header
       if (endpointFinal.deprecated_at) {
         reply.header('X-Deprecated', 'true');
         reply.header('X-Deprecated-At', endpointFinal.deprecated_at);
@@ -303,7 +277,6 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
 
       return result;
     } catch (err: any) {
-      // PostgreSQL data errors (invalid syntax, value out of range, etc.)
       const pgDataErrors = new Set(['22P02', '22003', '22007', '22008', '23502', '23505', '23503']);
       if (err.code && pgDataErrors.has(err.code)) {
         const msg = (err.message as string).split(' - ').pop() ?? err.message;

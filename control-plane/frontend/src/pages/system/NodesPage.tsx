@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Server, Trash2, Pencil, Terminal, Copy, Check } from 'lucide-react';
+import { Plus, Server, Trash2, Pencil, Terminal, Copy, Check, Download, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -128,6 +128,15 @@ export function NodesPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const triggerUpdateMutation = useMutation({
+    mutationFn: (id: string) => nodesApi.triggerUpdate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] });
+      toast.success(t('updateTriggered'));
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   function getSetupCommand(token: string, os: 'linux' | 'windows') {
     const cpUrl = import.meta.env.VITE_CP_URL || window.location.origin;
     const isDev = import.meta.env.DEV;
@@ -210,11 +219,31 @@ export function NodesPage() {
             <span className="text-xs text-muted-foreground w-10 text-right">{node.disk_usage}%</span>
           </div>
         </TableCell>
+        <TableCell className="text-sm font-mono">
+          {node.current_version || '-'}
+        </TableCell>
         <TableCell className="text-sm text-muted-foreground">
           {formatHeartbeat(node.last_heartbeat, t)}
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-1">
+            {node.status === 'online' && node.update_status === 'updating' && (
+              <Badge variant="outline" className="text-blue-600 border-blue-500/30 gap-1 mr-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+              </Badge>
+            )}
+            {node.status === 'online' && (!node.update_status || node.update_status === 'idle' || node.update_status === 'failed') && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                title={t('triggerUpdate')}
+                onClick={() => triggerUpdateMutation.mutate(node.id)}
+                disabled={triggerUpdateMutation.isPending}
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            )}
             {(isNotConnected || node.status === 'offline') && (
               <Button
                 variant="ghost"
@@ -286,14 +315,15 @@ export function NodesPage() {
                     <TableHead>{t('headers.cpu')}</TableHead>
                     <TableHead>{t('headers.ram')}</TableHead>
                     <TableHead>{t('headers.disk')}</TableHead>
+                    <TableHead>{t('headers.version')}</TableHead>
                     <TableHead>{t('headers.lastHeartbeat')}</TableHead>
-                    <TableHead className="w-28" />
+                    <TableHead className="w-36" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {systemNodes.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">{t('noSystemNodes')}</TableCell>
+                      <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">{t('noSystemNodes')}</TableCell>
                     </TableRow>
                   ) : systemNodes.map(renderNodeRow)}
                 </TableBody>

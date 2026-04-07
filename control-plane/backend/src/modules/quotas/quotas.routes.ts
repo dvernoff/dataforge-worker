@@ -6,15 +6,6 @@ import { z } from 'zod';
 
 const quotaSchema = z.object({
   max_projects: z.coerce.number().int().min(1).optional(),
-  max_tables: z.coerce.number().int().min(1).optional(),
-  max_records: z.coerce.number().int().min(1).optional(),
-  max_api_requests: z.coerce.number().int().min(1).optional(),
-  max_storage_mb: z.coerce.number().int().min(1).optional(),
-  max_endpoints: z.coerce.number().int().min(1).optional(),
-  max_webhooks: z.coerce.number().int().min(1).optional(),
-  max_files: z.coerce.number().int().min(1).optional(),
-  max_backups: z.coerce.number().int().min(1).optional(),
-  max_cron: z.coerce.number().int().min(1).optional(),
   max_ai_requests_per_day: z.coerce.number().int().min(0).optional(),
   max_ai_tokens_per_day: z.coerce.number().int().min(0).optional(),
 });

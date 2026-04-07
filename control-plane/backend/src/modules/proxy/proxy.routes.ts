@@ -2,12 +2,12 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ProxyService } from './proxy.service.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { requireRole } from '../../middleware/rbac.middleware.js';
-import { QuotasService } from '../quotas/quotas.service.js';
+import { ProjectQuotasService } from '../project-quotas/project-quotas.service.js';
 import { logAudit } from '../audit/audit.middleware.js';
 
 export async function proxyRoutes(app: FastifyInstance) {
   const proxyService = new ProxyService(app.db, app.redis);
-  const quotasService = new QuotasService(app.db, app.redis);
+  const projectQuotasService = new ProjectQuotasService(app.db, app.redis);
 
   app.addHook('preHandler', authMiddleware);
 
@@ -40,7 +40,7 @@ export async function proxyRoutes(app: FastifyInstance) {
     if (request.method === 'POST' && !request.user.is_superadmin) {
       const resourceType = createQuotaMap[segment];
       if (resourceType && !wildcardPath) {
-        const blocked = await quotasService.checkCreateQuota(request.user.id, resourceType);
+        const blocked = await projectQuotasService.checkProjectCreateQuota(projectId, resourceType);
         if (blocked) {
           return reply.status(429).send({
             error: blocked,
@@ -60,14 +60,14 @@ export async function proxyRoutes(app: FastifyInstance) {
       .select('p.slug', 'n.owner_id')
       .first();
 
-    // Resolve user performance quotas (cached in Redis by QuotasService)
+    // Resolve project performance quotas
     const quotaHeaders: Record<string, string> = {};
     const isSharedNode = !projInfo?.owner_id;
     quotaHeaders['x-node-shared'] = isSharedNode ? '1' : '0';
 
-    if (isSharedNode && request.user?.id) {
+    if (isSharedNode) {
       try {
-        const { quota } = await quotasService.getEffectiveQuota(request.user.id);
+        const { quota } = await projectQuotasService.getEffectiveProjectQuota(projectId);
         quotaHeaders['x-quota-query-timeout'] = String(quota.max_query_timeout_ms ?? 30000);
         quotaHeaders['x-quota-concurrent'] = String(quota.max_concurrent_requests ?? 10);
         quotaHeaders['x-quota-max-rows'] = String(quota.max_rows_per_query ?? 1000);

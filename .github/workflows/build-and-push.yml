@@ -48,7 +48,9 @@ jobs:
       - name: Build and push Worker
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: worker-node
           file: worker-node/backend/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}/worker:${{ steps.meta.outputs.version }},ghcr.io/${{ github.repository }}/worker:latest
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.version }}

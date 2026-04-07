@@ -10,14 +10,12 @@ export async function cronRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('admin'));
 
-  // List cron jobs
   app.get('/:projectId/cron', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const jobs = await cronService.findAll(projectId);
     return { jobs };
   });
 
-  // Create cron job
   app.post('/:projectId/cron', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const body = z.object({
@@ -31,14 +29,12 @@ export async function cronRoutes(app: FastifyInstance) {
     return { job };
   });
 
-  // Get cron job with recent runs
   app.get('/:projectId/cron/:jobId', async (request) => {
     const { projectId, jobId } = request.params as { projectId: string; jobId: string };
     const job = await cronService.findById(jobId, projectId);
     return { job };
   });
 
-  // Update cron job
   app.put('/:projectId/cron/:jobId', async (request) => {
     const { projectId, jobId } = request.params as { projectId: string; jobId: string };
     const body = z.object({
@@ -52,28 +48,24 @@ export async function cronRoutes(app: FastifyInstance) {
     return { job };
   });
 
-  // Delete cron job
   app.delete('/:projectId/cron/:jobId', async (request, reply) => {
     const { projectId, jobId } = request.params as { projectId: string; jobId: string };
     await cronService.delete(jobId, projectId);
     return reply.status(204).send();
   });
 
-  // Toggle active
   app.post('/:projectId/cron/:jobId/toggle', async (request) => {
     const { projectId, jobId } = request.params as { projectId: string; jobId: string };
     const job = await cronService.toggle(jobId, projectId);
     return { job };
   });
 
-  // Manual trigger
   app.post('/:projectId/cron/:jobId/run', async (request) => {
     const { projectId, jobId } = request.params as { projectId: string; jobId: string };
     const result = await cronService.runNow(jobId, projectId);
     return { result };
   });
 
-  // Run history
   app.get('/:projectId/cron/:jobId/runs', async (request) => {
     const { projectId, jobId } = request.params as { projectId: string; jobId: string };
     const query = request.query as Record<string, string>;

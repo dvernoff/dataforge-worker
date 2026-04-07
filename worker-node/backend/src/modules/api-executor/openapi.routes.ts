@@ -1,15 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { OpenAPIService } from './openapi.service.js';
 
-/**
- * OpenAPI / Swagger documentation routes.
- * These are PUBLIC routes (no auth required).
- * Registered at /api/v1/:projectSlug/docs
- */
 export async function openapiRoutes(app: FastifyInstance) {
   const openAPIService = new OpenAPIService(app.db);
 
-  // GET /api/v1/:projectSlug/docs — Swagger UI HTML page
   app.get('/api/v1/:projectSlug/docs', async (request, reply) => {
     const { projectSlug } = request.params as { projectSlug: string };
 
@@ -36,7 +30,6 @@ export async function openapiRoutes(app: FastifyInstance) {
     return reply.type('text/html').send(html);
   });
 
-  // GET /api/v1/:projectSlug/docs/openapi.json — raw OpenAPI JSON spec
   app.get('/api/v1/:projectSlug/docs/openapi.json', async (request, reply) => {
     const { projectSlug } = request.params as { projectSlug: string };
 

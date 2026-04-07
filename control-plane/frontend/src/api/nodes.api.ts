@@ -29,4 +29,11 @@ export const nodesApi = {
 
   deletePersonal: (nodeId: string) =>
     api.delete(`/nodes/personal/${nodeId}`),
+
+  // Update triggers
+  triggerUpdate: (nodeId: string) =>
+    api.post<{ status: string }>(`/nodes/${nodeId}/update`),
+
+  triggerPersonalUpdate: (nodeId: string) =>
+    api.post<{ status: string }>(`/nodes/personal/${nodeId}/update`),
 };

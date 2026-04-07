@@ -13,7 +13,6 @@ export class CacheInvalidationService {
     const eventKey = `on_${event}`;
 
     try {
-      // Find endpoints with cache + smart invalidation enabled for this table
       const endpoints = await this.db('api_endpoints')
         .where({
           project_id: projectId,
@@ -27,7 +26,6 @@ export class CacheInvalidationService {
 
       if (endpoints.length === 0) return;
 
-      // Get project slug for cache key
       const project = await this.db('projects')
         .where({ id: projectId })
         .select('slug')
@@ -35,12 +33,10 @@ export class CacheInvalidationService {
 
       if (!project) return;
 
-      // Invalidate cache for each matching endpoint
       await Promise.all(
         endpoints.map((ep) => this.cacheService.invalidateByEndpoint(project.slug, ep.id))
       );
     } catch {
-      // Don't fail the data operation if cache invalidation fails
     }
   }
 }

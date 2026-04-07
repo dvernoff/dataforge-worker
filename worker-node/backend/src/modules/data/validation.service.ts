@@ -20,9 +20,7 @@ export interface ValidationError {
 }
 
 export class ValidationService {
-  /** In-memory cache: rules per table (TTL 10s) */
   private rulesCache = new Map<string, { rules: ValidationRule[]; ts: number }>();
-  /** In-memory cache: column types per table (TTL 30s) */
   private typesCache = new Map<string, { types: Map<string, string>; ts: number }>();
 
   constructor(private db: Knex) {}
@@ -52,7 +50,6 @@ export class ValidationService {
     return types;
   }
 
-  /** Invalidate caches when rules change */
   private invalidateRulesCache(projectId: string, tableName: string): void {
     this.rulesCache.delete(`${projectId}:${tableName}`);
   }
@@ -63,7 +60,6 @@ export class ValidationService {
       .orderBy('created_at', 'desc');
   }
 
-  /** Validate SQL expression for safety */
   private static validateExpression(expression: string): void {
     const forbidden = /\b(DROP|ALTER|CREATE|TRUNCATE|INSERT|UPDATE|DELETE|GRANT|REVOKE|COPY|EXECUTE|CALL|SET\s+ROLE|SET\s+SESSION|pg_read_file|pg_write_file|lo_import|lo_export|dblink|pg_sleep)\b/i;
     if (forbidden.test(expression)) {
@@ -82,7 +78,6 @@ export class ValidationService {
     config: Record<string, unknown>;
     error_message: string;
   }): Promise<ValidationRule> {
-    // Validate custom expressions at creation time
     if (input.rule_type === 'custom_expression' && input.config.expression) {
       ValidationService.validateExpression(String(input.config.expression));
     }
@@ -110,7 +105,6 @@ export class ValidationService {
     this.invalidateRulesCache(rule.project_id, rule.table_name);
   }
 
-  /** Helper: query the project table with properly quoted schema */
   private table(schema: string, tableName: string) {
     return this.db.raw(`"${schema}"."${tableName}"`);
   }
@@ -134,7 +128,6 @@ export class ValidationService {
           case 'unique_combo': {
             const columns = config.columns as string[];
             if (columns && columns.length > 0) {
-              // Build WHERE conditions for each column
               const conditions: string[] = [];
               const bindings: unknown[] = [];
               for (const col of columns) {
@@ -200,26 +193,21 @@ export class ValidationService {
           case 'custom_expression': {
             const expression = config.expression as string;
             if (expression) {
-              // Security: block dangerous SQL patterns
               const forbidden = /\b(DROP|ALTER|CREATE|TRUNCATE|INSERT|UPDATE|DELETE|GRANT|REVOKE|COPY|EXECUTE|CALL|SET\s+ROLE|SET\s+SESSION|pg_read_file|pg_write_file|lo_import|lo_export|dblink|pg_sleep)\b/i;
               if (forbidden.test(expression)) {
                 console.warn(`[Validation] Blocked dangerous expression: ${expression}`);
                 break;
               }
-              // Block semicolons (multi-statement), comments, and schema-escaping
               if (/[;]|--|\/\*/.test(expression)) {
                 console.warn(`[Validation] Blocked expression with forbidden chars: ${expression}`);
                 break;
               }
 
               try {
-                // Build a CTE that exposes record values as column names
-                // so the expression can reference them naturally: "price > 100"
                 const colNames: string[] = [];
                 const colValues: unknown[] = [];
                 const colCasts: string[] = [];
 
-                // Get column types for proper casting (cached)
                 const typeMap = await this.getCachedColumnTypes(schema, tableName);
 
                 for (const [key, val] of Object.entries(record)) {
@@ -276,7 +264,6 @@ export class ValidationService {
           }
         }
       } catch (err) {
-        // Log but don't skip validation errors — only skip if rule itself is broken
         console.error(`[Validation] Rule ${rule.id} (${rule.rule_type}) failed:`, err);
       }
     }

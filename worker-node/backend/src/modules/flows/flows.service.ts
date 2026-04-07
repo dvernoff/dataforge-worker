@@ -80,14 +80,12 @@ export class FlowsService {
       throw new AppError(400, 'Flow has no nodes');
     }
 
-    // Resolve the project's schema — this is the only schema nodes are allowed to use
     const project = await this.db('projects').where({ id: projectId }).select('db_schema').first();
     if (!project?.db_schema) {
       throw new AppError(400, 'Project has no database schema assigned');
     }
     const projectSchema: string = project.db_schema;
 
-    // Create a run record
     const [run] = await this.db('flow_runs')
       .insert({
         flow_id: flowId,
@@ -102,7 +100,6 @@ export class FlowsService {
       variables: {},
     };
 
-    // Build node map for quick lookup
     const nodeMap = new Map<string, FlowNode>();
     for (const node of nodes) {
       nodeMap.set(node.id, node);
@@ -111,10 +108,9 @@ export class FlowsService {
     const nodeResults: Record<string, unknown> = {};
 
     try {
-      // Start from first node and follow the chain
       let currentNodeId: string | null = nodes[0]?.id ?? null;
       let iterations = 0;
-      const maxIterations = 100; // Safety guard
+      const maxIterations = 100;
 
       while (currentNodeId && iterations < maxIterations) {
         iterations++;
@@ -168,7 +164,6 @@ export class FlowsService {
   }
 
   async getRuns(flowId: string, projectId: string, limit = 50) {
-    // Verify the flow belongs to the project before returning runs
     const flow = await this.db('flows')
       .where({ id: flowId, project_id: projectId })
       .select('id')

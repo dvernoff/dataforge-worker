@@ -82,6 +82,7 @@ const NodesPage = lazy(() => import('@/pages/system/NodesPage'), 'NodesPage');
 const HealthPage = lazy(() => import('@/pages/system/HealthPage'), 'HealthPage');
 const ErrorsPage = lazy(() => import('@/pages/system/ErrorsPage'), 'ErrorsPage');
 const RolesPage = lazy(() => import('@/pages/system/RolesPage'), 'RolesPage');
+const ProjectPlansPage = lazy(() => import('@/pages/system/ProjectPlansPage'), 'ProjectPlansPage');
 const UserDetailPage = lazy(() => import('@/pages/system/UserDetailPage'), 'UserDetailPage');
 
 const queryClient = new QueryClient({
@@ -206,6 +207,7 @@ export default function App() {
               <Route path="/system/users" element={<S><AllUsersPage /></S>} />
               <Route path="/system/users/:userId" element={<S><UserDetailPage /></S>} />
               <Route path="/system/roles" element={<S><RolesPage /></S>} />
+              <Route path="/system/project-plans" element={<S><ProjectPlansPage /></S>} />
               <Route path="/system/logs" element={<S><AuditLogPage /></S>} />
               <Route path="/system/settings" element={<S><GlobalSettingsPage /></S>} />
 

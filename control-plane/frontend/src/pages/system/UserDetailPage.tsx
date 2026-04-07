@@ -32,10 +32,7 @@ import { quotasApi } from '@/api/quotas.api';
 import { toast } from 'sonner';
 
 const QUOTA_FIELDS = [
-  'max_projects', 'max_tables', 'max_records', 'max_api_requests',
-  'max_storage_mb', 'max_endpoints', 'max_webhooks', 'max_files',
-  'max_backups', 'max_cron', 'max_ai_requests_per_day', 'max_ai_tokens_per_day',
-  'max_query_timeout_ms', 'max_concurrent_requests', 'max_rows_per_query', 'max_export_rows',
+  'max_projects', 'max_ai_requests_per_day', 'max_ai_tokens_per_day',
 ] as const;
 
 const USAGE_MAP: Record<string, string> = {

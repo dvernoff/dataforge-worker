@@ -3,15 +3,9 @@ import type { Knex } from 'knex';
 export class HistoryService {
   constructor(private db: Knex) {}
 
-  /**
-   * Creates the history table and trigger for row versioning.
-   * History table: {schema}.__history_{tableName}
-   * Trigger: on INSERT/UPDATE/DELETE → stores old/new values as JSONB diff
-   */
   async setupHistoryTracking(schema: string, tableName: string) {
     const historyTable = `__history_${tableName}`;
 
-    // Create history table
     await this.db.raw(`
       CREATE TABLE IF NOT EXISTS "${schema}"."${historyTable}" (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -24,13 +18,11 @@ export class HistoryService {
       )
     `);
 
-    // Create index on record_id + changed_at
     await this.db.raw(`
       CREATE INDEX IF NOT EXISTS "idx_${historyTable}_record"
       ON "${schema}"."${historyTable}" (record_id, changed_at DESC)
     `);
 
-    // Create trigger function
     await this.db.raw(`
       CREATE OR REPLACE FUNCTION "${schema}"."${historyTable}_trigger_fn"()
       RETURNS TRIGGER AS $$
@@ -53,7 +45,6 @@ export class HistoryService {
       $$ LANGUAGE plpgsql;
     `);
 
-    // Create trigger
     await this.db.raw(`
       DROP TRIGGER IF EXISTS "${historyTable}_trigger" ON "${schema}"."${tableName}";
       CREATE TRIGGER "${historyTable}_trigger"
@@ -123,7 +114,6 @@ export class HistoryService {
       throw new Error('No values to rollback to');
     }
 
-    // Remove auto fields
     const { id: _id, created_at: _ca, ...updateData } = values;
 
     await this.db(`${schema}.${tableName}`)

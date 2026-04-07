@@ -36,7 +36,6 @@ export class SeedingService {
     generatorMap: Record<string, string>
   ): Record<string, unknown>[] {
     const records: Record<string, unknown>[] = [];
-    // Skip auto-generated fields
     const skipColumns = new Set(['id', 'created_at', 'updated_at', 'deleted_at']);
 
     for (let i = 0; i < count; i++) {
@@ -52,7 +51,6 @@ export class SeedingService {
         if (generator) {
           record[col.name] = generator();
         } else {
-          // Default fallback based on column type
           record[col.name] = this.generateByColumnType(col.type, col.udt_type);
         }
       }

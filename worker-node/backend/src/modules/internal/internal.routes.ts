@@ -5,19 +5,12 @@ import os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 
-/**
- * Dedicated auth for /internal/* routes.
- * Checks NODE_API_KEY + INTERNAL_SECRET. Does NOT run project validation
- * because internal routes may create/delete projects that don't exist yet.
- */
 async function internalAuthMiddleware(request: FastifyRequest, reply: FastifyReply) {
-  // Validate NODE_API_KEY
   const apiKey = request.headers['x-node-api-key'] as string;
   if (!apiKey || apiKey !== env.NODE_API_KEY) {
     return reply.status(401).send({ error: 'Unauthorized: invalid node API key' });
   }
 
-  // Validate INTERNAL_SECRET (if configured)
   const internalSecret = request.headers['x-internal-secret'] as string;
   if (env.INTERNAL_SECRET && internalSecret !== env.INTERNAL_SECRET) {
     return reply.status(403).send({ error: 'Forbidden: internal access only' });
@@ -27,7 +20,6 @@ async function internalAuthMiddleware(request: FastifyRequest, reply: FastifyRep
 export async function internalRoutes(app: FastifyInstance) {
   app.addHook('preHandler', internalAuthMiddleware);
 
-  // POST /internal/projects — create project schema on worker DB
   app.post('/projects', async (request, reply) => {
     const body = z.object({
       id: z.string().uuid(),
@@ -36,16 +28,13 @@ export async function internalRoutes(app: FastifyInstance) {
       settings: z.record(z.unknown()).default({}),
     }).parse(request.body);
 
-    // Validate schema name to prevent SQL injection
     const schemaRegex = /^[a-z_][a-z0-9_]*$/;
     if (!schemaRegex.test(body.db_schema)) {
       return reply.status(400).send({ error: 'Invalid schema name' });
     }
 
-    // Create the schema in the database
     await app.db.raw(`CREATE SCHEMA IF NOT EXISTS "${body.db_schema}"`);
 
-    // Insert into local projects table
     const [project] = await app.db('projects')
       .insert({
         id: body.id,
@@ -60,7 +49,6 @@ export async function internalRoutes(app: FastifyInstance) {
     return { project };
   });
 
-  // DELETE /internal/projects/:projectId — drop project schema + full cleanup
   app.delete('/projects/:projectId', async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
 
@@ -69,87 +57,69 @@ export async function internalRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Project not found' });
     }
 
-    // Validate schema name to prevent SQL injection
     const schemaRegex = /^[a-z_][a-z0-9_]*$/;
     if (!schemaRegex.test(project.db_schema)) {
       return reply.status(400).send({ error: 'Invalid schema name' });
     }
 
-    // 1. Delete uploaded files from disk
     try {
       const hasFiles = await app.db.schema.hasTable('files');
       if (hasFiles) {
         const files = await app.db('files').where({ project_id: projectId }).select('storage_path');
         for (const f of files) {
-          try { if (fs.existsSync(f.storage_path)) fs.unlinkSync(f.storage_path); } catch { /* ignore */ }
+          try { if (fs.existsSync(f.storage_path)) fs.unlinkSync(f.storage_path); } catch {}
         }
         await app.db('files').where({ project_id: projectId }).del();
       }
-    } catch { /* table may not exist */ }
+    } catch {}
 
-    // 2. Delete plugin instances
-    try { await app.db('plugin_instances').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('plugin_instances').where({ project_id: projectId }).del(); } catch {}
 
-    // 3. Delete schema versions
-    try { await app.db('schema_versions').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('schema_versions').where({ project_id: projectId }).del(); } catch {}
 
-    // 4. Delete validation rules
-    try { await app.db('validation_rules').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('validation_rules').where({ project_id: projectId }).del(); } catch {}
 
-    // 5. Delete RLS rules
-    try { await app.db('rls_rules').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('rls_rules').where({ project_id: projectId }).del(); } catch {}
 
-    // 6. Delete API request logs
-    try { await app.db('api_request_logs').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('api_request_logs').where({ project_id: projectId }).del(); } catch {}
 
-    // 7. Delete data history
-    try { await app.db('data_history').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('data_history').where({ project_id: projectId }).del(); } catch {}
 
-    // 8. Delete cron jobs + runs (may not cascade)
     try {
       const cronIds = await app.db('cron_jobs').where({ project_id: projectId }).pluck('id');
       if (cronIds.length) await app.db('cron_job_runs').whereIn('cron_job_id', cronIds).del();
       await app.db('cron_jobs').where({ project_id: projectId }).del();
-    } catch { /* ignore */ }
+    } catch {}
 
-    // 9. Delete flows + runs
     try {
       const flowIds = await app.db('flows').where({ project_id: projectId }).pluck('id');
       if (flowIds.length) await app.db('flow_runs').whereIn('flow_id', flowIds).del();
       await app.db('flows').where({ project_id: projectId }).del();
-    } catch { /* ignore */ }
+    } catch {}
 
-    // 10. Delete dashboards
-    try { await app.db('custom_dashboards').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('custom_dashboards').where({ project_id: projectId }).del(); } catch {}
 
-    // 11. Delete webhooks + logs
-    try { await app.db('webhook_logs').where({ project_id: projectId }).del(); } catch { /* ignore */ }
-    try { await app.db('webhooks').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('webhook_logs').where({ project_id: projectId }).del(); } catch {}
+    try { await app.db('webhooks').where({ project_id: projectId }).del(); } catch {}
 
-    // 12. Delete endpoints
-    try { await app.db('api_endpoints').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('api_endpoints').where({ project_id: projectId }).del(); } catch {}
 
-    // 13. Delete saved queries
-    try { await app.db('saved_queries').where({ project_id: projectId }).del(); } catch { /* ignore */ }
+    try { await app.db('saved_queries').where({ project_id: projectId }).del(); } catch {}
 
-    // 14. Drop the PostgreSQL schema (user tables + data)
     await app.db.raw(`DROP SCHEMA IF EXISTS "${project.db_schema}" CASCADE`);
 
-    // 15. Delete project record
     await app.db('projects').where({ id: projectId }).delete();
 
-    // 16. Clean up uploads directory for this project
     try {
       const uploadsDir = path.resolve('./uploads', projectId);
       if (fs.existsSync(uploadsDir)) {
         fs.rmSync(uploadsDir, { recursive: true, force: true });
       }
-    } catch { /* ignore */ }
+    } catch {}
 
     return reply.status(204).send();
   });
 
-  // GET /internal/projects/:projectId/usage — usage stats for a project
   app.get('/projects/:projectId/usage', async (request) => {
     const { projectId } = request.params as { projectId: string };
 
@@ -158,7 +128,6 @@ export async function internalRoutes(app: FastifyInstance) {
       return { tables: 0, records: 0, storage_mb: 0, files: 0, cron: 0, endpoints: 0, webhooks: 0 };
     }
 
-    // Count tables in project schema
     let tablesCount = 0;
     let recordsCount = 0;
     let schemaSizeMb = 0;
@@ -168,7 +137,6 @@ export async function internalRoutes(app: FastifyInstance) {
       );
       tablesCount = tables.rows?.length ?? 0;
 
-      // Count total records across all tables
       if (tablesCount > 0) {
         const countQueries = tables.rows.map((t: { tablename: string }) =>
           `SELECT COUNT(*)::bigint AS c FROM "${project.db_schema}"."${t.tablename}"`
@@ -177,16 +145,14 @@ export async function internalRoutes(app: FastifyInstance) {
         recordsCount = (result.rows ?? []).reduce((sum: number, r: { c: string }) => sum + Number(r.c), 0);
       }
 
-      // Get schema size in MB
       const sizeResult = await app.db.raw(
         `SELECT COALESCE(SUM(pg_total_relation_size('"' || ? || '"."' || tablename || '"')), 0)::bigint AS size_bytes
          FROM pg_tables WHERE schemaname = ?`,
         [project.db_schema, project.db_schema]
       );
       schemaSizeMb = Math.round(Number(sizeResult.rows?.[0]?.size_bytes ?? 0) / 1024 / 1024 * 100) / 100;
-    } catch { /* schema may not exist */ }
+    } catch {}
 
-    // Files size
     let filesSizeMb = 0;
     let filesCount = 0;
     try {
@@ -202,19 +168,16 @@ export async function internalRoutes(app: FastifyInstance) {
         filesCount = fileStats?.count ?? 0;
         filesSizeMb = Math.round(Number(fileStats?.total_bytes ?? 0) / 1024 / 1024 * 100) / 100;
       }
-    } catch { /* ignore */ }
+    } catch {}
 
-    // Cron jobs count
     let cronCount = 0;
-    try { cronCount = Number((await app.db('cron_jobs').where({ project_id: projectId }).count('id as count').first())?.count ?? 0); } catch { /* ignore */ }
+    try { cronCount = Number((await app.db('cron_jobs').where({ project_id: projectId }).count('id as count').first())?.count ?? 0); } catch {}
 
-    // Endpoints count
     let endpointsCount = 0;
-    try { endpointsCount = Number((await app.db('api_endpoints').where({ project_id: projectId }).count('id as count').first())?.count ?? 0); } catch { /* ignore */ }
+    try { endpointsCount = Number((await app.db('api_endpoints').where({ project_id: projectId }).count('id as count').first())?.count ?? 0); } catch {}
 
-    // Webhooks count
     let webhooksCount = 0;
-    try { webhooksCount = Number((await app.db('webhooks').where({ project_id: projectId }).count('id as count').first())?.count ?? 0); } catch { /* ignore */ }
+    try { webhooksCount = Number((await app.db('webhooks').where({ project_id: projectId }).count('id as count').first())?.count ?? 0); } catch {}
 
     return {
       tables: tablesCount,
@@ -227,7 +190,6 @@ export async function internalRoutes(app: FastifyInstance) {
     };
   });
 
-  // POST /internal/tokens/sync — sync API token (create/revoke)
   app.post('/tokens/sync', async (request) => {
     const body = z.object({
       action: z.enum(['create', 'revoke']),
@@ -235,7 +197,7 @@ export async function internalRoutes(app: FastifyInstance) {
       project_id: z.string().uuid(),
       scopes: z.array(z.string()).optional(),
       allowed_ips: z.array(z.string()).optional(),
-      expires_at: z.string().optional(),
+      expires_at: z.string().nullable().optional(),
     }).parse(request.body);
 
     const cacheKey = `api_token:${body.token_hash}`;
@@ -247,7 +209,6 @@ export async function internalRoutes(app: FastifyInstance) {
         allowed_ips: body.allowed_ips ?? [],
         expires_at: body.expires_at ?? null,
       };
-      // Store in Redis with optional TTL
       if (body.expires_at) {
         const ttl = Math.max(1, Math.floor((new Date(body.expires_at).getTime() - Date.now()) / 1000));
         await app.redis.set(cacheKey, JSON.stringify(tokenData), 'EX', ttl);
@@ -256,25 +217,60 @@ export async function internalRoutes(app: FastifyInstance) {
       }
       return { success: true, action: 'created' };
     } else {
-      // Revoke: remove from cache
       await app.redis.del(cacheKey);
       return { success: true, action: 'revoked' };
     }
   });
 
-  // GET /internal/health — detailed health info
+  app.post('/update', async (_request, reply) => {
+    const watchtowerUrl = env.WATCHTOWER_URL || 'http://watchtower:8080';
+    const watchtowerToken = env.WATCHTOWER_TOKEN;
+
+    if (!watchtowerToken) {
+      return reply.status(503).send({
+        error: 'Watchtower not configured',
+        detail: 'WATCHTOWER_TOKEN environment variable is not set',
+      });
+    }
+
+    try {
+      const res = await fetch(`${watchtowerUrl}/v1/update`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${watchtowerToken}`,
+        },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        return reply.status(502).send({
+          error: 'Watchtower update request failed',
+          status: res.status,
+          detail: text,
+        });
+      }
+
+      return { status: 'update_triggered', version: process.env.APP_VERSION || 'dev' };
+    } catch (err) {
+      return reply.status(502).send({
+        error: 'Failed to reach Watchtower',
+        detail: (err as Error).message,
+      });
+    }
+  });
+
   app.get('/health', async () => {
     let dbOk = false;
     try {
       await app.db.raw('SELECT 1');
       dbOk = true;
-    } catch { /* ignore */ }
+    } catch {}
 
     let redisOk = false;
     try {
       await app.redis.ping();
       redisOk = true;
-    } catch { /* ignore */ }
+    } catch {}
 
     return {
       status: dbOk && redisOk ? 'healthy' : 'degraded',

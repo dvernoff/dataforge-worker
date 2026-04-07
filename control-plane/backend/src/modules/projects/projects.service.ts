@@ -32,8 +32,6 @@ export class ProjectsService {
         role: 'admin',
       });
 
-      await trx.raw(`CREATE SCHEMA IF NOT EXISTS "${dbSchema}"`);
-
       return project;
     });
 
@@ -143,7 +141,11 @@ export class ProjectsService {
   }
 
   async updateMemberRole(projectId: string, userId: string, role: string) {
-    // Prevent demoting the last admin
+    const project = await this.db('projects').where({ id: projectId }).select('created_by').first();
+    if (project?.created_by === userId) {
+      throw new AppError(403, 'Cannot change the role of the project creator');
+    }
+
     const current = await this.db('project_members')
       .where({ project_id: projectId, user_id: userId })
       .first();

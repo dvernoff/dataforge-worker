@@ -6,16 +6,12 @@ import crypto from 'crypto';
 export async function graphqlRoutes(app: FastifyInstance) {
   const graphqlService = new GraphQLService(app.db);
 
-  // GraphQL endpoint: /api/v1/:projectSlug/graphql
-  // Requires X-API-Key header (same auth as dynamic API endpoints)
   app.all('/api/v1/:projectSlug/graphql', async (request, reply) => {
     const { projectSlug } = request.params as { projectSlug: string };
 
-    // Find project
     const project = await app.db('projects').where({ slug: projectSlug }).first();
     if (!project) return reply.status(404).send({ error: 'Project not found' });
 
-    // ── Auth: require API token ──
     const apiKey = request.headers['x-api-key'] as string | undefined;
     if (!apiKey) {
       return reply.status(401).send({ error: 'API key required. Pass X-API-Key header.' });
@@ -36,7 +32,6 @@ export async function graphqlRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: 'API key expired' });
     }
 
-    // Check IP allowlist
     if (tokenData.allowed_ips && Array.isArray(tokenData.allowed_ips) && tokenData.allowed_ips.length > 0) {
       const clientIp = request.headers['x-forwarded-for']
         ? (request.headers['x-forwarded-for'] as string).split(',')[0].trim()
@@ -46,7 +41,6 @@ export async function graphqlRoutes(app: FastifyInstance) {
       }
     }
 
-    // ── Parse query ──
     let query: string | undefined;
     let variables: Record<string, unknown> | undefined;
 
@@ -58,7 +52,7 @@ export async function graphqlRoutes(app: FastifyInstance) {
       const qs = request.query as Record<string, string>;
       query = qs.query;
       if (qs.variables) {
-        try { variables = JSON.parse(qs.variables); } catch { /* ignore */ }
+        try { variables = JSON.parse(qs.variables); } catch { }
       }
     }
 
