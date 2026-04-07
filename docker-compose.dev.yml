@@ -147,6 +147,11 @@ services:
     command: >
       sh -c "cd /app/shared && npm install --prefer-offline --no-audit 2>/dev/null;
              cd /app/control-plane/backend && npm install --prefer-offline --no-audit 2>/dev/null;
+             echo '[DataForge] Running CP migrations...';
+             npx knex migrate:latest --esm 2>/dev/null || node --import tsx/esm node_modules/knex/bin/cli.js migrate:latest;
+             echo '[DataForge] Running CP seeds...';
+             npx knex seed:run --esm 2>/dev/null || node --import tsx/esm node_modules/knex/bin/cli.js seed:run;
+             echo '[DataForge] Starting Control Plane...';
              npx tsx --watch src/index.ts"
     depends_on:
       postgres-control:
@@ -182,6 +187,9 @@ services:
     command: >
       sh -c "cd /app/shared && npm install --prefer-offline --no-audit 2>/dev/null;
              cd /app/worker-node/backend && npm install --prefer-offline --no-audit 2>/dev/null;
+             echo '[DataForge] Running Worker migrations...';
+             npx knex migrate:latest --esm 2>/dev/null || node --import tsx/esm node_modules/knex/bin/cli.js migrate:latest;
+             echo '[DataForge] Starting Worker...';
              npx tsx --watch src/index.ts"
     depends_on:
       postgres-worker:

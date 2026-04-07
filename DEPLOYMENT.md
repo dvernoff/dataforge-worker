@@ -408,6 +408,59 @@ docker compose up -d --build control-backend control-frontend
 docker compose --profile migrate up migrate-control-plane
 ```
 
+### Публикация Worker в публичный репозиторий
+
+Worker-нода живёт одновременно в двух репозиториях:
+- **Приватный** `dataforge` (полный проект) — папка `worker-node/`
+- **Публичный** `dataforge-worker` — только содержимое `worker-node/`
+
+Синхронизация через `git subtree`. Удалённые репозитории уже настроены:
+
+```bash
+# Проверить remotes
+git remote -v
+# origin   — приватный репозиторий (dataforge)
+# worker   — публичный репозиторий (dataforge-worker)
+# site     — публичный репозиторий (dataforge-site)
+```
+
+**Публикация Worker после изменений:**
+
+```bash
+# 1. Закоммитить изменения в основной репозиторий
+git add -A
+git commit -m "Worker: описание изменений"
+git push origin main
+
+# 2. Запушить worker-node/ в публичный репозиторий
+git subtree push --prefix=worker-node worker main
+```
+
+**Или одной командой (Windows):**
+```bash
+push-worker.bat
+```
+
+**На Linux/Mac:**
+```bash
+git subtree push --prefix=worker-node worker main
+```
+
+**Если subtree push упал с ошибкой** (бывает при больших историях):
+```bash
+# Форс-пуш через split
+git subtree split --prefix=worker-node -b worker-split
+git push worker worker-split:main --force
+git branch -D worker-split
+```
+
+**Важно:** всегда сначала пушить в `origin` (приватный), потом в `worker` (публичный). Порядок имеет значение — subtree берёт историю из текущего состояния.
+
+**Публикация сайта:**
+```bash
+git subtree push --prefix=dataforge-site site main
+```
+
 ### Семантическое версионирование
 
 Рекомендуемый формат версий:
