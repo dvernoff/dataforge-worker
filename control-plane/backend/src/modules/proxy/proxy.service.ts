@@ -1,15 +1,39 @@
 import type { Knex } from 'knex';
 import type Redis from 'ioredis';
+import { Agent as HttpAgent } from 'node:http';
+import { Agent as HttpsAgent } from 'node:https';
 import { env } from '../../config/env.js';
 import { decrypt } from '../../utils/encryption.js';
 
-interface WorkerInfo {
+export interface WorkerInfo {
   url: string;
   apiKey: string;
   schema: string;
+  slug: string;
+  nodeOwnerId: string | null;
 }
 
 const NODE_MAP_TTL = 300; // 5 minutes
+
+// Persistent HTTP/HTTPS agents with keep-alive for worker connections
+const httpAgent = new HttpAgent({ keepAlive: true, maxSockets: 50, keepAliveMsecs: 30_000 });
+const httpsAgent = new HttpsAgent({ keepAlive: true, maxSockets: 50, keepAliveMsecs: 30_000 });
+
+function agentForUrl(url: string) {
+  return url.startsWith('https') ? httpsAgent : httpAgent;
+}
+
+/** Shared fetch wrapper that uses persistent keep-alive agents */
+export function fetchWithKeepAlive(url: string, init?: RequestInit & { dispatcher?: unknown }): Promise<Response> {
+  // Node 18+ undici-based fetch uses `dispatcher`, but http.Agent works with node:http
+  // For maximum compatibility, use the global fetch with keepalive hint
+  return fetch(url, {
+    ...init,
+    // @ts-expect-error -- Node.js extended fetch option
+    agent: agentForUrl(url),
+    keepalive: true,
+  });
+}
 
 export class ProxyService {
   constructor(
@@ -30,7 +54,7 @@ export class ProxyService {
     const row = await this.db('projects as p')
       .join('nodes as n', 'p.node_id', 'n.id')
       .where('p.id', projectId)
-      .select('n.url', 'n.api_key_encrypted', 'p.db_schema')
+      .select('n.url', 'n.api_key_encrypted', 'n.owner_id', 'p.db_schema', 'p.slug')
       .first();
 
     if (!row) {
@@ -55,6 +79,8 @@ export class ProxyService {
       url: row.url,
       apiKey,
       schema: row.db_schema,
+      slug: row.slug,
+      nodeOwnerId: row.owner_id ?? null,
     };
 
     // Cache the result
@@ -106,7 +132,7 @@ export class ProxyService {
       fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
 
-    const response = await fetch(targetUrl, fetchOptions);
+    const response = await fetchWithKeepAlive(targetUrl, fetchOptions);
 
     const responseHeaders: Record<string, string> = {};
     response.headers.forEach((value, key) => {

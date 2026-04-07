@@ -2,11 +2,10 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, Search, Download, Upload, Trash2, RefreshCw, Wand2, MessageSquare, Sparkles, Clock,
+  Plus, Search, Download, Upload, Trash2, RefreshCw, Wand2, MessageSquare, Clock,
   Table2, Columns, Calendar, Image, Pencil, Key,
 } from 'lucide-react';
 import { SeedingDialog } from '@/components/data/SeedingDialog';
-import { AIDataAnalyzer } from '@/components/data/AIDataAnalyzer';
 import { TimeTravelPanel } from '@/components/data/TimeTravelPanel';
 import { KanbanView } from '@/components/data/KanbanView';
 import { CalendarView } from '@/components/data/CalendarView';
@@ -50,7 +49,6 @@ import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/auth.store';
-import { useAIEnabled } from '@/hooks/useAIEnabled';
 import { showErrorToast } from '@/lib/show-error-toast';
 
 export function DataBrowserPage() {
@@ -82,7 +80,6 @@ export function DataBrowserPage() {
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [seedingOpen, setSeedingOpen] = useState(false);
-  const [analyzerOpen, setAnalyzerOpen] = useState(false);
   const [timeTravelOpen, setTimeTravelOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'kanban' | 'calendar' | 'gallery'>('table');
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
@@ -94,7 +91,6 @@ export function DataBrowserPage() {
   const { user } = useAuthStore();
   const { isFeatureEnabled: _isFeatureEnabled } = useFeaturesStore();
   const isFeatureEnabled = (id: string) => _isFeatureEnabled(slug, id);
-  const { aiConfigured } = useAIEnabled();
 
   // Get table schema
   const { data: tableData } = useQuery({
@@ -422,15 +418,6 @@ export function DataBrowserPage() {
           {t('data:seeding.title')}
         </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setAnalyzerOpen(true)}
-          disabled={!aiConfigured}
-        >
-          <Sparkles className="h-4 w-4 mr-1" />
-          {t('data:aiAnalyzer.button')}
-        </Button>
 
         {isFeatureEnabled('feature-time-travel') && (
           <Button
@@ -715,15 +702,6 @@ export function DataBrowserPage() {
           projectId={project.id}
           tableName={tableName}
           columns={columns}
-        />
-      )}
-
-      {project?.id && tableName && (
-        <AIDataAnalyzer
-          open={analyzerOpen}
-          onOpenChange={setAnalyzerOpen}
-          projectId={project.id}
-          tableName={tableName}
         />
       )}
 

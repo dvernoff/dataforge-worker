@@ -18,7 +18,7 @@ import { quotasApi } from '@/api/quotas.api';
 import { projectsApi } from '@/api/projects.api';
 import { api } from '@/api/client';
 import { toast } from 'sonner';
-import { User, Shield, BarChart3, FolderKanban, Server, Bot, Info } from 'lucide-react';
+import { User, Shield, BarChart3, FolderKanban, Server, Info } from 'lucide-react';
 
 export function ProfilePage() {
   const { t } = useTranslation(['common', 'settings', 'system']);
@@ -261,32 +261,6 @@ export function ProfilePage() {
                             <span>{t(`system:globalSettings.quotas.${quotaKeyMap[field]}`)}</span>
                             <span className="text-muted-foreground">
                               {used}/{max === 0 ? '\u221E' : max}
-                            </span>
-                          </div>
-                          <Progress value={pct} className="h-2" />
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* AI Usage */}
-                  <Separator />
-                  <h4 className="text-sm font-medium flex items-center gap-1.5">
-                    <Bot className="h-4 w-4" />
-                    {t('common:profile.aiUsage')}
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      { label: t('common:profile.aiRequestsToday'), used: quotaData.usage?.ai_requests_today ?? 0, max: quotaData.quota?.max_ai_requests_per_day ?? 50 },
-                      { label: t('common:profile.aiTokensToday'), used: quotaData.usage?.ai_tokens_today ?? 0, max: quotaData.quota?.max_ai_tokens_per_day ?? 100000 },
-                    ].map((item) => {
-                      const pct = item.max > 0 ? Math.min((item.used / item.max) * 100, 100) : 0;
-                      return (
-                        <div key={item.label} className="space-y-1">
-                          <div className="flex items-center justify-between text-sm">
-                            <span>{item.label}</span>
-                            <span className="text-muted-foreground">
-                              {item.used}/{item.max === 0 ? '\u221E' : item.max}
                             </span>
                           </div>
                           <Progress value={pct} className="h-2" />

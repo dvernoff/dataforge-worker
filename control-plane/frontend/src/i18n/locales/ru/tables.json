@@ -275,6 +275,28 @@
       "jsonb": "JSON (бинарный)",
       "text[]": "Массив текста",
       "integer[]": "Массив чисел"
-    }
+    },
+    "tabVisual": "Визуальный",
+    "tabYaml": "YAML"
+  },
+  "importSchema": "Импорт схемы",
+  "yamlImport": {
+    "title": "Импорт схемы (YAML)",
+    "copyTemplate": "Скопировать шаблон для AI",
+    "exportExisting": "Экспорт существующих таблиц",
+    "validatePreview": "Проверить и посмотреть",
+    "import": "Импортировать",
+    "templateCopied": "Шаблон скопирован в буфер обмена",
+    "exported": "Экспортировано {{count}} таблиц в YAML",
+    "noTablesToExport": "Нет таблиц для экспорта",
+    "singleTableOnly": "Здесь можно создать только одну таблицу. Для нескольких таблиц используйте \"Импорт схемы\" на странице таблиц.",
+    "previewDesc": "Будет создано: {{tables}} таблиц(ы), {{fks}} внешних ключей, {{indexes}} индексов",
+    "creatingTable": "Создаётся таблица {{name}}...",
+    "creatingEndpoints": "Создаются эндпоинты для {{name}}...",
+    "addingForeignKeys": "Добавляются внешние ключи...",
+    "addingIndexes": "Добавляются индексы...",
+    "success": "Все объекты успешно созданы!",
+    "partialSuccess": "Завершено с ошибками",
+    "tablesCreatedCount": "Создано {{count}} таблиц(ы)"
   }
 }

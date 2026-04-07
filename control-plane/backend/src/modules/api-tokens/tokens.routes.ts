@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { TokensService } from './tokens.service.js';
-import { ProxyService } from '../proxy/proxy.service.js';
+import { ProxyService, fetchWithKeepAlive } from '../proxy/proxy.service.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { requireRole } from '../../middleware/rbac.middleware.js';
 import { logAudit } from '../audit/audit.middleware.js';
@@ -17,7 +17,7 @@ async function syncTokenToWorker(
 ) {
   try {
     const worker = await proxyService.getWorkerForProject(projectId);
-    const res = await fetch(`${worker.url.replace(/\/$/, '')}/internal/tokens/sync`, {
+    const res = await fetchWithKeepAlive(`${worker.url.replace(/\/$/, '')}/internal/tokens/sync`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

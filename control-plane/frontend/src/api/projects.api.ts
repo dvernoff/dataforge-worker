@@ -14,8 +14,8 @@ interface MembersResponse {
 }
 
 export const projectsApi = {
-  list: () =>
-    api.get<ProjectsResponse>('/projects'),
+  list: (all?: boolean) =>
+    api.get<ProjectsResponse>(all ? '/projects?all=true' : '/projects'),
 
   getById: (id: string) =>
     api.get<ProjectResponse>(`/projects/${id}`),

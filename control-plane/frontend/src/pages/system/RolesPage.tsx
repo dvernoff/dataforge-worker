@@ -31,20 +31,15 @@ const QUOTA_GROUPS = [
     key: 'resources',
     fields: ['max_projects'],
   },
-  {
-    key: 'ai',
-    fields: ['max_ai_requests_per_day', 'max_ai_tokens_per_day'],
-  },
 ] as const;
 
 const QUOTA_DEFAULTS: Record<string, number> = {
-  max_projects: 10, max_ai_requests_per_day: 50, max_ai_tokens_per_day: 100000,
+  max_projects: 10,
 };
 
 function formatQuotaSummary(role: Role) {
   const parts: string[] = [];
   if (role.max_projects) parts.push(`${role.max_projects} proj`);
-  if (role.max_ai_requests_per_day) parts.push(`${role.max_ai_requests_per_day} AI/day`);
   return parts.join(', ');
 }
 

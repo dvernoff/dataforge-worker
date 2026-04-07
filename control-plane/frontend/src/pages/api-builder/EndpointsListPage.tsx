@@ -18,6 +18,7 @@ import { endpointsApi } from '@/api/endpoints.api';
 import { HTTP_METHOD_COLORS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { getProjectColor } from '@/lib/project-colors';
 
 interface EndpointGroup {
   key: string;
@@ -283,7 +284,12 @@ export function EndpointsListPage() {
                     type="button"
                     className="flex items-center gap-2 w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors"
                   >
-                    <group.icon className="h-4 w-4 text-muted-foreground" />
+                    <div
+                      className="h-6 w-6 rounded flex items-center justify-center text-white font-bold text-[10px] shrink-0"
+                      style={{ backgroundColor: getProjectColor(group.label) }}
+                    >
+                      {group.label.charAt(0).toUpperCase()}
+                    </div>
                     <span className="font-medium text-sm">{group.label}</span>
                     <Badge variant="secondary" className="text-[10px] px-1.5 h-5 ml-1">
                       {group.endpoints.length}

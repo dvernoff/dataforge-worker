@@ -15,8 +15,6 @@ export interface Role {
   max_files: number;
   max_backups: number;
   max_cron: number;
-  max_ai_requests_per_day: number;
-  max_ai_tokens_per_day: number;
   max_query_timeout_ms: number;
   max_concurrent_requests: number;
   max_rows_per_query: number;
@@ -40,8 +38,6 @@ export interface CreateRoleInput {
   max_files?: number;
   max_backups?: number;
   max_cron?: number;
-  max_ai_requests_per_day?: number;
-  max_ai_tokens_per_day?: number;
   max_query_timeout_ms?: number;
   max_concurrent_requests?: number;
   max_rows_per_query?: number;

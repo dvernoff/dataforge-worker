@@ -101,36 +101,4 @@ declare module '@aws-sdk/s3-request-presigner' {
   ): Promise<string>;
 }
 
-declare module '@anthropic-ai/sdk' {
-  interface TextBlock {
-    type: 'text';
-    text: string;
-  }
 
-  interface ContentBlock {
-    type: string;
-    text?: string;
-  }
-
-  interface Message {
-    content: ContentBlock[];
-  }
-
-  interface MessageCreateParams {
-    model: string;
-    max_tokens: number;
-    system?: string;
-    messages: Array<{ role: string; content: string }>;
-  }
-
-  interface Messages {
-    create(params: MessageCreateParams): Promise<Message>;
-  }
-
-  class Anthropic {
-    messages: Messages;
-    constructor(config: { apiKey: string });
-  }
-
-  export default Anthropic;
-}

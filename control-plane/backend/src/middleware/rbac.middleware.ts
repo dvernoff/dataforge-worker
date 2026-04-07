@@ -26,8 +26,9 @@ export function requireRole(...roles: ProjectRole[]) {
       return;
     }
 
-    // Superadmin bypass — allow all
+    // Superadmin bypass — allow all, assign admin role for downstream use
     if (user.is_superadmin) {
+      request.projectRole = 'admin';
       return;
     }
 

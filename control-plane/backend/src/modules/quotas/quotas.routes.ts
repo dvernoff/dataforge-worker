@@ -6,8 +6,6 @@ import { z } from 'zod';
 
 const quotaSchema = z.object({
   max_projects: z.coerce.number().int().min(1).optional(),
-  max_ai_requests_per_day: z.coerce.number().int().min(0).optional(),
-  max_ai_tokens_per_day: z.coerce.number().int().min(0).optional(),
 });
 
 export async function quotasRoutes(app: FastifyInstance) {

@@ -18,11 +18,6 @@ export async function sdkRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'Unsupported language. Use: typescript, python, curl' });
     }
 
-    const project = await app.db('projects').where({ id: projectId }).first();
-    if (!project) {
-      return reply.status(404).send({ error: 'Project not found' });
-    }
-
     const worker = await proxyService.getWorkerForProject(projectId);
 
     // Fetch endpoints from worker
@@ -43,18 +38,18 @@ export async function sdkRoutes(app: FastifyInstance) {
     let code: string;
     switch (language) {
       case 'typescript':
-        code = generateTypeScript(project.slug, worker.url, endpoints);
+        code = generateTypeScript(worker.slug, worker.url, endpoints);
         break;
       case 'python':
-        code = generatePython(project.slug, worker.url, endpoints);
+        code = generatePython(worker.slug, worker.url, endpoints);
         break;
       case 'curl':
-        code = generateCurl(project.slug, worker.url, endpoints);
+        code = generateCurl(worker.slug, worker.url, endpoints);
         break;
       default:
         code = '';
     }
 
-    return { code, language, project_slug: project.slug };
+    return { code, language, project_slug: worker.slug };
   });
 }

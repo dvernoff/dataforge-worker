@@ -29,8 +29,6 @@ import { openapiRoutes } from './modules/api-executor/openapi.routes.js';
 import { sboxAuthRoutes } from './modules/plugins/built-in/sbox-auth/sbox-auth.routes.js';
 import { dashboardsRoutes } from './modules/dashboards/dashboards.routes.js';
 import { dbMapRoutes } from './modules/db-map/db-map.routes.js';
-import { aiRoutes } from './modules/ai/ai.routes.js';
-import { naturalPublicRoutes } from './modules/ai/natural.public.routes.js';
 import { pipelinesRoutes } from './modules/pipelines/pipelines.routes.js';
 import fastifyWebsocket from '@fastify/websocket';
 import { websocketRoutes } from './modules/realtime/websocket.service.js';
@@ -88,7 +86,6 @@ await app.register(flowsRoutes, { prefix: '/api/projects' });
 await app.register(pluginRoutes, { prefix: '/api/projects' });
 await app.register(dashboardsRoutes, { prefix: '/api/projects' });
 await app.register(dbMapRoutes, { prefix: '/api/projects' });
-await app.register(aiRoutes, { prefix: '/api/projects' });
 await app.register(pipelinesRoutes, { prefix: '/api/projects' });
 
 await app.register(apiDynamicRoutes);
@@ -97,7 +94,6 @@ await app.register(openapiRoutes);
 
 await app.register(sboxAuthRoutes, { prefix: '/api/v1' });
 
-await app.register(naturalPublicRoutes, { prefix: '/api/v1' });
 
 registerRequestLogger(app);
 

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { ProxyService } from './proxy.service.js';
+import { ProxyService, fetchWithKeepAlive } from './proxy.service.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { requireRole } from '../../middleware/rbac.middleware.js';
 import { ProjectQuotasService } from '../project-quotas/project-quotas.service.js';
@@ -53,16 +53,9 @@ export async function proxyRoutes(app: FastifyInstance) {
     const worker = await proxyService.getWorkerForProject(projectId);
     const workerPath = `/api/projects/${projectId}/${segment}${wildcardPath ? '/' + wildcardPath : ''}${queryString}`;
 
-    // Look up project slug and node type for auto-provisioning on worker
-    const projInfo = await app.db('projects as p')
-      .join('nodes as n', 'p.node_id', 'n.id')
-      .where('p.id', projectId)
-      .select('p.slug', 'n.owner_id')
-      .first();
-
-    // Resolve project performance quotas
+    // Resolve project performance quotas (slug & nodeOwnerId already in worker info)
     const quotaHeaders: Record<string, string> = {};
-    const isSharedNode = !projInfo?.owner_id;
+    const isSharedNode = !worker.nodeOwnerId;
     quotaHeaders['x-node-shared'] = isSharedNode ? '1' : '0';
 
     if (isSharedNode) {
@@ -85,7 +78,7 @@ export async function proxyRoutes(app: FastifyInstance) {
           'content-type': (request.headers['content-type'] as string) ?? 'application/json',
           'x-user-id': request.user.id,
           'x-user-role': ((request as unknown as Record<string, unknown>).projectRole as string) ?? 'viewer',
-          'x-project-slug': projInfo?.slug ?? '',
+          'x-project-slug': worker.slug,
           ...quotaHeaders,
         },
         request.body,
@@ -132,12 +125,11 @@ export async function proxyRoutes(app: FastifyInstance) {
     }
   }
 
-  // ── Admin-only routes (cron, flows, pipelines, AI) ──
+  // ── Admin-only routes (cron, flows, pipelines) ──
   const adminPatterns = [
     '/:projectId/cron/*', '/:projectId/cron',
     '/:projectId/flows/*', '/:projectId/flows',
     '/:projectId/pipelines/*', '/:projectId/pipelines',
-    '/:projectId/ai/*', '/:projectId/ai',
   ];
   for (const pattern of adminPatterns) {
     app.all(pattern, { preHandler: [requireRole('admin')] }, handleProxy);
@@ -155,14 +147,12 @@ export async function proxyRoutes(app: FastifyInstance) {
   // ── OpenAPI spec proxy (viewer+) ──
   app.get('/:projectId/openapi-spec', { preHandler: [requireRole('viewer')] }, async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
-    const project = await app.db('projects').where({ id: projectId }).select('slug').first();
-    if (!project) return reply.status(404).send({ error: 'Project not found' });
 
     const worker = await proxyService.getWorkerForProject(projectId);
-    const specUrl = `${worker.url}/api/v1/${project.slug}/docs/openapi.json`;
+    const specUrl = `${worker.url}/api/v1/${worker.slug}/docs/openapi.json`;
 
     try {
-      const res = await fetch(specUrl, {
+      const res = await fetchWithKeepAlive(specUrl, {
         headers: { 'X-Node-Api-Key': worker.apiKey },
       });
       const spec = await res.json();
@@ -184,7 +174,6 @@ export async function proxyRoutes(app: FastifyInstance) {
     '/:projectId/analytics/*', '/:projectId/analytics',
     '/:projectId/explorer/*', '/:projectId/explorer',
     '/:projectId/db-map',
-    '/:projectId/natural',
     '/:projectId/files/*', '/:projectId/files',
   ];
   for (const pattern of viewerPatterns) {

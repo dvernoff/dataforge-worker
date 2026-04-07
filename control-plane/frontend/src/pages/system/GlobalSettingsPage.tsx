@@ -7,8 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { Progress } from '@/components/ui/progress';
-import { Download, Upload, Eye, EyeOff, DollarSign } from 'lucide-react';
+import { Download, Upload } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -66,12 +65,6 @@ export function GlobalSettingsPage() {
   const [defaultRole, setDefaultRole] = useState('');
   const [maxUsersLimit, setMaxUsersLimit] = useState(0);
 
-  // AI Configuration
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const [aiApiKey, setAiApiKey] = useState('');
-  const [aiModel, setAiModel] = useState('claude-sonnet-4-20250514');
-  const [aiKeyVisible, setAiKeyVisible] = useState(false);
-
   // Fetch system settings
   const { data: systemSettings } = useQuery({
     queryKey: ['system-settings'],
@@ -87,9 +80,6 @@ export function GlobalSettingsPage() {
   useEffect(() => {
     if (systemSettings?.settings) {
       const s = systemSettings.settings;
-      setAiEnabled(s.ai_enabled === 'true');
-      setAiApiKey(s.ai_api_key_ref ?? '');
-      setAiModel(s.ai_model ?? 'claude-sonnet-4-20250514');
       setRegistrationEnabled(s.registration_enabled !== 'false');
       setRequireInvite(s.require_invite !== 'false');
       setDefaultRole(s.default_role ?? '');
@@ -106,14 +96,6 @@ export function GlobalSettingsPage() {
       toast.success(t('globalSettings.saved'));
     },
   });
-
-  const handleSaveAiSettings = () => {
-    saveSettingsMutation.mutate({
-      ai_enabled: String(aiEnabled),
-      ai_api_key_ref: aiApiKey,
-      ai_model: aiModel,
-    });
-  };
 
   const handleSaveRegistration = () => {
     saveSettingsMutation.mutate({
@@ -391,58 +373,6 @@ export function GlobalSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* AI Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('globalSettings.ai.title')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="ai-enabled">{t('globalSettings.ai.enableAi')}</Label>
-                <p className="text-sm text-muted-foreground">{t('globalSettings.ai.enableAiDesc')}</p>
-              </div>
-              <Switch id="ai-enabled" checked={aiEnabled} onCheckedChange={setAiEnabled} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ai-api-key">{t('globalSettings.ai.apiKey')}</Label>
-              <div className="relative">
-                <Input
-                  id="ai-api-key"
-                  type={aiKeyVisible ? 'text' : 'password'}
-                  value={aiApiKey}
-                  onChange={(e) => setAiApiKey(e.target.value)}
-                  placeholder={t('globalSettings.ai.apiKeyPlaceholder')}
-                  className="pr-10"
-                />
-                <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" onClick={() => setAiKeyVisible(!aiKeyVisible)}>
-                  {aiKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              <p className="text-xs text-muted-foreground">{t('globalSettings.ai.apiKeyNote')}</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ai-model">{t('globalSettings.ai.model')}</Label>
-              <Select value={aiModel} onValueChange={setAiModel}>
-                <SelectTrigger id="ai-model">
-                  <SelectValue placeholder={t('globalSettings.ai.modelPlaceholder')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4</SelectItem>
-                  <SelectItem value="claude-opus-4-20250514">Claude Opus 4</SelectItem>
-                  <SelectItem value="claude-haiku-235-20250514">Claude Haiku 3.5</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button type="button" onClick={handleSaveAiSettings} disabled={saveSettingsMutation.isPending}>
-              {t('globalSettings.save')}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* AI Budget — Monthly Spend */}
-        <AiBudgetCard t={t} />
-
         {/* Maintenance Mode */}
         <Card>
           <CardHeader>
@@ -524,100 +454,5 @@ export function GlobalSettingsPage() {
         <Button type="submit">{t('globalSettings.save')}</Button>
       </form>
     </PageWrapper>
-  );
-}
-
-
-
-function AiBudgetCard({ t }: { t: (key: string) => string }) {
-  const queryClient = useQueryClient();
-  const [budgetLimit, setBudgetLimit] = useState(0);
-  const [alertThreshold, setAlertThreshold] = useState(80);
-
-  const { data: budgetData } = useQuery({
-    queryKey: ['ai-budget'],
-    queryFn: () => api.get<{
-      month: string;
-      total_requests: number;
-      total_input_tokens: number;
-      total_output_tokens: number;
-      total_cost_usd: number;
-      budget_limit_usd: number;
-      alert_threshold_pct: number;
-    }>('/system/ai/budget'),
-  });
-
-  useEffect(() => {
-    if (budgetData) {
-      setBudgetLimit(budgetData.budget_limit_usd);
-      setAlertThreshold(budgetData.alert_threshold_pct);
-    }
-  }, [budgetData]);
-
-  const saveBudgetMutation = useMutation({
-    mutationFn: (data: { budget_limit_usd?: number; alert_threshold_pct?: number }) =>
-      api.put('/system/ai/budget', data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai-budget'] });
-      toast.success(t('globalSettings.aiBudget.saved'));
-    },
-  });
-
-  const spentPct = budgetData && budgetLimit > 0
-    ? Math.min(100, Math.round((budgetData.total_cost_usd / budgetLimit) * 100))
-    : 0;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <DollarSign className="h-5 w-5" />
-          {t('globalSettings.aiBudget.monthlyBudgetTitle')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {budgetData && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">{t('globalSettings.aiBudget.currentMonthSpent')}</span>
-              <span className="text-2xl font-bold">${budgetData.total_cost_usd.toFixed(4)}</span>
-            </div>
-            {budgetLimit > 0 && (
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{spentPct}% {t('globalSettings.aiBudget.ofBudget')}</span>
-                  <span>${budgetLimit.toFixed(2)}</span>
-                </div>
-                <Progress value={spentPct} className={`h-3 ${spentPct >= alertThreshold ? '[&>div]:bg-destructive' : ''}`} />
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">{t('globalSettings.aiBudget.totalRequests')}</span>
-                <p className="font-semibold">{budgetData.total_requests}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">{t('globalSettings.aiBudget.totalTokens')}</span>
-                <p className="font-semibold">{(budgetData.total_input_tokens + budgetData.total_output_tokens).toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-        )}
-        <Separator />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>{t('globalSettings.aiBudget.monthlyBudgetUsd')}</Label>
-            <Input type="number" min={0} step={0.01} value={budgetLimit} onChange={(e) => setBudgetLimit(Number(e.target.value))} placeholder="100.00" />
-          </div>
-          <div className="space-y-2">
-            <Label>{t('globalSettings.aiBudget.alertThresholdPct')}</Label>
-            <Input type="number" min={0} max={100} value={alertThreshold} onChange={(e) => setAlertThreshold(Number(e.target.value))} placeholder="80" />
-          </div>
-        </div>
-        <Button type="button" onClick={() => saveBudgetMutation.mutate({ budget_limit_usd: budgetLimit, alert_threshold_pct: alertThreshold })} disabled={saveBudgetMutation.isPending}>
-          {t('globalSettings.save')}
-        </Button>
-      </CardContent>
-    </Card>
   );
 }

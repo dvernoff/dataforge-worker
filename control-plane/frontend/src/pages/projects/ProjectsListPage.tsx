@@ -40,6 +40,8 @@ interface NodeStatus {
   ping?: number;
 }
 
+import { getProjectColor } from '@/lib/project-colors';
+
 const TRANSLIT_MAP: Record<string, string> = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'zh', з: 'z',
   и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r',
@@ -304,8 +306,18 @@ export function ProjectsListPage() {
                 onClick={() => navigate(`/projects/${project.slug}/dashboard`)}
               >
                 <CardHeader>
-                  <CardTitle className="text-lg">{project.name}</CardTitle>
-                  <CardDescription>{project.description ?? t('projects.noDescription')}</CardDescription>
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold text-lg shrink-0"
+                      style={{ backgroundColor: getProjectColor(project.name) }}
+                    >
+                      {project.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-lg">{project.name}</CardTitle>
+                      <CardDescription className="truncate">{project.description ?? t('projects.noDescription')}</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <p className="text-xs text-muted-foreground">

@@ -3,20 +3,14 @@ import type Redis from 'ioredis';
 
 const QUOTA_FIELDS = [
   'max_projects',
-  'max_ai_requests_per_day',
-  'max_ai_tokens_per_day',
 ] as const;
 
 const HARDCODED_DEFAULTS: Record<string, number> = {
   max_projects: 5,
-  max_ai_requests_per_day: 50,
-  max_ai_tokens_per_day: 100000,
 };
 
 export interface QuotaInput {
   max_projects?: number;
-  max_ai_requests_per_day?: number;
-  max_ai_tokens_per_day?: number;
 }
 
 export class QuotasService {
@@ -136,29 +130,8 @@ export class QuotasService {
       .first()
       .then(r => Number(r?.count ?? 0));
 
-    let aiRequests = 0;
-    let aiTokens = 0;
-    try {
-      const hasAiLog = await this.db.schema.hasTable('ai_usage_log');
-      if (hasAiLog) {
-        const today = new Date().toISOString().split('T')[0];
-        const aiUsage = await this.db('ai_usage_log')
-          .where('user_id', userId)
-          .whereRaw("created_at::date = ?", [today])
-          .select(
-            this.db.raw('COUNT(*)::int as requests'),
-            this.db.raw('COALESCE(SUM(input_tokens + output_tokens), 0)::int as tokens')
-          )
-          .first();
-        aiRequests = aiUsage?.requests ?? 0;
-        aiTokens = aiUsage?.tokens ?? 0;
-      }
-    } catch { /* ai_usage_log may not exist yet */ }
-
     return {
       projects: projectsCount,
-      ai_requests_today: aiRequests,
-      ai_tokens_today: aiTokens,
     };
   }
 

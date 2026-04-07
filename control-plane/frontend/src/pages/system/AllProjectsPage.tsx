@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/shared/PageWrapper';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { useProjects } from '@/hooks/useProject';
+import { useAllProjects } from '@/hooks/useProject';
 import { useAuthStore } from '@/stores/auth.store';
 import { projectsApi } from '@/api/projects.api';
 import { toast } from 'sonner';
@@ -22,7 +22,7 @@ export function AllProjectsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const { data: projects, isLoading } = useProjects();
+  const { data: projects, isLoading } = useAllProjects();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const deleteMutation = useMutation({

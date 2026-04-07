@@ -32,13 +32,11 @@ import { quotasApi } from '@/api/quotas.api';
 import { toast } from 'sonner';
 
 const QUOTA_FIELDS = [
-  'max_projects', 'max_ai_requests_per_day', 'max_ai_tokens_per_day',
+  'max_projects',
 ] as const;
 
 const USAGE_MAP: Record<string, string> = {
   max_projects: 'projects',
-  max_ai_requests_per_day: 'ai_requests_today',
-  max_ai_tokens_per_day: 'ai_tokens_today',
 };
 
 function getProgressColor(pct: number): string {

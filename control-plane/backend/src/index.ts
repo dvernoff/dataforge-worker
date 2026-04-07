@@ -91,18 +91,12 @@ app.get('/api/system/settings/public', async () => {
   if (!exists) {
     return { settings: { registration_enabled: 'true', require_invite: 'true', default_role: 'viewer' } };
   }
-  const keys = ['registration_enabled', 'require_invite', 'default_role', 'ai_enabled', 'ai_api_key_ref', 'time_travel_days'];
+  const keys = ['registration_enabled', 'require_invite', 'default_role', 'time_travel_days'];
   const rows = await app.db('system_settings').whereIn('key', keys).select('key', 'value');
   const settings: Record<string, string> = { registration_enabled: 'true', require_invite: 'true', default_role: 'viewer' };
   for (const row of rows) {
     settings[row.key] = row.value;
   }
-  // Expose AI availability as boolean flags (don't expose the actual key)
-  const aiEnabled = settings.ai_enabled === 'true';
-  const aiConfigured = aiEnabled && !!settings.ai_api_key_ref;
-  delete settings.ai_api_key_ref;
-  settings.ai_enabled = String(aiEnabled);
-  settings.ai_configured = String(aiConfigured);
   return { settings };
 });
 

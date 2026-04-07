@@ -1,4 +1,5 @@
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { getProjectColor } from '@/lib/project-colors';
 import { useTranslation } from 'react-i18next';
 import {
   PanelLeft, Table2, Database, Plug, Webhook, Terminal,
@@ -134,11 +135,22 @@ export function AppSidebar() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">{t('nav.allProjects')}</SelectItem>
-              {projects.map((p) => (
-                <SelectItem key={p.slug} value={p.slug}>
-                  {p.name}
-                </SelectItem>
-              ))}
+              {projects.map((p) => {
+                const color = getProjectColor(p.name);
+                return (
+                  <SelectItem key={p.slug} value={p.slug}>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="h-5 w-5 rounded flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                        style={{ backgroundColor: color }}
+                      >
+                        {p.name.charAt(0).toUpperCase()}
+                      </div>
+                      {p.name}
+                    </div>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         )}

@@ -12,6 +12,16 @@ export function useProjects() {
   });
 }
 
+export function useAllProjects() {
+  return useQuery({
+    queryKey: ['projects', 'all'],
+    queryFn: async () => {
+      const data = await projectsApi.list(true);
+      return data.projects;
+    },
+  });
+}
+
 export function useCurrentProject() {
   const { slug } = useParams<{ slug: string }>();
 

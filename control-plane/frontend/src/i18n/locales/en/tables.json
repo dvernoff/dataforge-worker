@@ -275,6 +275,28 @@
       "jsonb": "JSON Binary",
       "text[]": "Text Array",
       "integer[]": "Integer Array"
-    }
+    },
+    "tabVisual": "Visual",
+    "tabYaml": "YAML"
+  },
+  "importSchema": "Import Schema",
+  "yamlImport": {
+    "title": "Import Schema (YAML)",
+    "copyTemplate": "Copy Template for AI",
+    "exportExisting": "Export Existing Tables",
+    "validatePreview": "Validate & Preview",
+    "import": "Import",
+    "templateCopied": "Template copied to clipboard",
+    "exported": "Exported {{count}} tables to YAML",
+    "noTablesToExport": "No tables to export",
+    "singleTableOnly": "Only one table allowed here. For multiple tables, use \"Import Schema\" on the tables page.",
+    "previewDesc": "{{tables}} table(s), {{fks}} foreign key(s), {{indexes}} index(es) will be created",
+    "creatingTable": "Creating table {{name}}...",
+    "creatingEndpoints": "Creating endpoints for {{name}}...",
+    "addingForeignKeys": "Adding foreign keys...",
+    "addingIndexes": "Adding indexes...",
+    "success": "All objects created successfully!",
+    "partialSuccess": "Completed with some errors",
+    "tablesCreatedCount": "{{count}} table(s) created"
   }
 }

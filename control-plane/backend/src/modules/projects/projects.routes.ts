@@ -5,7 +5,7 @@ import { requireRole, requireSuperadmin } from '../../middleware/rbac.middleware
 import { createProjectSchema, updateProjectSchema } from '../../../../../shared/types/project.types.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { logAudit } from '../audit/audit.middleware.js';
-import { ProxyService } from '../proxy/proxy.service.js';
+import { ProxyService, fetchWithKeepAlive } from '../proxy/proxy.service.js';
 import { QuotasService } from '../quotas/quotas.service.js';
 import { env } from '../../config/env.js';
 import { z } from 'zod';
@@ -22,7 +22,7 @@ export async function projectRoutes(app: FastifyInstance) {
   async function syncProjectToWorker(project: { id: string; slug: string; db_schema: string }) {
     try {
       const worker = await proxyService.getWorkerForProject(project.id);
-      await fetch(`${worker.url.replace(/\/$/, '')}/internal/projects`, {
+      await fetchWithKeepAlive(`${worker.url.replace(/\/$/, '')}/internal/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -48,11 +48,13 @@ export async function projectRoutes(app: FastifyInstance) {
   // keyPrefix 'cp:' is auto-applied by ioredis to GET/SET/DEL but NOT to KEYS.
   // So cache keys must NOT include the 'cp:' prefix manually.
   app.get('/', async (request) => {
-    const cacheKey = `projects:list:${request.user.id}:${request.user.is_superadmin}`;
+    const query = request.query as { all?: string };
+    const showAll = query.all === 'true' && request.user.is_superadmin;
+    const cacheKey = `projects:list:${request.user.id}:${showAll}`;
     const cached = await app.redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
-    const projects = await projectsService.findAll(request.user.id, request.user.is_superadmin);
+    const projects = await projectsService.findAll(request.user.id, showAll);
     const result = { projects };
     await app.redis.set(cacheKey, JSON.stringify(result), 'EX', 30);
     return result;
@@ -158,7 +160,7 @@ export async function projectRoutes(app: FastifyInstance) {
     // Delete project schema on Worker
     try {
       const worker = await proxyService.getWorkerForProject(projectId);
-      await fetch(`${worker.url.replace(/\/$/, '')}/internal/projects/${projectId}`, {
+      await fetchWithKeepAlive(`${worker.url.replace(/\/$/, '')}/internal/projects/${projectId}`, {
         method: 'DELETE',
         headers: {
           'X-Node-Api-Key': worker.apiKey,

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Table2, LayoutGrid, List, MoreHorizontal, Pencil, Eye, Trash2, History, Sparkles } from 'lucide-react';
+import { Plus, Table2, LayoutGrid, List, MoreHorizontal, Pencil, Eye, Trash2, History, FileUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,9 +19,9 @@ import { schemaApi } from '@/api/schema.api';
 import { toast } from 'sonner';
 import { showErrorToast } from '@/lib/show-error-toast';
 import { CreateTableDialog } from '@/components/schema/CreateTableDialog';
-import { AISchemaDesigner } from '@/components/schema/AISchemaDesigner';
+import { getProjectColor } from '@/lib/project-colors';
+import { SchemaImportDialog } from '@/components/schema/SchemaImportDialog';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useAIEnabled } from '@/hooks/useAIEnabled';
 
 export function TablesListPage() {
   const { t } = useTranslation(['tables', 'common']);
@@ -29,8 +29,7 @@ export function TablesListPage() {
   const [viewMode, setViewMode] = useState<string>(() => localStorage.getItem('dataforge-tables-view') ?? 'cards');
   const handleViewChange = (mode: string) => { setViewMode(mode); localStorage.setItem('dataforge-tables-view', mode); };
   const [createOpen, setCreateOpen] = useState(false);
-  const [aiDesignerOpen, setAiDesignerOpen] = useState(false);
-  const { aiConfigured } = useAIEnabled();
+  const [importOpen, setImportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -90,9 +89,9 @@ export function TablesListPage() {
             <History className="h-4 w-4 mr-2" />
             {t('tables:versioning.title')}
           </Button>
-          <Button variant="outline" onClick={() => setAiDesignerOpen(true)} disabled={!aiConfigured}>
-            <Sparkles className="h-4 w-4 mr-2" />
-            {t('tables:aiDesigner.title')}
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileUp className="h-4 w-4 mr-2" />
+            {t('tables:importSchema')}
           </Button>
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -131,7 +130,13 @@ export function TablesListPage() {
                 onClick={() => navigate(`${basePath}/tables/${table.name}/data`)}
               >
                 <CardHeader className="flex flex-row items-start justify-between">
-                  <div>
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="h-8 w-8 rounded-md flex items-center justify-center text-white font-bold text-sm shrink-0"
+                      style={{ backgroundColor: getProjectColor(table.name) }}
+                    >
+                      {table.name.charAt(0).toUpperCase()}
+                    </div>
                     <CardTitle className="text-base font-mono">{table.name}</CardTitle>
                   </div>
                   <DropdownMenu>
@@ -187,7 +192,17 @@ export function TablesListPage() {
                   className="cursor-pointer"
                   onClick={() => navigate(`${basePath}/tables/${table.name}/data`)}
                 >
-                  <TableCell className="font-mono font-medium">{table.name}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="h-6 w-6 rounded flex items-center justify-center text-white font-bold text-[10px] shrink-0"
+                        style={{ backgroundColor: getProjectColor(table.name) }}
+                      >
+                        {table.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="font-mono font-medium">{table.name}</span>
+                    </div>
+                  </TableCell>
                   <TableCell>{table.column_count}</TableCell>
                   <TableCell>{table.row_count.toLocaleString()}</TableCell>
                   <TableCell>
@@ -229,6 +244,12 @@ export function TablesListPage() {
         projectId={project?.id ?? ''}
       />
 
+      <SchemaImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        projectId={project?.id ?? ''}
+      />
+
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
@@ -240,11 +261,6 @@ export function TablesListPage() {
         loading={deleteMutation.isPending}
       />
 
-      <AISchemaDesigner
-        open={aiDesignerOpen}
-        onOpenChange={setAiDesignerOpen}
-        projectId={project?.id ?? ''}
-      />
     </PageWrapper>
   );
 }
