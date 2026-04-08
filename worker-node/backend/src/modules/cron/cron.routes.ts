@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { CronService } from './cron.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
 import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
+import { isModuleEnabled, moduleDisabledError } from '../../utils/module-check.js';
 import { z } from 'zod';
 
 export async function cronRoutes(app: FastifyInstance) {
@@ -9,6 +10,15 @@ export async function cronRoutes(app: FastifyInstance) {
 
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('admin'));
+
+  app.addHook('preHandler', async (request, reply) => {
+    const { projectId } = request.params as { projectId: string };
+    if (!projectId) return;
+    const enabled = await isModuleEnabled(app.db, projectId, 'feature-cron');
+    if (!enabled) {
+      return reply.status(404).send(moduleDisabledError('Cron'));
+    }
+  });
 
   app.get('/:projectId/cron', async (request) => {
     const { projectId } = request.params as { projectId: string };
@@ -21,7 +31,7 @@ export async function cronRoutes(app: FastifyInstance) {
     const body = z.object({
       name: z.string().min(1).max(255),
       cron_expression: z.string().min(1).max(100),
-      action_type: z.enum(['sql', 'api_call', 'webhook']),
+      action_type: z.enum(['sql']),
       action_config: z.record(z.unknown()),
       is_active: z.boolean().optional(),
     }).parse(request.body);
@@ -40,7 +50,7 @@ export async function cronRoutes(app: FastifyInstance) {
     const body = z.object({
       name: z.string().min(1).max(255).optional(),
       cron_expression: z.string().min(1).max(100).optional(),
-      action_type: z.enum(['sql', 'api_call', 'webhook']).optional(),
+      action_type: z.enum(['sql']).optional(),
       action_config: z.record(z.unknown()).optional(),
       is_active: z.boolean().optional(),
     }).parse(request.body);

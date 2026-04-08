@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import { AppError } from '../../middleware/error-handler.js';
+import { validateSchema, validateIdentifier } from '../../utils/sql-guard.js';
 import type {
   TableDefinition, ColumnDef, ForeignKeyDef, IndexDef, AlterColumnDef, PG_TYPE_MAP as PgTypeMapType,
 } from './schema.types.js';
@@ -13,63 +14,65 @@ export class SchemaService {
       SELECT
         t.table_name as name,
         (SELECT COUNT(*) FROM information_schema.columns c
-         WHERE c.table_schema = t.table_schema AND c.table_name = t.table_name)::int as column_count
+         WHERE c.table_schema = t.table_schema AND c.table_name = t.table_name)::int as column_count,
+        COALESCE(s.n_live_tup, 0)::int as row_count
       FROM information_schema.tables t
+      LEFT JOIN pg_stat_user_tables s
+        ON s.schemaname = t.table_schema AND s.relname = t.table_name
       WHERE t.table_schema = ? AND t.table_type = 'BASE TABLE'
       ORDER BY t.table_name
     `, [schema]);
 
-    const tables = [];
-    for (const row of result.rows) {
-      try {
-        const countResult = await this.db.raw(
-          `SELECT COUNT(*)::int as count FROM "${schema}"."${row.name}"`
-        );
-        tables.push({
-          name: row.name,
-          column_count: row.column_count,
-          row_count: countResult.rows[0].count,
-        });
-      } catch {
-        tables.push({ name: row.name, column_count: row.column_count, row_count: 0 });
-      }
-    }
-
-    return tables;
+    return result.rows;
   }
 
   async getTableInfo(schema: string, tableName: string) {
-    const columns = await this.db.raw(`
-      SELECT
-        c.column_name as name,
-        c.data_type as type,
-        c.udt_name as udt_type,
-        c.is_nullable = 'YES' as nullable,
-        c.column_default as default_value,
-        c.ordinal_position
-      FROM information_schema.columns c
-      WHERE c.table_schema = ? AND c.table_name = ?
-      ORDER BY c.ordinal_position
-    `, [schema, tableName]);
+    const [columns, pks, uniques, fks, indexes, countRes] = await Promise.all([
+      this.db.raw(`
+        SELECT c.column_name as name, c.data_type as type, c.udt_name as udt_type,
+               c.is_nullable = 'YES' as nullable, c.column_default as default_value, c.ordinal_position
+        FROM information_schema.columns c
+        WHERE c.table_schema = ? AND c.table_name = ?
+        ORDER BY c.ordinal_position
+      `, [schema, tableName]),
+      this.db.raw(`
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+        WHERE tc.table_schema = ? AND tc.table_name = ? AND tc.constraint_type = 'PRIMARY KEY'
+      `, [schema, tableName]),
+      this.db.raw(`
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+        WHERE tc.table_schema = ? AND tc.table_name = ? AND tc.constraint_type = 'UNIQUE'
+      `, [schema, tableName]),
+      this.db.raw(`
+        SELECT tc.constraint_name, kcu.column_name as source_column, ccu.table_name as target_table,
+               ccu.column_name as target_column, rc.delete_rule as on_delete, rc.update_rule as on_update
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+        JOIN information_schema.referential_constraints rc ON rc.constraint_name = tc.constraint_name AND rc.constraint_schema = tc.table_schema
+        WHERE tc.table_schema = ? AND tc.table_name = ? AND tc.constraint_type = 'FOREIGN KEY'
+      `, [schema, tableName]),
+      this.db.raw(`
+        SELECT i.relname as name, am.amname as type, ix.indisunique as is_unique,
+               array_agg(a.attname ORDER BY k.n) as columns
+        FROM pg_index ix
+        JOIN pg_class t ON t.oid = ix.indrelid
+        JOIN pg_class i ON i.oid = ix.indexrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        JOIN pg_am am ON am.oid = i.relam
+        CROSS JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, n)
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+        WHERE n.nspname = ? AND t.relname = ? AND NOT ix.indisprimary
+        GROUP BY i.relname, am.amname, ix.indisunique
+      `, [schema, tableName]),
+      this.db.raw(`SELECT COUNT(*)::int as count FROM "${schema}"."${tableName}"`).catch(() => ({ rows: [{ count: 0 }] })),
+    ]);
 
-    const pks = await this.db.raw(`
-      SELECT kcu.column_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu
-        ON tc.constraint_name = kcu.constraint_name
-        AND tc.table_schema = kcu.table_schema
-      WHERE tc.table_schema = ? AND tc.table_name = ? AND tc.constraint_type = 'PRIMARY KEY'
-    `, [schema, tableName]);
     const pkColumns = new Set(pks.rows.map((r: { column_name: string }) => r.column_name));
-
-    const uniques = await this.db.raw(`
-      SELECT kcu.column_name
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu
-        ON tc.constraint_name = kcu.constraint_name
-        AND tc.table_schema = kcu.table_schema
-      WHERE tc.table_schema = ? AND tc.table_name = ? AND tc.constraint_type = 'UNIQUE'
-    `, [schema, tableName]);
     const uniqueColumns = new Set(uniques.rows.map((r: { column_name: string }) => r.column_name));
 
     const TAIL_COLS = new Set(['created_at', 'updated_at', 'deleted_at']);
@@ -87,50 +90,6 @@ export class SchemaService {
       ...allCols.filter((c: { name: string }) => TAIL_COLS.has(c.name)),
     ];
 
-    const fks = await this.db.raw(`
-      SELECT
-        tc.constraint_name,
-        kcu.column_name as source_column,
-        ccu.table_name as target_table,
-        ccu.column_name as target_column,
-        rc.delete_rule as on_delete,
-        rc.update_rule as on_update
-      FROM information_schema.table_constraints tc
-      JOIN information_schema.key_column_usage kcu
-        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
-      JOIN information_schema.constraint_column_usage ccu
-        ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
-      JOIN information_schema.referential_constraints rc
-        ON rc.constraint_name = tc.constraint_name AND rc.constraint_schema = tc.table_schema
-      WHERE tc.table_schema = ? AND tc.table_name = ? AND tc.constraint_type = 'FOREIGN KEY'
-    `, [schema, tableName]);
-
-    const indexes = await this.db.raw(`
-      SELECT
-        i.relname as name,
-        am.amname as type,
-        ix.indisunique as is_unique,
-        array_agg(a.attname ORDER BY k.n) as columns
-      FROM pg_index ix
-      JOIN pg_class t ON t.oid = ix.indrelid
-      JOIN pg_class i ON i.oid = ix.indexrelid
-      JOIN pg_namespace n ON n.oid = t.relnamespace
-      JOIN pg_am am ON am.oid = i.relam
-      CROSS JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, n)
-      JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
-      WHERE n.nspname = ? AND t.relname = ?
-        AND NOT ix.indisprimary
-      GROUP BY i.relname, am.amname, ix.indisunique
-    `, [schema, tableName]);
-
-    let rowCount = 0;
-    try {
-      const countRes = await this.db.raw(
-        `SELECT COUNT(*)::int as count FROM "${schema}"."${tableName}"`
-      );
-      rowCount = countRes.rows[0].count;
-    } catch {}
-
     const normalizedIndexes = indexes.rows.map((idx: any) => ({
       ...idx,
       columns: Array.isArray(idx.columns)
@@ -143,11 +102,13 @@ export class SchemaService {
       columns: columnList,
       foreign_keys: fks.rows,
       indexes: normalizedIndexes,
-      row_count: rowCount,
+      row_count: countRes.rows[0].count,
     };
   }
 
   async createTable(schema: string, def: TableDefinition): Promise<string> {
+    validateSchema(schema);
+    validateIdentifier(def.name, 'table name');
     const parts: string[] = [];
 
     if (def.add_uuid_pk) {
@@ -190,6 +151,8 @@ export class SchemaService {
   }
 
   async alterColumns(schema: string, tableName: string, changes: AlterColumnDef[]): Promise<string[]> {
+    validateSchema(schema);
+    validateIdentifier(tableName, 'table name');
     const sqls: string[] = [];
 
     for (const change of changes) {
@@ -200,8 +163,10 @@ export class SchemaService {
           sql = `ALTER TABLE "${schema}"."${tableName}" ADD COLUMN "${change.name}" ${pgType}`;
           if (change.nullable === false) sql += ' NOT NULL';
           if (change.default_value !== undefined) {
-            const val = String(change.default_value);
-            if (/^[0-9]+(\.[0-9]+)?$/.test(val) || val === 'true' || val === 'false' || val === 'NULL' || val.startsWith('gen_') || val === 'now()') {
+            let val = String(change.default_value);
+            if (val.startsWith("'") && val.endsWith("'")) {
+              sql += ` DEFAULT ${val}`;
+            } else if (/^-?[0-9]+(\.[0-9]+)?$/.test(val) || val === 'true' || val === 'false' || val === 'NULL' || val.startsWith('gen_') || /^\w+\(.*\)$/.test(val)) {
               sql += ` DEFAULT ${val}`;
             } else {
               sql += ` DEFAULT '${val.replace(/'/g, "''")}'`;
@@ -227,7 +192,9 @@ export class SchemaService {
             } else {
               const val = String(change.default_value);
               let defaultExpr: string;
-              if (/^[0-9]+(\.[0-9]+)?$/.test(val) || val === 'true' || val === 'false' || val === 'NULL' || val.startsWith('gen_') || val === 'now()') {
+              if (val.startsWith("'") && val.endsWith("'")) {
+                defaultExpr = val;
+              } else if (/^-?[0-9]+(\.[0-9]+)?$/.test(val) || val === 'true' || val === 'false' || val === 'NULL' || val.startsWith('gen_') || /^\w+\(.*\)$/.test(val)) {
                 defaultExpr = val;
               } else {
                 defaultExpr = `'${val.replace(/'/g, "''")}'`;
@@ -312,9 +279,27 @@ export class SchemaService {
   }
 
   async dropTable(schema: string, tableName: string, projectId?: string): Promise<string[]> {
+    validateSchema(schema);
+    validateIdentifier(tableName, 'table name');
+    try {
+      const comment = await this.db.raw(`SELECT obj_description(oid) as comment FROM pg_class WHERE relname = ? AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = ?)`, [tableName, schema]);
+      if (comment.rows[0]?.comment?.startsWith('system:')) {
+        throw new AppError(403, `Table "${tableName}" is a system table managed by plugin "${comment.rows[0].comment.replace('system:', '')}". Disable the plugin to remove it.`);
+      }
+    } catch (e) { if ((e as { statusCode?: number }).statusCode === 403) throw e; }
     const deleted: string[] = [];
 
     if (projectId) {
+      try {
+        const files = await this.db('files')
+          .where({ project_id: projectId, table_name: tableName })
+          .select('storage_path');
+        const fs = await import('fs');
+        for (const f of files) {
+          try { if (f.storage_path && fs.existsSync(f.storage_path)) fs.unlinkSync(f.storage_path); } catch {}
+        }
+      } catch {}
+
       const cleanup: [string, Promise<number>][] = [
         ['endpoints', this.db('api_endpoints').where({ project_id: projectId }).where(function () {
           this.whereRaw("source_config::text LIKE ?", [`%"table":"${tableName}"%`])
@@ -342,6 +327,11 @@ export class SchemaService {
   }
 
   async addForeignKey(schema: string, tableName: string, fk: ForeignKeyDef) {
+    validateSchema(schema);
+    validateIdentifier(tableName, 'table name');
+    validateIdentifier(fk.source_column, 'source column');
+    validateIdentifier(fk.target_table, 'target table');
+    validateIdentifier(fk.target_column, 'target column');
     const constraintName = fk.constraint_name ?? `fk_${tableName}_${fk.source_column}_${fk.target_table}`;
     const sql = `
       ALTER TABLE "${schema}"."${tableName}"
@@ -373,12 +363,18 @@ export class SchemaService {
   }
 
   async dropForeignKey(schema: string, tableName: string, constraintName: string) {
+    validateSchema(schema);
+    validateIdentifier(tableName, 'table name');
+    validateIdentifier(constraintName, 'constraint name');
     await this.db.raw(
       `ALTER TABLE "${schema}"."${tableName}" DROP CONSTRAINT IF EXISTS "${constraintName}"`
     );
   }
 
   async addIndex(schema: string, tableName: string, idx: IndexDef) {
+    validateSchema(schema);
+    validateIdentifier(tableName, 'table name');
+    for (const col of idx.columns) validateIdentifier(col, 'column name');
     const idxName = idx.name ?? `idx_${tableName}_${idx.columns.join('_')}`;
     const unique = idx.is_unique ? 'UNIQUE' : '';
     const using = idx.type !== 'btree' ? `USING ${idx.type}` : '';
@@ -408,6 +404,8 @@ export class SchemaService {
   }
 
   async dropIndex(schema: string, indexName: string) {
+    validateSchema(schema);
+    validateIdentifier(indexName, 'index name');
     await this.db.raw(`DROP INDEX IF EXISTS "${schema}"."${indexName}"`);
   }
 
@@ -438,8 +436,10 @@ export class SchemaService {
     if (!col.nullable && !col.is_primary) sql += ' NOT NULL';
     if (col.is_unique && !col.is_primary) sql += ' UNIQUE';
     if (col.default_value) {
-      const val = String(col.default_value);
-      if (/^[0-9]+(\.[0-9]+)?$/.test(val) || val === 'true' || val === 'false' || val === 'NULL' || val.startsWith('gen_') || val === 'now()') {
+      let val = String(col.default_value);
+      if (val.startsWith("'") && val.endsWith("'")) {
+        sql += ` DEFAULT ${val}`;
+      } else if (/^-?[0-9]+(\.[0-9]+)?$/.test(val) || val === 'true' || val === 'false' || val === 'NULL' || val.startsWith('gen_') || /^\w+\(.*\)$/.test(val)) {
         sql += ` DEFAULT ${val}`;
       } else {
         sql += ` DEFAULT '${val.replace(/'/g, "''")}'`;

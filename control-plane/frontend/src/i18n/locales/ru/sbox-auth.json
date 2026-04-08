@@ -1,0 +1,80 @@
+{
+  "pageTitle": "S&box Авторизация",
+  "pluginDisabled": "Плагин S&box Auth не активен",
+  "pluginDisabledDesc": "Включите плагин S&box Auth в настройках проекта для управления авторизацией игроков.",
+  "goToPlugins": "Перейти к плагинам",
+  "tabs": {
+    "dashboard": "Обзор",
+    "players": "Игроки",
+    "settings": "Настройки",
+    "endpoints": "Эндпоинты",
+    "docs": "Документация"
+  },
+  "stats": {
+    "totalPlayers": "Всего игроков",
+    "onlineNow": "Онлайн сейчас",
+    "newToday": "Новых сегодня"
+  },
+  "players": {
+    "steamId": "Steam ID",
+    "lastActive": "Последняя активность",
+    "createdAt": "Зарегистрирован",
+    "status": "Статус",
+    "online": "Онлайн",
+    "offline": "Оффлайн",
+    "expired": "Истёк",
+    "actions": "Действия",
+    "kick": "Кикнуть",
+    "kickAll": "Кикнуть всех",
+    "kickAllConfirm": "Вы уверены, что хотите отозвать все активные сессии?",
+    "kicked": "Игрок кикнут",
+    "kickedAll": "Все сессии отозваны",
+    "noPlayers": "Нет активных сессий",
+    "noPlayersDesc": "Игроки появятся здесь после входа через S&box.",
+    "profile": "Профиль игрока",
+    "backToList": "Назад к списку",
+    "cleanup": "Очистить просроченные",
+    "cleanupDone": "Очищено {{count}} просроченных сессий"
+  },
+  "settings": {
+    "serviceName": "Имя сервиса",
+    "serviceNameDesc": "Имя сервиса/игры для валидации токенов Facepunch",
+    "sessionTable": "Таблица сессий",
+    "sessionTableDesc": "Таблица в БД для хранения сессий игроков",
+    "steamIdColumn": "Колонка Steam ID",
+    "sessionKeyColumn": "Колонка Session Key",
+    "sessionTtl": "Время жизни сессии (минуты)",
+    "sessionTtlDesc": "Время жизни сессии в минутах. 0 = бессрочно",
+    "saved": "Настройки сохранены",
+    "selectTable": "Выберите таблицу...",
+    "selectColumn": "Выберите колонку...",
+    "tableNotFound": "Таблица не найдена или пустая. Сначала создайте таблицу."
+  },
+  "endpoints": {
+    "title": "Защищённые эндпоинты",
+    "desc": "API эндпоинты, использующие авторизацию S&box Session",
+    "noEndpoints": "Нет настроенных эндпоинтов",
+    "noEndpointsDesc": "Создайте API эндпоинт с типом авторизации «S&box Session» в API Builder.",
+    "goToBuilder": "Создать эндпоинт",
+    "createNew": "Создать новый эндпоинт",
+    "method": "Метод",
+    "path": "Путь",
+    "description": "Описание"
+  },
+  "docs": {
+    "howItWorks": "Как это работает",
+    "step1": "Игрок заходит в вашу игру S&box, клиент генерирует токен через Sandbox.Services.Auth.GetToken()",
+    "step2": "Игра отправляет токен на эндпоинт /sbox_login. DataForge валидирует его через Facepunch API и возвращает session_key.",
+    "step3": "Игрок использует session_key в заголовке x-session-key для всех запросов к защищённым эндпоинтам.",
+    "step4": "Защищённые эндпоинты автоматически проверяют сессию и подставляют {{player_steam_id}} в SQL-запросы.",
+    "apiEndpoints": "API эндпоинты авторизации",
+    "apiEndpointsDesc": "Встроенные эндпоинты для авторизации игроков. Работают автоматически при включённом плагине.",
+    "sboxClient": "Код клиента S&box",
+    "sboxClientDesc": "Пример C# кода для авторизации из вашей игры S&box",
+    "protectEndpoint": "Защита ваших API эндпоинтов",
+    "protectEndpointDesc": "Как добавить авторизацию S&box Session на свои эндпоинты",
+    "protectStep1": "Перейдите в API Builder и создайте или отредактируйте эндпоинт",
+    "protectStep2": "Установите тип авторизации «S&box Session» — запросы без валидного session_key получат 401",
+    "protectStep3": "Используйте {{player_steam_id}} в SQL для ограничения данных текущего игрока:"
+  }
+}

@@ -17,10 +17,10 @@ import enNodes from './locales/en/nodes.json';
 import enAnalytics from './locales/en/analytics.json';
 import enExplorer from './locales/en/explorer.json';
 import enCron from './locales/en/cron.json';
-import enFlows from './locales/en/flows.json';
 import enPlugins from './locales/en/plugins.json';
 import enDashboards from './locales/en/dashboards.json';
 import enDocs from './locales/en/docs.json';
+import enSboxAuth from './locales/en/sbox-auth.json';
 
 import ruCommon from './locales/ru/common.json';
 import ruAuth from './locales/ru/auth.json';
@@ -37,10 +37,10 @@ import ruNodes from './locales/ru/nodes.json';
 import ruAnalytics from './locales/ru/analytics.json';
 import ruExplorer from './locales/ru/explorer.json';
 import ruCron from './locales/ru/cron.json';
-import ruFlows from './locales/ru/flows.json';
 import ruPlugins from './locales/ru/plugins.json';
 import ruDashboards from './locales/ru/dashboards.json';
 import ruDocs from './locales/ru/docs.json';
+import ruSboxAuth from './locales/ru/sbox-auth.json';
 
 i18n
   .use(LanguageDetector)
@@ -63,10 +63,10 @@ i18n
         analytics: enAnalytics,
         explorer: enExplorer,
         cron: enCron,
-        flows: enFlows,
         plugins: enPlugins,
         dashboards: enDashboards,
         docs: enDocs,
+        'sbox-auth': enSboxAuth,
       },
       ru: {
         common: ruCommon,
@@ -84,15 +84,15 @@ i18n
         analytics: ruAnalytics,
         explorer: ruExplorer,
         cron: ruCron,
-        flows: ruFlows,
         plugins: ruPlugins,
         dashboards: ruDashboards,
         docs: ruDocs,
+        'sbox-auth': ruSboxAuth,
       },
     },
     fallbackLng: 'en',
     defaultNS: 'common',
-    ns: ['common', 'auth', 'dashboard', 'tables', 'data', 'api', 'webhooks', 'sql', 'audit', 'settings', 'system', 'nodes', 'analytics', 'explorer', 'cron', 'flows', 'plugins', 'dashboards', 'docs'],
+    ns: ['common', 'auth', 'dashboard', 'tables', 'data', 'api', 'webhooks', 'sql', 'audit', 'settings', 'system', 'nodes', 'analytics', 'explorer', 'cron', 'plugins', 'dashboards', 'docs', 'sbox-auth'],
     detection: {
       order: ['localStorage', 'navigator'],
       lookupLocalStorage: 'dataforge-lang',

@@ -8,7 +8,6 @@ export interface Backup {
   status: 'pending' | 'running' | 'completed' | 'failed';
   file_path: string | null;
   file_size: number | null;
-  encryption_key_hash: string | null;
   error: string | null;
   metadata: string | null;
   created_by: string | null;
@@ -24,16 +23,26 @@ export interface BackupSchedule {
   is_active: boolean;
   max_backups: number;
   last_run_at: string | null;
-  next_run_at: string | null;
   created_at: string;
+}
+
+export interface BackupStats {
+  count: number;
+  totalSize: number;
+  manualToday: number;
+  manualLimit: number;
+  maxBackups: number;
 }
 
 export const backupsApi = {
   list: (projectId: string) =>
     api.get<{ backups: Backup[] }>(`/projects/${projectId}/backups`),
 
-  create: (projectId: string, tables?: string[]) =>
-    api.post<{ backup: Backup }>(`/projects/${projectId}/backups`, { tables }),
+  stats: (projectId: string) =>
+    api.get<BackupStats>(`/projects/${projectId}/backups/stats`),
+
+  create: (projectId: string) =>
+    api.post<{ backup: Backup }>(`/projects/${projectId}/backups`, {}),
 
   delete: (projectId: string, backupId: string) =>
     api.delete(`/projects/${projectId}/backups/${backupId}`),
@@ -48,7 +57,7 @@ export const backupsApi = {
     const blob = await response.blob();
     const disposition = response.headers.get('Content-Disposition');
     const match = disposition?.match(/filename="(.+)"/);
-    const filename = match?.[1] ?? `backup_${backupId}.json`;
+    const filename = match?.[1] ?? `backup_${backupId}.json.gz`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -66,9 +75,20 @@ export const backupsApi = {
     api.get<{ schedule: BackupSchedule | null }>(`/projects/${projectId}/backups/schedule`),
 
   updateSchedule: (projectId: string, data: {
-    cron_expression?: string;
+    interval?: string;
     is_active?: boolean;
     max_backups?: number;
   }) =>
     api.put<{ schedule: BackupSchedule }>(`/projects/${projectId}/backups/schedule`, data),
+
+  import: async (projectId: string, file: File) => {
+    const buffer = await file.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ''),
+    );
+    return api.post<{ backup: Backup }>(`/projects/${projectId}/backups/import`, {
+      data: base64,
+      filename: file.name,
+    });
+  },
 };

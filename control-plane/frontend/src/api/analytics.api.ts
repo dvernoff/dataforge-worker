@@ -4,6 +4,7 @@ export interface AnalyticsSummary {
   totalRequests: number;
   avgResponseTime: number;
   errorRate: number;
+  uniqueIps: number;
   topEndpoint: string | null;
 }
 
@@ -47,5 +48,20 @@ export const analyticsApi = {
   getSlowQueries: (projectId: string) =>
     api.get<{ requests: RequestLog[] }>(
       `/projects/${projectId}/analytics/slow-queries`
+    ),
+
+  getDailyStats: (projectId: string, days = 7) =>
+    api.get<{ stats: { day: string; total: number; success: number; errors: number }[] }>(
+      `/projects/${projectId}/analytics/daily-stats?days=${days}`
+    ),
+
+  getStatusBreakdown: (projectId: string, days = 7) =>
+    api.get<Record<string, number>>(
+      `/projects/${projectId}/analytics/status-breakdown?days=${days}`
+    ),
+
+  getCacheStats: (projectId: string, days = 7) =>
+    api.get<Record<string, number>>(
+      `/projects/${projectId}/analytics/cache-stats?days=${days}`
     ),
 };

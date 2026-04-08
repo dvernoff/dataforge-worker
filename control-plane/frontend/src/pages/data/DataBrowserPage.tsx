@@ -2,11 +2,10 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, Search, Download, Upload, Trash2, RefreshCw, Wand2, MessageSquare, Clock,
+  Plus, Search, Download, Upload, Trash2, RefreshCw, Wand2, MessageSquare,
   Table2, Columns, Calendar, Image, Pencil, Key,
 } from 'lucide-react';
 import { SeedingDialog } from '@/components/data/SeedingDialog';
-import { TimeTravelPanel } from '@/components/data/TimeTravelPanel';
 import { KanbanView } from '@/components/data/KanbanView';
 import { CalendarView } from '@/components/data/CalendarView';
 import { GalleryView } from '@/components/data/GalleryView';
@@ -80,7 +79,6 @@ export function DataBrowserPage() {
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [seedingOpen, setSeedingOpen] = useState(false);
-  const [timeTravelOpen, setTimeTravelOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'kanban' | 'calendar' | 'gallery'>('table');
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkEditField, setBulkEditField] = useState('');
@@ -419,17 +417,6 @@ export function DataBrowserPage() {
         </Button>
 
 
-        {isFeatureEnabled('feature-time-travel') && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setTimeTravelOpen(!timeTravelOpen)}
-          >
-            <Clock className="h-4 w-4 mr-1" />
-            {t('data:timeTravel.button')}
-          </Button>
-        )}
-
         {selectedIds.size > 0 && (
           <>
             <Button
@@ -477,7 +464,7 @@ export function DataBrowserPage() {
             onClick={() => setViewMode('kanban')}
           >
             <Columns className="h-4 w-4 mr-1" />
-            {t('data:views.kanban')}
+            {t('data:views.kanban.label')}
           </Button>
         )}
         {isFeatureEnabled('feature-calendar') && (
@@ -487,7 +474,7 @@ export function DataBrowserPage() {
             onClick={() => setViewMode('calendar')}
           >
             <Calendar className="h-4 w-4 mr-1" />
-            {t('data:views.calendar')}
+            {t('data:views.calendar.label')}
           </Button>
         )}
         {isFeatureEnabled('feature-gallery') && (
@@ -497,26 +484,19 @@ export function DataBrowserPage() {
             onClick={() => setViewMode('gallery')}
           >
             <Image className="h-4 w-4 mr-1" />
-            {t('data:views.gallery')}
+            {t('data:views.gallery.label')}
           </Button>
         )}
       </div>
 
-      {/* Time Travel Panel */}
-      {timeTravelOpen && project?.id && tableName && (
-        <div className="mb-4">
-          <TimeTravelPanel
-            projectId={project.id}
-            tableName={tableName}
-            columns={columns}
-            onClose={() => setTimeTravelOpen(false)}
-          />
-        </div>
-      )}
-
       {/* Alternative Views */}
       {viewMode === 'kanban' && !isLoading && (
-        <KanbanView rows={rows} columns={columns} />
+        <KanbanView
+          rows={rows}
+          columns={columns}
+          pagination={pagination ? { page, totalPages: pagination.totalPages, total: pagination.total, limit } : undefined}
+          onPageChange={setPage}
+        />
       )}
       {viewMode === 'calendar' && !isLoading && (
         <CalendarView rows={rows} columns={columns} />
@@ -657,8 +637,8 @@ export function DataBrowserPage() {
         </div>
       ) : null}
 
-      {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
+      {/* Pagination (table/calendar/gallery only — kanban has its own) */}
+      {viewMode !== 'kanban' && pagination && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <span className="text-sm text-muted-foreground">
             {t('data:showing', { from: ((page - 1) * limit) + 1, to: Math.min(page * limit, pagination.total), total: pagination.total.toLocaleString() })}

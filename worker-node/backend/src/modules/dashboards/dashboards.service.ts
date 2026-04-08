@@ -50,9 +50,17 @@ export class DashboardsService {
     is_public?: boolean;
     public_slug?: string | null;
   }) {
+    const updateData: Record<string, unknown> = {};
+    if (input.name !== undefined) updateData.name = input.name;
+    if (input.description !== undefined) updateData.description = input.description;
+    if (input.widgets !== undefined) updateData.widgets = JSON.stringify(input.widgets);
+    if (input.layout !== undefined) updateData.layout = JSON.stringify(input.layout);
+    if (input.is_public !== undefined) updateData.is_public = input.is_public;
+    if (input.public_slug !== undefined) updateData.public_slug = input.public_slug;
+
     const [dashboard] = await this.db('custom_dashboards')
       .where({ id: dashboardId, project_id: projectId })
-      .update(input)
+      .update(updateData)
       .returning('*');
     return dashboard;
   }
@@ -79,8 +87,12 @@ export class DashboardsService {
     }
 
     try {
+      const schemaRegex = /^[a-z_][a-z0-9_]*$/;
+      if (!schemaRegex.test(dbSchema)) {
+        return { error: 'Invalid schema name' };
+      }
       const result = await this.db.transaction(async (trx) => {
-        await trx.raw(`SET LOCAL search_path TO ?, 'public'`, [dbSchema]);
+        await trx.raw(`SET LOCAL search_path TO "${dbSchema}"`);
         await trx.raw(`SET LOCAL statement_timeout = ${Math.max(1000, Math.min(timeoutMs, 120000))}`);
         await trx.raw('SET LOCAL transaction_read_only = on');
         return trx.raw(widget.sql!) as any;

@@ -12,7 +12,8 @@
       "key": "service_name",
       "label": "Service Name",
       "type": "string",
-      "required": true,
+      "required": false,
+      "default": "my-game-server",
       "placeholder": "my-game-server",
       "description": "The service/game name for Facepunch token validation"
     },
@@ -20,7 +21,7 @@
       "key": "session_table",
       "label": "Session Table",
       "type": "string",
-      "required": true,
+      "required": false,
       "default": "players",
       "placeholder": "players",
       "description": "Database table to store player sessions"
@@ -29,7 +30,7 @@
       "key": "steam_id_column",
       "label": "Steam ID Column",
       "type": "string",
-      "required": true,
+      "required": false,
       "default": "steam_id",
       "placeholder": "steam_id",
       "description": "Column name for the player's Steam ID"
@@ -38,10 +39,19 @@
       "key": "session_key_column",
       "label": "Session Key Column",
       "type": "string",
-      "required": true,
+      "required": false,
       "default": "session_key",
       "placeholder": "session_key",
       "description": "Column name for the session authentication key"
+    },
+    {
+      "key": "session_ttl_minutes",
+      "label": "Session TTL (minutes)",
+      "type": "number",
+      "required": false,
+      "default": 1440,
+      "placeholder": "1440",
+      "description": "Session lifetime in minutes. 0 = no expiration. Default: 1440 (24 hours)"
     }
   ]
 }

@@ -1,0 +1,80 @@
+{
+  "pageTitle": "S&box Auth",
+  "pluginDisabled": "S&box Auth plugin is not enabled",
+  "pluginDisabledDesc": "Enable the S&box Auth plugin in project settings to manage game player authentication.",
+  "goToPlugins": "Go to Plugins",
+  "tabs": {
+    "dashboard": "Dashboard",
+    "players": "Players",
+    "settings": "Settings",
+    "endpoints": "Endpoints",
+    "docs": "Docs"
+  },
+  "stats": {
+    "totalPlayers": "Total Players",
+    "onlineNow": "Online Now",
+    "newToday": "New Today"
+  },
+  "players": {
+    "steamId": "Steam ID",
+    "lastActive": "Last Active",
+    "createdAt": "Registered",
+    "status": "Status",
+    "online": "Online",
+    "offline": "Offline",
+    "expired": "Expired",
+    "actions": "Actions",
+    "kick": "Kick",
+    "kickAll": "Kick All",
+    "kickAllConfirm": "Are you sure you want to revoke all active sessions?",
+    "kicked": "Player kicked",
+    "kickedAll": "All sessions revoked",
+    "noPlayers": "No active sessions",
+    "noPlayersDesc": "Players will appear here once they log in via S&box.",
+    "profile": "Player Profile",
+    "backToList": "Back to list",
+    "cleanup": "Clean Expired",
+    "cleanupDone": "Cleaned {{count}} expired sessions"
+  },
+  "settings": {
+    "serviceName": "Service Name",
+    "serviceNameDesc": "The service/game name for Facepunch token validation",
+    "sessionTable": "Session Table",
+    "sessionTableDesc": "Database table to store player sessions",
+    "steamIdColumn": "Steam ID Column",
+    "sessionKeyColumn": "Session Key Column",
+    "sessionTtl": "Session TTL (minutes)",
+    "sessionTtlDesc": "Session lifetime in minutes. 0 = no expiration",
+    "saved": "Settings saved",
+    "selectTable": "Select table...",
+    "selectColumn": "Select column...",
+    "tableNotFound": "Table not found or has no columns. Create the table first."
+  },
+  "endpoints": {
+    "title": "Protected Endpoints",
+    "desc": "API endpoints using S&box Session authentication",
+    "noEndpoints": "No endpoints configured",
+    "noEndpointsDesc": "Create an API endpoint with auth type \"S&box Session\" in the API Builder.",
+    "goToBuilder": "Create Endpoint",
+    "createNew": "Create New Endpoint",
+    "method": "Method",
+    "path": "Path",
+    "description": "Description"
+  },
+  "docs": {
+    "howItWorks": "How It Works",
+    "step1": "Player joins your S&box game and the client generates an auth token via Sandbox.Services.Auth.GetToken()",
+    "step2": "Your game sends the token to the /sbox_login endpoint. DataForge validates it with Facepunch API and returns a session_key.",
+    "step3": "Player uses session_key in the x-session-key header for all subsequent API requests to protected endpoints.",
+    "step4": "Protected endpoints automatically verify the session and inject {{player_steam_id}} into SQL queries.",
+    "apiEndpoints": "Auth API Endpoints",
+    "apiEndpointsDesc": "Built-in endpoints for player authentication. These work automatically when the plugin is enabled.",
+    "sboxClient": "S&box Client Code",
+    "sboxClientDesc": "Example C# code to authenticate from your S&box game",
+    "protectEndpoint": "Protecting Your API Endpoints",
+    "protectEndpointDesc": "How to require S&box session auth on your custom endpoints",
+    "protectStep1": "Go to API Builder and create or edit an endpoint",
+    "protectStep2": "Set auth type to \"S&box Session\" — requests without a valid session_key will get 401",
+    "protectStep3": "Use {{player_steam_id}} in your SQL to scope data to the current player:"
+  }
+}

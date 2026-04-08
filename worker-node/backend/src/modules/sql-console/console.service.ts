@@ -13,10 +13,6 @@ export class ConsoleService {
       if (!normalized.startsWith('SELECT') && !normalized.startsWith('EXPLAIN') && !normalized.startsWith('WITH')) {
         throw new AppError(403, 'Your role only allows SELECT queries');
       }
-      const lower = query.toLowerCase();
-      if (lower.includes('pg_catalog') || lower.includes('information_schema') || lower.includes('pg_stat')) {
-        throw new AppError(403, 'Access to system catalogs denied');
-      }
     }
 
     validateSchemaAccess(query, schema);
@@ -24,8 +20,8 @@ export class ConsoleService {
     const start = Date.now();
     try {
       const result = await this.db.transaction(async (trx) => {
-        await trx.raw(`SET LOCAL search_path TO "${schema}"`);
-        await trx.raw(`SET LOCAL statement_timeout = ${Math.max(1000, Math.min(timeoutMs, 120000))}`);
+        await trx.raw(`SET LOCAL search_path TO ?`, [schema]);
+        await trx.raw(`SET LOCAL statement_timeout = ?`, [Math.max(1000, Math.min(timeoutMs, 120000))]);
         return trx.raw(query) as any;
       });
 
@@ -55,7 +51,7 @@ export class ConsoleService {
     const start = Date.now();
     try {
       const result = await this.db.transaction(async (trx) => {
-        await trx.raw(`SET LOCAL search_path TO "${schema}"`);
+        await trx.raw(`SET LOCAL search_path TO ?`, [schema]);
         return trx.raw(`EXPLAIN ANALYZE ${query}`) as any;
       });
 

@@ -2,6 +2,19 @@ import type { Knex } from 'knex';
 import { AppError } from '../../middleware/error-handler.js';
 import { applyFilters, type FilterCondition } from './data.filter.js';
 import { getPaginationMeta } from '../../utils/pagination.js';
+import { WebhookDispatcher } from '../webhooks/dispatcher.js';
+import { WebSocketService } from '../realtime/websocket.service.js';
+import { RLSService } from './rls.service.js';
+import { isModuleEnabled } from '../../utils/module-check.js';
+import { fireDiscordWebhooks } from '../plugins/built-in/discord-webhook/discord-webhook.routes.js';
+import { fireTelegramNotifications } from '../plugins/built-in/telegram-bot/telegram-bot.routes.js';
+
+export interface RLSContext {
+  projectId: string;
+  userId?: string;
+  userRole?: string;
+  headers?: Record<string, string>;
+}
 
 interface QueryParams {
   page: number;
@@ -13,41 +26,93 @@ interface QueryParams {
   searchColumns?: string[];
   include_deleted?: boolean;
   only_deleted?: boolean;
+  rls?: RLSContext;
 }
 
 export class DataService {
-  constructor(private db: Knex) {}
+  private webhookDispatcher: WebhookDispatcher;
+  private columnCache = new Map<string, { columns: { column_name: string; data_type: string }[]; expiry: number }>();
+  private static COLUMN_CACHE_TTL = 300_000;
+
+  constructor(private db: Knex) {
+    this.webhookDispatcher = new WebhookDispatcher(db);
+  }
+
+  private async getColumns(schema: string, tableName: string): Promise<{ column_name: string; data_type: string }[]> {
+    const key = `${schema}.${tableName}`;
+    const cached = this.columnCache.get(key);
+    if (cached && cached.expiry > Date.now()) return cached.columns;
+
+    const result = await this.db.raw(
+      `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position`,
+      [schema, tableName]
+    );
+    const columns = result.rows;
+    this.columnCache.set(key, { columns, expiry: Date.now() + DataService.COLUMN_CACHE_TTL });
+    return columns;
+  }
+
+  invalidateColumnCache(schema: string, tableName: string) {
+    this.columnCache.delete(`${schema}.${tableName}`);
+  }
+
+  private fireWebhooks(projectId: string, tableName: string, event: string, record: Record<string, unknown>) {
+    try {
+      const ws = WebSocketService.getInstance();
+      ws.broadcastDataChange(projectId, tableName, event as 'INSERT' | 'UPDATE' | 'DELETE', record);
+    } catch {}
+
+    Promise.all([
+      isModuleEnabled(this.db, projectId, 'feature-webhooks').then((enabled) => {
+        if (!enabled) return;
+        return this.db('webhooks')
+          .where({ project_id: projectId, is_active: true })
+          .whereRaw('? = ANY(table_names)', [tableName])
+          .whereRaw('? = ANY(events)', [event])
+          .then((webhooks) => {
+            for (const wh of webhooks) {
+              this.webhookDispatcher.dispatch(wh, event, { table: tableName, event, record, timestamp: new Date().toISOString() }).catch(() => {});
+            }
+          });
+      }),
+      fireDiscordWebhooks(this.db, projectId, tableName, event, record),
+      fireTelegramNotifications(this.db, projectId, tableName, event, record),
+    ]).catch(() => {});
+  }
 
   private async hasDeletedAtColumn(schema: string, tableName: string): Promise<boolean> {
-    try {
-      const result = await this.db.raw(
-        `SELECT 1 FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = 'deleted_at'`,
-        [schema, tableName]
-      );
-      return result.rows.length > 0;
-    } catch {
-      return false;
-    }
+    const columns = await this.getColumns(schema, tableName);
+    return columns.some(c => c.column_name === 'deleted_at');
   }
 
   async findAll(schema: string, tableName: string, params: QueryParams) {
-    const baseQuery = this.db(`${schema}.${tableName}`);
+    const columns = await this.getColumns(schema, tableName);
+    const columnNames = columns.map(c => c.column_name);
+    const hasDeletedAt = columnNames.includes('deleted_at');
 
+    const baseQuery = this.db(`${schema}.${tableName}`);
     let query = baseQuery.clone();
 
-    try {
-      const hasDeletedAt = await this.db.raw(
-        `SELECT 1 FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = 'deleted_at'`,
-        [schema, tableName]
-      );
-      if (hasDeletedAt.rows.length > 0) {
-        if (params.only_deleted) {
-          query = query.whereNotNull('deleted_at');
-        } else if (!params.include_deleted) {
-          query = query.whereNull('deleted_at');
+    if (hasDeletedAt) {
+      if (params.only_deleted) {
+        query = query.whereNotNull('deleted_at');
+      } else if (!params.include_deleted) {
+        query = query.whereNull('deleted_at');
+      }
+    }
+
+    if (params.rls) {
+      const rlsService = new RLSService(this.db);
+      const rlsContext: Record<string, string> = {};
+      if (params.rls.userId) rlsContext.userId = params.rls.userId;
+      if (params.rls.userRole) rlsContext.userRole = params.rls.userRole;
+      if (params.rls.headers) {
+        for (const [k, v] of Object.entries(params.rls.headers)) {
+          rlsContext[`header_${k}`] = v;
         }
       }
-    } catch {}
+      await rlsService.applyRLS(query, params.rls.projectId, tableName, rlsContext);
+    }
 
     if (params.filters && params.filters.length > 0) {
       query = applyFilters(query, params.filters);
@@ -63,15 +128,9 @@ export class DataService {
         ]);
         const SKIP_COLUMNS = new Set(['id', 'created_at', 'updated_at', 'deleted_at']);
 
-        const colsResult = await this.db.raw(
-          `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = ? AND table_name = ?`,
-          [schema, tableName]
-        );
-        searchCols = colsResult.rows
-          .filter((r: { column_name: string; data_type: string }) =>
-            SEARCHABLE_TYPES.has(r.data_type) && !SKIP_COLUMNS.has(r.column_name)
-          )
-          .map((r: { column_name: string }) => r.column_name);
+        searchCols = columns
+          .filter(r => SEARCHABLE_TYPES.has(r.data_type) && !SKIP_COLUMNS.has(r.column_name))
+          .map(r => r.column_name);
       }
 
       if (searchCols.length > 0) {
@@ -84,28 +143,23 @@ export class DataService {
       }
     }
 
-    const countQuery = query.clone();
-    const [{ count }] = await countQuery.count('* as count');
-    const total = Number(count);
-
-    const sortField = params.sort ?? 'created_at';
-    const columnsResult = await this.db.raw(
-      `SELECT column_name FROM information_schema.columns WHERE table_schema = ? AND table_name = ?`,
-      [schema, tableName]
-    );
-    const validColumns = columnsResult.rows.map((r: { column_name: string }) => r.column_name);
-    if (!validColumns.includes(sortField)) {
-      throw new AppError(400, 'Invalid sort field');
+    const sortField = params.sort ?? (columnNames.includes('created_at') ? 'created_at' : columnNames[0]);
+    if (sortField && columnNames.includes(sortField)) {
+      query = query.orderBy(sortField, params.order);
     }
-    query = query.orderBy(sortField, params.order);
 
     const offset = (params.page - 1) * params.limit;
-    query = query.offset(offset).limit(params.limit);
+    query = query.select(this.db.raw('*, COUNT(*) OVER() as _total_count')).offset(offset).limit(params.limit);
 
     const rows = await query;
+    const total = rows.length > 0 ? Number(rows[0]._total_count) : 0;
+    const data = rows.map((r: Record<string, unknown>) => {
+      const { _total_count, ...rest } = r;
+      return rest;
+    });
 
     return {
-      data: rows,
+      data,
       pagination: getPaginationMeta(params.page, params.limit, total),
     };
   }
@@ -122,12 +176,13 @@ export class DataService {
     return row;
   }
 
-  async create(schema: string, tableName: string, data: Record<string, unknown>) {
+  async create(schema: string, tableName: string, data: Record<string, unknown>, projectId?: string) {
     const [row] = await this.db(`${schema}.${tableName}`).insert(data).returning('*');
+    if (projectId) this.fireWebhooks(projectId, tableName, 'INSERT', row);
     return row;
   }
 
-  async update(schema: string, tableName: string, id: string, data: Record<string, unknown>) {
+  async update(schema: string, tableName: string, id: string, data: Record<string, unknown>, projectId?: string) {
     const { id: _id, created_at: _ca, updated_at: _ua, ...updateData } = data;
 
     const [row] = await this.db(`${schema}.${tableName}`)
@@ -138,6 +193,7 @@ export class DataService {
     if (!row) {
       throw new AppError(404, 'Record not found');
     }
+    if (projectId) this.fireWebhooks(projectId, tableName, 'UPDATE', row);
     return row;
   }
 
@@ -153,7 +209,7 @@ export class DataService {
     return row;
   }
 
-  async delete(schema: string, tableName: string, id: string) {
+  async delete(schema: string, tableName: string, id: string, projectId?: string) {
     const hasSoftDelete = await this.hasDeletedAtColumn(schema, tableName);
     if (hasSoftDelete) {
       const [row] = await this.db(`${schema}.${tableName}`)
@@ -161,9 +217,12 @@ export class DataService {
         .update({ deleted_at: this.db.fn.now() })
         .returning('*');
       if (!row) throw new AppError(404, 'Record not found');
+      if (projectId) this.fireWebhooks(projectId, tableName, 'DELETE', row);
     } else {
-      const deleted = await this.db(`${schema}.${tableName}`).where({ id }).delete();
-      if (!deleted) throw new AppError(404, 'Record not found');
+      const record = await this.db(`${schema}.${tableName}`).where({ id }).first();
+      if (!record) throw new AppError(404, 'Record not found');
+      await this.db(`${schema}.${tableName}`).where({ id }).delete();
+      if (projectId) this.fireWebhooks(projectId, tableName, 'DELETE', record);
     }
   }
 
@@ -193,6 +252,20 @@ export class DataService {
     return row;
   }
 
+  async bulkInsertWithWebhooks(schema: string, tableName: string, records: Record<string, unknown>[], projectId: string) {
+    const batchSize = 500;
+    let inserted = 0;
+    for (let i = 0; i < records.length; i += batchSize) {
+      const batch = records.slice(i, i + batchSize);
+      const rows = await this.db(`${schema}.${tableName}`).insert(batch).returning('*');
+      inserted += rows.length;
+      for (const row of rows) {
+        this.fireWebhooks(projectId, tableName, 'INSERT', row);
+      }
+    }
+    return inserted;
+  }
+
   async permanentDelete(schema: string, tableName: string, id: string) {
     const deleted = await this.db(`${schema}.${tableName}`).where({ id }).delete();
     if (!deleted) {
@@ -217,13 +290,18 @@ export class DataService {
       try {
         await this.db(`${schema}.${tableName}`).insert(batch);
         inserted += batch.length;
-      } catch (err) {
-        for (let j = 0; j < batch.length; j++) {
-          try {
-            await this.db(`${schema}.${tableName}`).insert(batch[j]);
-            inserted++;
-          } catch (e) {
-            errors.push({ index: i + j, error: (e as Error).message });
+      } catch {
+        const results = await Promise.allSettled(
+          batch.map((record, j) =>
+            this.db(`${schema}.${tableName}`).insert(record)
+              .then(() => ({ index: i + j, ok: true as const }))
+              .catch((e: Error) => ({ index: i + j, ok: false as const, error: e.message }))
+          )
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            if (r.value.ok) inserted++;
+            else errors.push({ index: r.value.index, error: r.value.error });
           }
         }
       }
@@ -237,9 +315,8 @@ export class DataService {
     if (filters && filters.length > 0) {
       query = applyFilters(query, filters);
     }
-    if (maxRows && maxRows > 0) {
-      query = query.limit(maxRows);
-    }
+    const safeLimit = maxRows && maxRows > 0 ? maxRows : 10000;
+    query = query.limit(safeLimit);
     return query.orderBy('created_at', 'desc');
   }
 

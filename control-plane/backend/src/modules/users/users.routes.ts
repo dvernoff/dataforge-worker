@@ -212,10 +212,21 @@ export async function usersRoutes(app: FastifyInstance) {
     const user = await app.db('users').where({ id: userId }).select('id', 'email', 'name').first();
     if (!user) throw new AppError(404, 'User not found');
 
-    // Remove from project_members first
+    const cleanupTables = [
+      'project_members', 'api_tokens', 'refresh_tokens', 'audit_logs',
+    ];
+    for (const table of cleanupTables) {
+      try { await app.db(table).where({ user_id: userId }).del(); } catch {}
+    }
+
     try {
-      await app.db('project_members').where({ user_id: userId }).del();
-    } catch { /* table may not exist */ }
+      let cursor = '0';
+      do {
+        const [next, keys] = await app.redis.scan(cursor, 'MATCH', `rbac:${userId}:*`, 'COUNT', 200);
+        cursor = next;
+        if (keys.length) await app.redis.del(...keys);
+      } while (cursor !== '0');
+    } catch {}
 
     await app.db('users').where({ id: userId }).del();
 

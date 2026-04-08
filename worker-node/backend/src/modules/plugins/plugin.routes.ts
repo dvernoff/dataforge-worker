@@ -12,6 +12,25 @@ export async function pluginRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('editor'));
 
+  app.get('/:projectId/plugins/features', async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    const DEFAULT_FEATURES = ['feature-cron', 'feature-backups', 'feature-analytics'];
+    const rows = await app.db('plugin_instances')
+      .where({ project_id: projectId })
+      .select('plugin_id', 'is_enabled');
+    const explicitlyEnabled = new Set<string>();
+    const explicitlyDisabled = new Set<string>();
+    for (const r of rows as { plugin_id: string; is_enabled: boolean }[]) {
+      if (r.is_enabled) explicitlyEnabled.add(r.plugin_id);
+      else explicitlyDisabled.add(r.plugin_id);
+    }
+    const features = new Set(explicitlyEnabled);
+    for (const def of DEFAULT_FEATURES) {
+      if (!explicitlyDisabled.has(def)) features.add(def);
+    }
+    return { features: [...features] };
+  });
+
   app.get('/:projectId/plugins', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const plugins = await pluginManager.listPluginsWithStatus(projectId);

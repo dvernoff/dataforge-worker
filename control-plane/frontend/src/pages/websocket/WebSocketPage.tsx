@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Copy, Radio, Users, ArrowUpDown, Save, Key } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ import { useCurrentProject } from '@/hooks/useProject';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { toast } from 'sonner';
 import { schemaApi } from '@/api/schema.api';
+import { api } from '@/api/client';
 
 interface TableSubscription {
   table: string;
@@ -33,26 +34,32 @@ export function WebSocketPage() {
     enabled: !!project?.id,
   });
 
+  const { data: wsStats } = useQuery({
+    queryKey: ['ws-stats', project?.id],
+    queryFn: () => api.get<{ connectedClients: number; messagesSent: number; messagesReceived: number }>(`/projects/${project!.id}/ws-stats`),
+    enabled: !!project?.id,
+    refetchInterval: 10_000,
+  });
+
   const tables = tablesData?.tables ?? [];
 
+  const storageKey = project?.id ? `df-ws-subs:${project.id}` : '';
   const [subscriptions, setSubscriptions] = useState<TableSubscription[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-  // Initialize subscriptions when tables load
-  const initSubscriptions = () => {
-    if (tables.length > 0 && subscriptions.length === 0) {
-      setSubscriptions(
-        tables.map((t) => ({
-          table: t.name,
-          insert: false,
-          update: false,
-          delete: false,
-        }))
-      );
-    }
-  };
-  if (tables.length > 0 && subscriptions.length === 0) {
-    initSubscriptions();
-  }
+  useEffect(() => {
+    if (!storageKey || !tables.length) return;
+    if (loaded) return;
+    let saved: TableSubscription[] = [];
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) saved = JSON.parse(raw);
+    } catch {}
+    const savedMap = new Map(saved.map((s) => [s.table, s]));
+    const merged = tables.map((t) => savedMap.get(t.name) ?? { table: t.name, insert: false, update: false, delete: false });
+    setSubscriptions(merged);
+    setLoaded(true);
+  }, [storageKey, tables, loaded]);
 
   const toggleEvent = (tableName: string, event: 'insert' | 'update' | 'delete') => {
     setSubscriptions((prev) =>
@@ -75,6 +82,9 @@ export function WebSocketPage() {
   };
 
   const handleSave = () => {
+    if (storageKey) {
+      localStorage.setItem(storageKey, JSON.stringify(subscriptions));
+    }
     toast.success(t('api:websocket.subscriptionsSaved'));
   };
 
@@ -146,34 +156,34 @@ ws.onclose = () => {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card>
-          <CardContent className="pt-6">
+          <CardContent>
             <div className="flex items-center gap-3">
               <Users className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">{t('api:websocket.connectedClients')}</p>
-                <p className="text-2xl font-bold">0</p>
+                <p className="text-2xl font-bold">{wsStats?.connectedClients ?? 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent>
             <div className="flex items-center gap-3">
               <ArrowUpDown className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">{t('api:websocket.messagesSent')}</p>
-                <p className="text-2xl font-bold">0</p>
+                <p className="text-2xl font-bold">{wsStats?.messagesSent ?? 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
+          <CardContent>
             <div className="flex items-center gap-3">
               <ArrowUpDown className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">{t('api:websocket.messagesReceived')}</p>
-                <p className="text-2xl font-bold">0</p>
+                <p className="text-2xl font-bold">{wsStats?.messagesReceived ?? 0}</p>
               </div>
             </div>
           </CardContent>

@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 import { AppError } from '../../middleware/error-handler.js';
-import { validateSchemaAccess } from '../../utils/sql-guard.js';
+import { validateSchemaAccess, validateIdentifier, validateSchema } from '../../utils/sql-guard.js';
+import { RLSService } from '../data/rls.service.js';
 
 interface ResponseFieldConfig {
   enabled: boolean;
@@ -21,8 +22,16 @@ interface EndpointDef {
 
 const SYSTEM_COLUMNS = new Set(['id', 'created_at', 'updated_at', 'deleted_at']);
 
+export type MutationHook = (event: 'INSERT' | 'UPDATE' | 'DELETE', tableName: string, record: Record<string, unknown>) => void;
+
 export class Executor {
+  private onMutation?: MutationHook;
+
   constructor(private db: Knex) {}
+
+  setMutationHook(hook: MutationHook) {
+    this.onMutation = hook;
+  }
 
   async execute(
     endpoint: EndpointDef,
@@ -31,6 +40,7 @@ export class Executor {
     query: Record<string, string>,
     body: Record<string, unknown> | null,
     timeoutMs = 30_000,
+    projectId?: string,
   ) {
     if (body && endpoint.validation_schema) {
       this.validateBody(body, endpoint.validation_schema);
@@ -40,7 +50,7 @@ export class Executor {
 
     switch (endpoint.source_type) {
       case 'table':
-        result = await this.executeTable(endpoint, schema, params, query, body);
+        result = await this.executeTable(endpoint, schema, params, query, body, projectId);
         break;
       case 'custom_sql':
         result = await this.executeSQL(endpoint, schema, params, query, body, timeoutMs);
@@ -203,9 +213,12 @@ export class Executor {
     params: Record<string, string>,
     query: Record<string, string>,
     body: Record<string, unknown> | null,
+    projectId?: string,
   ) {
     const config = endpoint.source_config;
     const tableName = config.table as string;
+    validateSchema(schema);
+    validateIdentifier(tableName, 'table name');
     const rawOp = config.operation as string;
     const fullTable = `${schema}.${tableName}`;
 
@@ -226,6 +239,12 @@ export class Executor {
 
         const q = this.db(fullTable);
         const countQ = this.db(fullTable);
+
+        if (projectId) {
+          const rlsService = new RLSService(this.db);
+          await rlsService.applyRLS(q, projectId, tableName, {});
+          await rlsService.applyRLS(countQ, projectId, tableName, {});
+        }
 
         this.applyFilters(q, query);
         this.applyFilters(countQ, query);
@@ -257,7 +276,12 @@ export class Executor {
         }
         const value = params[searchColumn] ?? query[searchColumn] ?? params.id ?? query.id;
         if (!value) throw new AppError(400, `${searchColumn} required`);
-        const record = await this.db(fullTable).where(searchColumn, value).first();
+        const findOneQ = this.db(fullTable).where(searchColumn, value);
+        if (projectId) {
+          const rlsService = new RLSService(this.db);
+          await rlsService.applyRLS(findOneQ, projectId, tableName, {});
+        }
+        const record = await findOneQ.first();
         if (!record) throw new AppError(404, 'Record not found');
         result = record;
         break;
@@ -270,6 +294,7 @@ export class Executor {
           throw new AppError(400, 'Request body must contain at least one field');
         }
         const [record] = await this.db(fullTable).insert(cleanBody).returning('*');
+        if (this.onMutation) this.onMutation('INSERT', tableName, record);
         result = record;
         break;
       }
@@ -284,6 +309,7 @@ export class Executor {
         }
         const [record] = await this.db(fullTable).where({ id }).update(updateData).returning('*');
         if (!record) throw new AppError(404, 'Record not found');
+        if (this.onMutation) this.onMutation('UPDATE', tableName, record);
         result = record;
         break;
       }
@@ -291,8 +317,10 @@ export class Executor {
       case 'delete': {
         const id = params.id ?? query.id;
         if (!id) throw new AppError(400, 'ID required');
-        const deleted = await this.db(fullTable).where({ id }).delete();
-        if (!deleted) throw new AppError(404, 'Record not found');
+        const existing = await this.db(fullTable).where({ id }).first();
+        if (!existing) throw new AppError(404, 'Record not found');
+        await this.db(fullTable).where({ id }).delete();
+        if (this.onMutation) this.onMutation('DELETE', tableName, existing);
         result = { deleted: true };
         break;
       }
@@ -337,7 +365,7 @@ export class Executor {
     const clamped = Math.max(1000, Math.min(timeoutMs, 120_000));
     const result = await this.db.transaction(async (trx) => {
       await trx.raw(`SET LOCAL statement_timeout = ${clamped}`);
-      await trx.raw(`SET LOCAL search_path TO ?, 'public'`, [schema]);
+      await trx.raw(`SET LOCAL search_path TO ?`, [schema]);
       return trx.raw(parameterizedSql, paramValues as any[]) as any;
     });
 

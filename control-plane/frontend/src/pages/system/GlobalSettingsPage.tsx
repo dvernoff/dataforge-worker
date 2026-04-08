@@ -52,10 +52,9 @@ export function GlobalSettingsPage() {
   const [enableAlerts, setEnableAlerts] = useState(false);
 
   // Data Retention
-  const [auditRetentionDays, setAuditRetentionDays] = useState(90);
+  const [auditRetentionDays, setAuditRetentionDays] = useState(30);
   const [requestRetentionDays, setRequestRetentionDays] = useState(30);
-  const [timeTravelDays, setTimeTravelDays] = useState(7);
-
+  const [backupRetentionDays, setBackupRetentionDays] = useState(14);
   // Maintenance Mode
   const [maintenanceMode, setMaintenanceMode] = useState(false);
 
@@ -84,7 +83,9 @@ export function GlobalSettingsPage() {
       setRequireInvite(s.require_invite !== 'false');
       setDefaultRole(s.default_role ?? '');
       setMaxUsersLimit(Number(s.max_users ?? '0'));
-      setTimeTravelDays(Number(s.time_travel_days ?? '7'));
+      if (s.audit_retention_days) setAuditRetentionDays(Number(s.audit_retention_days));
+      if (s.request_retention_days) setRequestRetentionDays(Number(s.request_retention_days));
+      if (s.backup_retention_days) setBackupRetentionDays(Number(s.backup_retention_days));
     }
   }, [systemSettings]);
 
@@ -354,20 +355,24 @@ export function GlobalSettingsPage() {
             <CardTitle>{t('globalSettings.dataRetention.title')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t('globalSettings.dataRetention.description')}</p>
             <div className="space-y-2">
               <Label htmlFor="audit-retention">{t('globalSettings.dataRetention.auditRetention')}</Label>
-              <Input id="audit-retention" type="number" min={1} value={auditRetentionDays} onChange={(e) => setAuditRetentionDays(Number(e.target.value))} />
+              <Input id="audit-retention" type="number" min={1} max={365} value={auditRetentionDays} onChange={(e) => setAuditRetentionDays(Number(e.target.value))} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="request-retention">{t('globalSettings.dataRetention.requestRetention')}</Label>
-              <Input id="request-retention" type="number" min={1} value={requestRetentionDays} onChange={(e) => setRequestRetentionDays(Number(e.target.value))} />
+              <Input id="request-retention" type="number" min={1} max={365} value={requestRetentionDays} onChange={(e) => setRequestRetentionDays(Number(e.target.value))} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="time-travel-days">{t('globalSettings.dataRetention.timeTravelDays')}</Label>
-              <p className="text-sm text-muted-foreground">{t('globalSettings.dataRetention.timeTravelDaysDesc')}</p>
-              <Input id="time-travel-days" type="number" min={1} max={90} value={timeTravelDays} onChange={(e) => setTimeTravelDays(Number(e.target.value))} />
+              <Label htmlFor="backup-retention">{t('globalSettings.dataRetention.backupRetention')}</Label>
+              <Input id="backup-retention" type="number" min={1} max={365} value={backupRetentionDays} onChange={(e) => setBackupRetentionDays(Number(e.target.value))} />
             </div>
-            <Button type="button" onClick={() => saveSettingsMutation.mutate({ time_travel_days: String(timeTravelDays) })}>
+            <Button onClick={() => saveSettingsMutation.mutate({
+              audit_retention_days: String(auditRetentionDays),
+              request_retention_days: String(requestRetentionDays),
+              backup_retention_days: String(backupRetentionDays),
+            })}>
               {t('globalSettings.save')}
             </Button>
           </CardContent>

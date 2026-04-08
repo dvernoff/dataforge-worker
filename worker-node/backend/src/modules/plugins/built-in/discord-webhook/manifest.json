@@ -5,13 +5,5 @@
   "version": "1.0.0",
   "runtime": "worker",
   "icon": "message-circle",
-  "settings": [
-    {
-      "key": "webhook_url",
-      "label": "Webhook URL",
-      "type": "password",
-      "required": true,
-      "placeholder": "https://discord.com/api/webhooks/..."
-    }
-  ]
+  "settings": []
 }

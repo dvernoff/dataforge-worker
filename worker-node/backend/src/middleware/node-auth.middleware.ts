@@ -1,6 +1,9 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { env } from '../config/env.js';
 
+const projectCache = new Map<string, { db_schema: string; expiry: number }>();
+const PROJECT_CACHE_TTL = 300_000;
+
 export async function nodeAuthMiddleware(request: FastifyRequest, reply: FastifyReply) {
   const apiKey = request.headers['x-node-api-key'] as string;
   if (!apiKey || apiKey !== env.NODE_API_KEY) {
@@ -34,11 +37,21 @@ export async function nodeAuthMiddleware(request: FastifyRequest, reply: Fastify
   }
 
   if (projectId) {
-    const db = request.server.db;
-    const project = await db('projects').where({ id: projectId }).select('id', 'db_schema').first();
-    if (!project) {
-      return reply.status(404).send({ error: 'Project not found on this worker' });
+    const cached = projectCache.get(projectId);
+    if (cached && cached.expiry > Date.now()) {
+      request.projectSchema = cached.db_schema;
+    } else {
+      const db = request.server.db;
+      const project = await db('projects').where({ id: projectId }).select('id', 'db_schema').first();
+      if (!project) {
+        return reply.status(404).send({ error: 'Project not found on this worker' });
+      }
+      request.projectSchema = project.db_schema;
+      projectCache.set(projectId, { db_schema: project.db_schema, expiry: Date.now() + PROJECT_CACHE_TTL });
     }
-    request.projectSchema = project.db_schema;
   }
+}
+
+export function invalidateProjectCache(projectId: string) {
+  projectCache.delete(projectId);
 }

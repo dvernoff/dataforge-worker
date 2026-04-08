@@ -22,28 +22,30 @@ export async function webhookRoutes(app: FastifyInstance) {
     return { webhook };
   });
 
+  const webhookSchema = z.object({
+    name: z.string().max(255).optional(),
+    table_names: z.array(z.string().min(1)).min(1),
+    events: z.array(z.enum(['INSERT', 'UPDATE', 'DELETE'])).min(1),
+    url: z.string().url().max(2000),
+    method: z.enum(['POST', 'PUT', 'PATCH']).optional(),
+    headers: z.record(z.string()).optional(),
+    payload_template: z.record(z.unknown()).optional(),
+    secret: z.string().max(255).optional(),
+    retry_count: z.number().int().min(0).max(10).optional(),
+    is_active: z.boolean().optional(),
+  });
+
   app.post('/:projectId/webhooks', async (request) => {
     const { projectId } = request.params as { projectId: string };
     const userId = request.userId;
-    const body = z.object({
-      name: z.string().max(255).optional(),
-      table_name: z.string().min(1),
-      events: z.array(z.enum(['INSERT', 'UPDATE', 'DELETE'])).min(1),
-      url: z.string().url().max(2000),
-      method: z.enum(['POST', 'PUT', 'PATCH']).optional(),
-      headers: z.record(z.string()).optional(),
-      payload_template: z.record(z.unknown()).optional(),
-      secret: z.string().max(255).optional(),
-      retry_count: z.number().int().min(0).max(10).optional(),
-      is_active: z.boolean().optional(),
-    }).parse(request.body);
+    const body = webhookSchema.parse(request.body);
     const webhook = await webhooksService.create(projectId, userId, body);
     return { webhook };
   });
 
   app.put('/:projectId/webhooks/:webhookId', async (request) => {
     const { projectId, webhookId } = request.params as { projectId: string; webhookId: string };
-    const body = request.body as Record<string, unknown>;
+    const body = webhookSchema.partial().parse(request.body);
     const webhook = await webhooksService.update(webhookId, projectId, body);
     return { webhook };
   });

@@ -5,11 +5,10 @@ import { requireRole } from '../../middleware/rbac.middleware.js';
 import * as fs from 'fs';
 
 export async function backupsRoutes(app: FastifyInstance) {
-  const backupsService = new BackupsService(app.db);
+  const backupsService = new BackupsService(app.db, app.redis);
 
   app.addHook('preHandler', authMiddleware);
 
-  // GET /api/projects/:projectId/backups — list backups
   app.get('/:projectId/backups', {
     preHandler: [requireRole('viewer')],
   }, async (request) => {
@@ -18,17 +17,32 @@ export async function backupsRoutes(app: FastifyInstance) {
     return { backups };
   });
 
-  // POST /api/projects/:projectId/backups — trigger backup (admin)
-  app.post('/:projectId/backups', {
-    preHandler: [requireRole('admin')],
+  app.get('/:projectId/backups/stats', {
+    preHandler: [requireRole('viewer')],
   }, async (request) => {
     const { projectId } = request.params as { projectId: string };
-    const { tables } = (request.body as { tables?: string[] }) ?? {};
-    const backup = await backupsService.createBackup(projectId, request.user.id, tables);
-    return { backup };
+    return backupsService.getStats(projectId);
   });
 
-  // GET /api/projects/:projectId/backups/:backupId/download — download backup file
+  app.post('/:projectId/backups', {
+    preHandler: [requireRole('admin')],
+  }, async (request, reply) => {
+    const { projectId } = request.params as { projectId: string };
+    try {
+      const backup = await backupsService.createBackup(projectId, request.user.id, 'manual');
+      const schedule = await backupsService.getSchedule(projectId);
+      if (schedule?.max_backups) {
+        await backupsService.rotateBackups(projectId, schedule.max_backups);
+      }
+      return { backup };
+    } catch (err: any) {
+      if (err.message?.includes('limit reached')) {
+        return reply.status(429).send({ error: err.message });
+      }
+      throw err;
+    }
+  });
+
   app.get('/:projectId/backups/:backupId/download', {
     preHandler: [requireRole('admin')],
   }, async (request, reply) => {
@@ -36,22 +50,33 @@ export async function backupsRoutes(app: FastifyInstance) {
     const { filePath, filename } = await backupsService.getBackupFilePath(backupId, projectId);
 
     const stream = fs.createReadStream(filePath);
+    const contentType = filename.endsWith('.gz') ? 'application/gzip' : 'application/json';
     return reply
       .header('Content-Disposition', `attachment; filename="${filename}"`)
-      .header('Content-Type', 'application/json')
+      .header('Content-Type', contentType)
       .send(stream);
   });
 
-  // POST /api/projects/:projectId/backups/:backupId/restore — restore from backup (admin)
   app.post('/:projectId/backups/:backupId/restore', {
     preHandler: [requireRole('admin')],
   }, async (request) => {
     const { projectId, backupId } = request.params as { projectId: string; backupId: string };
-    const result = await backupsService.restoreBackup(backupId, projectId);
-    return result;
+    return backupsService.restoreBackup(backupId, projectId);
   });
 
-  // DELETE /api/projects/:projectId/backups/:backupId — delete (admin)
+  // Import backup from uploaded file (100MB limit)
+  app.post('/:projectId/backups/import', {
+    preHandler: [requireRole('admin')],
+    config: { rawBody: false },
+    bodyLimit: 100 * 1024 * 1024,
+  }, async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    const body = request.body as { data: string; filename?: string };
+    if (!body.data) throw new Error('Missing backup data');
+    const backup = await backupsService.importBackup(projectId, request.user.id, body.data, body.filename);
+    return { backup };
+  });
+
   app.delete('/:projectId/backups/:backupId', {
     preHandler: [requireRole('admin')],
   }, async (request, reply) => {
@@ -60,7 +85,6 @@ export async function backupsRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  // GET /api/projects/:projectId/backups/schedule — get schedule
   app.get('/:projectId/backups/schedule', {
     preHandler: [requireRole('viewer')],
   }, async (request) => {
@@ -69,13 +93,12 @@ export async function backupsRoutes(app: FastifyInstance) {
     return { schedule };
   });
 
-  // PUT /api/projects/:projectId/backups/schedule — update schedule (admin)
   app.put('/:projectId/backups/schedule', {
     preHandler: [requireRole('admin')],
   }, async (request) => {
     const { projectId } = request.params as { projectId: string };
     const body = request.body as {
-      cron_expression?: string;
+      interval?: string;
       is_active?: boolean;
       max_backups?: number;
     };

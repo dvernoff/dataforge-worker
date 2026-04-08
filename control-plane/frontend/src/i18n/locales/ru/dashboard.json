@@ -4,27 +4,51 @@
     "tables": "Таблицы",
     "records": "Записей",
     "endpoints": "API Эндпоинты",
-    "webhooks": "Вебхуки",
+    "apiToday": "API вызовов сегодня",
     "tablesTotal": "{{count}} всего",
     "noTables": "Пока нет",
     "acrossTables": "По {{count}} таблицам",
-    "active": "{{count}} активных"
+    "active": "{{count}} активных",
+    "avgResponse": "Среднее {{ms}}мс",
+    "noRequests": "Нет запросов"
   },
   "charts": {
     "apiRequests": "API запросы (7 дней)",
-    "cacheRatio": "Соотношение Cache Hit/Miss"
+    "statusBreakdown": "Статусы ответов",
+    "cacheRatio": "Cache Hit/Miss",
+    "statusBtn": "Статусы",
+    "cacheBtn": "Hit/Miss",
+    "requests": "Запросы"
   },
   "recentActivity": "Последние действия",
   "noActivity": "Нет активности",
-  "activeWebhooks": "Активные вебхуки",
-  "noWebhooks": "Вебхуки не настроены",
-  "cacheHit": "Cache HIT: {{count}} ({{percentage}}%)",
-  "cacheMiss": "Cache MISS: {{count}} ({{percentage}}%)",
+  "recentApiCalls": "Последние API вызовы",
+  "noApiCalls": "Нет API вызовов",
   "noDataYet": "Нет данных",
-  "aiUsage": {
-    "title": "Использование ИИ",
-    "monthlySpend": "За этот месяц",
-    "requests": "запросов",
-    "budget": "Бюджет"
+  "placeholderHint": "Демо-данные \u2014 реальная статистика появится после API активности",
+  "activity": {
+    "verbs": {
+      "create": "Создал",
+      "update": "Обновил",
+      "delete": "Удалил",
+      "toggle": "Переключил",
+      "login": "Вошёл",
+      "logout": "Вышел",
+      "register": "Зарегистрировался"
+    },
+    "resources": {
+      "tables": "таблицу",
+      "endpoints": "эндпоинт",
+      "webhooks": "вебхук",
+      "cron": "крон-задачу",
+      "files": "файл",
+      "backups": "бэкап",
+      "token": "API-токен",
+      "auth": "сессию",
+      "plan": "план",
+      "node": "ноду",
+      "user": "пользователя",
+      "project": "проект"
+    }
   }
 }

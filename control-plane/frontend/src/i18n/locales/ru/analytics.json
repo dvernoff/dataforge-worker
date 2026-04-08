@@ -4,6 +4,7 @@
   "avgResponseTime": "Среднее время ответа",
   "errorRate": "Процент ошибок",
   "uniqueIps": "Уникальных IP",
+  "last7days": "За 7 дней",
   "ms": "{{value}}мс",
   "percent": "{{value}}%",
   "requestVolume": "Объём запросов (7 дней)",

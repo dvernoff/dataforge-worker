@@ -110,17 +110,18 @@
     "analytics": "Analytics",
     "queryBuilder": "Query Builder",
     "cron": "Cron Jobs",
-    "flows": "Flows",
     "plugins": "Plugins",
-    "secrets": "Secrets",
     "dashboards": "Dashboards",
     "docs": "Documentation",
     "profile": "Profile",
     "roles": "Roles",
     "dbMap": "DB Map",
     "apiPlayground": "API Playground",
-    "pipelines": "Pipelines",
     "websocket": "WebSocket",
+    "discord": "Discord",
+    "telegram": "Telegram",
+    "uptimeMonitor": "Monitoring",
+    "sboxAuth": "S&box Auth",
     "myNodes": "My Nodes",
     "myProjects": "Projects",
     "personalNodes": "Personal Nodes",
@@ -194,6 +195,23 @@
       "projectsCount": "{{count}}/{{max}} projects",
       "noNodes": "No worker nodes available",
       "noNodesDesc": "Add a worker node in the Nodes section before creating a project."
+    },
+    "disclaimer": {
+      "title": "Important Information",
+      "subtitle": "Please read before creating your project on a shared node.",
+      "quotas": {
+        "title": "Resource Limits Apply",
+        "desc": "Your project will have quotas on tables, records, storage, API calls, and other resources. Limits depend on the assigned plan and can be viewed in project settings."
+      },
+      "data": {
+        "title": "Shared Infrastructure",
+        "desc": "This project will run on shared infrastructure. We do not guarantee the safety or persistence of your data. For production workloads, use your own dedicated node."
+      },
+      "ownNode": {
+        "title": "Want full control?",
+        "desc": "Connect your own worker node for unlimited resources, full data ownership, and guaranteed isolation. Set it up in Settings > My Nodes."
+      },
+      "accept": "I understand, create project"
     }
   },
   "notFound": {
@@ -234,6 +252,21 @@
     "passwordChanged": "Password changed successfully",
     "twoFactorAuth": "Two-Factor Authentication",
     "twoFactorStatus": "Manage your 2FA settings from the Security page in project settings.",
+    "twofa": {
+      "title": "Two-Factor Authentication",
+      "enabled": "2FA Enabled",
+      "disabled": "2FA Not Enabled",
+      "enable": "Enable 2FA",
+      "disable": "Disable 2FA",
+      "scanQr": "Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)",
+      "backupCodes": "Backup Codes",
+      "backupDesc": "Save these codes in a safe place. Each can be used once.",
+      "enterCode": "Enter verification code",
+      "confirmPassword": "Confirm your password",
+      "enterPassword": "Enter your password to enable 2FA",
+      "confirm": "Confirm",
+      "cancel": "Cancel"
+    },
     "quotasTitle": "Resource Quotas",
     "connectServer": "Connect Your Own Server",
     "connectServerDesc": "Deploy a worker node to increase your resource limits and run workloads on your own infrastructure.",

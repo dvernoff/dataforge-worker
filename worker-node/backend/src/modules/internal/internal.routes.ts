@@ -11,9 +11,11 @@ async function internalAuthMiddleware(request: FastifyRequest, reply: FastifyRep
     return reply.status(401).send({ error: 'Unauthorized: invalid node API key' });
   }
 
-  const internalSecret = request.headers['x-internal-secret'] as string;
-  if (env.INTERNAL_SECRET && internalSecret !== env.INTERNAL_SECRET) {
-    return reply.status(403).send({ error: 'Forbidden: internal access only' });
+  if (env.INTERNAL_SECRET) {
+    const internalSecret = request.headers['x-internal-secret'] as string;
+    if (!internalSecret || internalSecret !== env.INTERNAL_SECRET) {
+      return reply.status(403).send({ error: 'Forbidden: internal access only' });
+    }
   }
 }
 
@@ -105,6 +107,35 @@ export async function internalRoutes(app: FastifyInstance) {
     try { await app.db('api_endpoints').where({ project_id: projectId }).del(); } catch {}
 
     try { await app.db('saved_queries').where({ project_id: projectId }).del(); } catch {}
+
+    try { await app.db('comments').where({ project_id: projectId }).del(); } catch {}
+
+    try { await app.db('api_tokens_cache').where({ project_id: projectId }).del(); } catch {}
+
+    try {
+      const tokenHashes = await app.db('api_tokens_cache').where({ project_id: projectId }).pluck('token_hash');
+      for (const hash of tokenHashes) {
+        await app.redis.del(`api_token:${hash}`);
+      }
+    } catch {}
+
+    try {
+      let cursor = '0';
+      do {
+        const [next, keys] = await app.redis.scan(cursor, 'MATCH', `cache:${project.slug}:*`, 'COUNT', 200);
+        cursor = next;
+        if (keys.length) await app.redis.del(...keys);
+      } while (cursor !== '0');
+    } catch {}
+
+    try {
+      let cursor = '0';
+      do {
+        const [next, keys] = await app.redis.scan(cursor, 'MATCH', `security:${projectId}`, 'COUNT', 10);
+        cursor = next;
+        if (keys.length) await app.redis.del(...keys);
+      } while (cursor !== '0');
+    } catch {}
 
     await app.db.raw(`DROP SCHEMA IF EXISTS "${project.db_schema}" CASCADE`);
 
@@ -215,10 +246,55 @@ export async function internalRoutes(app: FastifyInstance) {
       } else {
         await app.redis.set(cacheKey, JSON.stringify(tokenData));
       }
+      try {
+        await app.db('api_tokens_cache')
+          .insert({
+            token_hash: body.token_hash,
+            project_id: body.project_id,
+            scopes: JSON.stringify(tokenData.scopes),
+            allowed_ips: JSON.stringify(tokenData.allowed_ips),
+            expires_at: body.expires_at ?? null,
+          })
+          .onConflict('token_hash')
+          .merge();
+      } catch {}
       return { success: true, action: 'created' };
     } else {
       await app.redis.del(cacheKey);
+      try { await app.db('api_tokens_cache').where({ token_hash: body.token_hash }).delete(); } catch {}
       return { success: true, action: 'revoked' };
+    }
+  });
+
+  app.post('/tokens/restore', async () => {
+    try {
+      const tokens = await app.db('api_tokens_cache').select('*');
+      let restored = 0;
+      for (const token of tokens) {
+        if (token.expires_at && new Date(token.expires_at) < new Date()) {
+          await app.db('api_tokens_cache').where({ token_hash: token.token_hash }).delete();
+          continue;
+        }
+        const cacheKey = `api_token:${token.token_hash}`;
+        const existing = await app.redis.get(cacheKey);
+        if (existing) continue;
+        const tokenData = {
+          project_id: token.project_id,
+          scopes: typeof token.scopes === 'string' ? JSON.parse(token.scopes) : token.scopes,
+          allowed_ips: typeof token.allowed_ips === 'string' ? JSON.parse(token.allowed_ips) : token.allowed_ips,
+          expires_at: token.expires_at,
+        };
+        if (token.expires_at) {
+          const ttl = Math.max(1, Math.floor((new Date(token.expires_at).getTime() - Date.now()) / 1000));
+          await app.redis.set(cacheKey, JSON.stringify(tokenData), 'EX', ttl);
+        } else {
+          await app.redis.set(cacheKey, JSON.stringify(tokenData));
+        }
+        restored++;
+      }
+      return { success: true, restored };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
     }
   });
 
@@ -257,6 +333,24 @@ export async function internalRoutes(app: FastifyInstance) {
         detail: (err as Error).message,
       });
     }
+  });
+
+  app.post('/security/sync', async (request) => {
+    const body = z.object({
+      project_id: z.string().uuid(),
+      ip_mode: z.enum(['disabled', 'whitelist', 'blacklist']),
+      ip_whitelist: z.array(z.string()).default([]),
+      ip_blacklist: z.array(z.string()).default([]),
+    }).parse(request.body);
+
+    const cacheKey = `security:${body.project_id}`;
+    await app.redis.set(cacheKey, JSON.stringify({
+      ip_mode: body.ip_mode,
+      ip_whitelist: body.ip_whitelist,
+      ip_blacklist: body.ip_blacklist,
+    }), 'EX', 3600);
+
+    return { success: true };
   });
 
   app.get('/health', async () => {

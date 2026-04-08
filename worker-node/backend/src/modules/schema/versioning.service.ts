@@ -42,10 +42,8 @@ export class VersioningService {
     description: string,
     userId: string
   ): Promise<SchemaVersion> {
-    // Get current schema snapshot
     const currentSchema = await this.getSchemaSnapshot(schema);
 
-    // Get previous version
     const prevVersion = await this.db('schema_versions')
       .where({ project_id: projectId })
       .orderBy('version', 'desc')
@@ -53,7 +51,6 @@ export class VersioningService {
 
     const version = prevVersion ? prevVersion.version + 1 : 1;
 
-    // Compute diff
     const previousSchema = prevVersion?.full_schema as { tables: TableSchema[] } | undefined;
     const diff = this.computeDiff(previousSchema, currentSchema);
 
@@ -91,21 +88,17 @@ export class VersioningService {
       ? JSON.parse(targetVersion.full_schema as unknown as string)
       : targetVersion.full_schema) as { tables: TableSchema[] };
 
-    // Get current schema
     const currentSchema = await this.getSchemaSnapshot(schema);
 
-    // Compute what we need to do to go from current -> target
     const currentTableNames = new Set(currentSchema.tables.map((t) => t.name));
     const targetTableNames = new Set(targetSchema.tables.map((t) => t.name));
 
-    // Drop tables that exist now but not in target
     for (const table of currentSchema.tables) {
       if (!targetTableNames.has(table.name)) {
         await this.db.raw(`DROP TABLE IF EXISTS "${schema}"."${table.name}" CASCADE`);
       }
     }
 
-    // Create tables that exist in target but not now
     for (const table of targetSchema.tables) {
       if (!currentTableNames.has(table.name)) {
         const colDefs = table.columns.map((col) => {
@@ -118,7 +111,6 @@ export class VersioningService {
       }
     }
 
-    // For tables that exist in both, align columns
     for (const targetTable of targetSchema.tables) {
       if (!currentTableNames.has(targetTable.name)) continue;
       const currentTable = currentSchema.tables.find((t) => t.name === targetTable.name);
@@ -127,7 +119,6 @@ export class VersioningService {
       const currentColNames = new Set(currentTable.columns.map((c) => c.name));
       const targetColNames = new Set(targetTable.columns.map((c) => c.name));
 
-      // Drop columns not in target
       for (const col of currentTable.columns) {
         if (!targetColNames.has(col.name)) {
           await this.db.raw(
@@ -136,7 +127,6 @@ export class VersioningService {
         }
       }
 
-      // Add columns in target but not in current
       for (const col of targetTable.columns) {
         if (!currentColNames.has(col.name)) {
           let sql = `ALTER TABLE "${schema}"."${targetTable.name}" ADD COLUMN "${col.name}" ${col.type}`;
@@ -145,7 +135,6 @@ export class VersioningService {
           try {
             await this.db.raw(sql);
           } catch {
-            // Column might already exist or fail due to NOT NULL without default
           }
         }
       }
@@ -202,21 +191,18 @@ export class VersioningService {
     const tables_removed: string[] = [];
     const tables_modified: SchemaDiff['tables_modified'] = [];
 
-    // Find added tables
     for (const name of currTableMap.keys()) {
       if (!prevTableMap.has(name)) {
         tables_added.push(name);
       }
     }
 
-    // Find removed tables
     for (const name of prevTableMap.keys()) {
       if (!currTableMap.has(name)) {
         tables_removed.push(name);
       }
     }
 
-    // Find modified tables
     for (const [name, currTable] of currTableMap.entries()) {
       const prevTable = prevTableMap.get(name);
       if (!prevTable) continue;

@@ -4,27 +4,51 @@
     "tables": "Tables",
     "records": "Records",
     "endpoints": "API Endpoints",
-    "webhooks": "Webhooks",
+    "apiToday": "API Calls Today",
     "tablesTotal": "{{count}} total",
     "noTables": "None yet",
     "acrossTables": "Across {{count}} tables",
-    "active": "{{count}} active"
+    "active": "{{count}} active",
+    "avgResponse": "Avg {{ms}}ms",
+    "noRequests": "No requests yet"
   },
   "charts": {
     "apiRequests": "API Requests (7 days)",
-    "cacheRatio": "Cache Hit/Miss Ratio"
+    "statusBreakdown": "Response Status",
+    "cacheRatio": "Cache Hit/Miss",
+    "statusBtn": "Status",
+    "cacheBtn": "Hit/Miss",
+    "requests": "Requests"
   },
   "recentActivity": "Recent Activity",
   "noActivity": "No activity yet",
-  "activeWebhooks": "Active Webhooks",
-  "noWebhooks": "No webhooks configured",
-  "cacheHit": "Cache HIT: {{count}} ({{percentage}}%)",
-  "cacheMiss": "Cache MISS: {{count}} ({{percentage}}%)",
+  "recentApiCalls": "Recent API Calls",
+  "noApiCalls": "No API calls yet",
   "noDataYet": "No data yet",
-  "aiUsage": {
-    "title": "AI Usage",
-    "monthlySpend": "This month",
-    "requests": "requests",
-    "budget": "Budget"
+  "placeholderHint": "Sample data \u2014 real stats appear after API activity",
+  "activity": {
+    "verbs": {
+      "create": "Created",
+      "update": "Updated",
+      "delete": "Deleted",
+      "toggle": "Toggled",
+      "login": "Logged in",
+      "logout": "Logged out",
+      "register": "Registered"
+    },
+    "resources": {
+      "tables": "table",
+      "endpoints": "endpoint",
+      "webhooks": "webhook",
+      "cron": "cron job",
+      "files": "file",
+      "backups": "backup",
+      "token": "API token",
+      "auth": "session",
+      "plan": "plan",
+      "node": "node",
+      "user": "user",
+      "project": "project"
+    }
   }
 }

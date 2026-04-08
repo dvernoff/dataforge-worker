@@ -12,10 +12,9 @@ export async function proxyRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
 
   // Map URL segments to quota resource types for POST enforcement
-  const createQuotaMap: Record<string, 'tables' | 'endpoints' | 'webhooks' | 'cron' | 'files' | 'backups'> = {
+  const createQuotaMap: Record<string, 'tables' | 'endpoints' | 'cron' | 'files' | 'backups'> = {
     tables: 'tables',
     endpoints: 'endpoints',
-    webhooks: 'webhooks',
     cron: 'cron',
     files: 'files',
     backups: 'backups',
@@ -111,11 +110,16 @@ export async function proxyRoutes(app: FastifyInstance) {
 
       // Invalidate caches after mutating requests
       if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
-        // KEYS ignores ioredis keyPrefix, DEL auto-prepends it — strip prefix before del()
-        const keys1 = await app.redis.keys('cp:projects:*');
-        if (keys1.length) await app.redis.del(...keys1.map(k => k.replace(/^cp:/, '')));
-        const keys2 = await app.redis.keys(`cache:endpoint:${projectId}:*`);
-        if (keys2.length) await app.redis.del(...keys2.map(k => k.replace(/^cp:/, '')));
+        const scanDel = async (pattern: string) => {
+          let cursor = '0';
+          do {
+            const [next, keys] = await app.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+            cursor = next;
+            if (keys.length) await app.redis.del(...keys.map(k => k.replace(/^cp:/, '')));
+          } while (cursor !== '0');
+        };
+        scanDel('cp:projects:*').catch(() => {});
+        scanDel(`cache:endpoint:${projectId}:*`).catch(() => {});
       }
 
       return reply.status(result.status).send(result.body);
@@ -125,11 +129,12 @@ export async function proxyRoutes(app: FastifyInstance) {
     }
   }
 
-  // ── Admin-only routes (cron, flows, pipelines) ──
+  // ── Admin-only routes (cron, backup-export) ──
   const adminPatterns = [
     '/:projectId/cron/*', '/:projectId/cron',
-    '/:projectId/flows/*', '/:projectId/flows',
-    '/:projectId/pipelines/*', '/:projectId/pipelines',
+    '/:projectId/rls/*', '/:projectId/rls',
+    '/:projectId/backups/export-data',
+    '/:projectId/backups/restore-data',
   ];
   for (const pattern of adminPatterns) {
     app.all(pattern, { preHandler: [requireRole('admin')] }, handleProxy);
@@ -139,6 +144,9 @@ export async function proxyRoutes(app: FastifyInstance) {
   const editorPatterns = [
     '/:projectId/dashboards/*', '/:projectId/dashboards',
     '/:projectId/plugins/*', '/:projectId/plugins',
+    '/:projectId/discord-webhooks/*', '/:projectId/discord-webhooks',
+    '/:projectId/telegram-notifications/*', '/:projectId/telegram-notifications',
+    '/:projectId/uptime-monitors/*', '/:projectId/uptime-monitors',
   ];
   for (const pattern of editorPatterns) {
     app.all(pattern, { preHandler: [requireRole('editor')] }, handleProxy);
@@ -162,19 +170,91 @@ export async function proxyRoutes(app: FastifyInstance) {
     }
   });
 
+  // ── API Playground proxy (bypass CORS) ──
+  app.post('/:projectId/api-playground/proxy', { preHandler: [requireRole('viewer')] }, async (request, reply) => {
+    const { url, method: reqMethod, headers: reqHeaders, body: reqBody } = request.body as {
+      url: string;
+      method: string;
+      headers?: Record<string, string>;
+      body?: string;
+    };
+
+    if (!url || !reqMethod) {
+      return reply.status(400).send({ error: 'url and method are required' });
+    }
+
+    try {
+      new URL(url);
+    } catch {
+      return reply.status(400).send({ error: 'Invalid URL' });
+    }
+
+    const allowedMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+    if (!allowedMethods.includes(reqMethod.toUpperCase())) {
+      return reply.status(400).send({ error: 'Unsupported HTTP method' });
+    }
+
+    try {
+      const fetchOptions: RequestInit = {
+        method: reqMethod.toUpperCase(),
+        headers: reqHeaders ?? {},
+      };
+      if (reqBody && !['GET', 'HEAD'].includes(reqMethod.toUpperCase())) {
+        fetchOptions.body = reqBody;
+      }
+
+      const start = performance.now();
+      const res = await fetch(url, fetchOptions);
+      const duration = Math.round(performance.now() - start);
+
+      const responseHeaders: Record<string, string> = {};
+      res.headers.forEach((v, k) => { responseHeaders[k] = v; });
+
+      const contentType = res.headers.get('content-type') ?? '';
+      let responseBody: string;
+      if (contentType.includes('json')) {
+        try {
+          const json = await res.json();
+          responseBody = JSON.stringify(json, null, 2);
+        } catch {
+          responseBody = await res.text();
+        }
+      } else {
+        responseBody = await res.text();
+      }
+
+      return reply.send({
+        status: res.status,
+        statusText: res.statusText,
+        headers: responseHeaders,
+        body: responseBody,
+        duration,
+      });
+    } catch (err: any) {
+      return reply.send({
+        status: 0,
+        statusText: 'Network Error',
+        headers: {},
+        body: err.message ?? 'Failed to connect',
+        duration: 0,
+      });
+    }
+  });
+
   // ── Viewer routes (read-only: tables, data, endpoints, webhooks, sql, etc.) ──
   const viewerPatterns = [
     '/:projectId/tables/*', '/:projectId/tables',
     '/:projectId/endpoints/*', '/:projectId/endpoints',
     '/:projectId/webhooks/*', '/:projectId/webhooks',
     '/:projectId/sql/*', '/:projectId/sql',
-    '/:projectId/schema-versions',
+    '/:projectId/schema-versions/*', '/:projectId/schema-versions',
     '/:projectId/batch',
     '/:projectId/graphql',
     '/:projectId/analytics/*', '/:projectId/analytics',
     '/:projectId/explorer/*', '/:projectId/explorer',
     '/:projectId/db-map',
     '/:projectId/files/*', '/:projectId/files',
+    '/:projectId/ws-stats',
   ];
   for (const pattern of viewerPatterns) {
     app.all(pattern, { preHandler: [requireRole('viewer')] }, handleProxy);

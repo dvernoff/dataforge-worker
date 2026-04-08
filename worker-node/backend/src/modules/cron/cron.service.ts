@@ -1,7 +1,8 @@
 import type { Knex } from 'knex';
 import cron from 'node-cron';
 import { AppError } from '../../middleware/error-handler.js';
-import { safeFetch } from '../../utils/safe-fetch.js';
+import { isModuleEnabled } from '../../utils/module-check.js';
+
 import { validateSchema, validateSchemaAccess } from '../../utils/sql-guard.js';
 
 const VALID_SCHEMA_RE = /^[a-z_][a-z0-9_]*$/;
@@ -195,6 +196,11 @@ export class CronService {
   }
 
   async executeJob(job: CronJobRecord) {
+    const enabled = await isModuleEnabled(this.db, job.project_id, 'feature-cron');
+    if (!enabled) {
+      return { status: 'skipped', reason: 'module_disabled' };
+    }
+
     const [run] = await this.db('cron_job_runs')
       .insert({
         cron_job_id: job.id,
@@ -214,9 +220,6 @@ export class CronService {
       switch (job.action_type) {
         case 'sql':
           result = await this.executeSql(job.action_config, projectSchema);
-          break;
-        case 'api_call':
-          result = await this.executeApiCall(job.action_config);
           break;
         default:
           throw new Error(`Unknown action type: ${job.action_type}`);
@@ -292,39 +295,6 @@ export class CronService {
       return trx.raw(query) as any;
     });
     return { rows: result.rows ?? [], rowCount: result.rowCount ?? 0 };
-  }
-
-  private async executeApiCall(config: Record<string, unknown>) {
-    const url = config.url as string;
-    const method = (config.method as string) ?? 'GET';
-    const headers = (config.headers as Record<string, string>) ?? {};
-    const body = config.body;
-
-    if (!url) throw new Error('API URL is required');
-
-    const fetchOptions: RequestInit = {
-      method: method.toUpperCase(),
-      headers: { 'Content-Type': 'application/json', ...headers },
-    };
-
-    if (body && method.toUpperCase() !== 'GET') {
-      fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
-    }
-
-    const response = await safeFetch(url, fetchOptions);
-    const responseText = await response.text();
-
-    let responseBody: unknown;
-    try {
-      responseBody = JSON.parse(responseText);
-    } catch {
-      responseBody = responseText;
-    }
-
-    return {
-      status: response.status,
-      body: responseBody,
-    };
   }
 
 }

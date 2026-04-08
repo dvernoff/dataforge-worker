@@ -118,16 +118,10 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     // Optionally fetch project members and quotas
     let projectMembers: Record<string, unknown>[] = [];
-    let projectSecrets: Record<string, unknown>[] = [];
     let quotas: Record<string, unknown>[] = [];
 
     try {
       projectMembers = await app.db('project_members').select('*');
-    } catch { /* table may not exist */ }
-
-    try {
-      projectSecrets = await app.db('project_secrets')
-        .select('id', 'project_id', 'key', 'description', 'created_at', 'updated_at');
     } catch { /* table may not exist */ }
 
     try {
@@ -144,7 +138,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         project_members: projectMembers,
         api_tokens: apiTokens,
         invite_keys: inviteKeys,
-        project_secrets: projectSecrets,
         quotas,
         tracked_errors: trackedErrors,
       },

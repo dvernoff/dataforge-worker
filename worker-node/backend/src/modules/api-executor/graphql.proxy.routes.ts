@@ -3,6 +3,7 @@ import { GraphQLService } from './graphql.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
 import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
+import { isModuleEnabled, moduleDisabledError } from '../../utils/module-check.js';
 
 function resolveProjectSchema(request: any): string {
   const schema = request.projectSchema;
@@ -17,6 +18,13 @@ export async function graphqlProxyRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
   app.post('/:projectId/graphql', async (request, reply) => {
+    const { projectId } = request.params as { projectId: string };
+
+    const graphqlEnabled = await isModuleEnabled(app.db, projectId, 'feature-graphql');
+    if (!graphqlEnabled) {
+      return reply.status(404).send(moduleDisabledError('GraphQL'));
+    }
+
     const dbSchema = resolveProjectSchema(request);
     const body = request.body as Record<string, unknown>;
     const query = body.query as string;

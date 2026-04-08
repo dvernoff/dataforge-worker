@@ -21,7 +21,7 @@ const QUOTA_GROUPS = [
   },
   {
     key: 'apiAutomation',
-    fields: ['max_api_requests', 'max_endpoints', 'max_webhooks', 'max_cron'],
+    fields: ['max_api_requests', 'max_endpoints', 'max_cron'],
   },
   {
     key: 'backups',

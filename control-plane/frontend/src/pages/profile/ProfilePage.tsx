@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,19 +17,29 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAuthStore } from '@/stores/auth.store';
 import { quotasApi } from '@/api/quotas.api';
 import { projectsApi } from '@/api/projects.api';
+import { authApi } from '@/api/auth.api';
 import { api } from '@/api/client';
 import { toast } from 'sonner';
-import { User, Shield, BarChart3, FolderKanban, Server, Info } from 'lucide-react';
+import { User, Shield, BarChart3, FolderKanban, Server, Info, CheckCircle2, XCircle } from 'lucide-react';
 
 export function ProfilePage() {
   const { t } = useTranslation(['common', 'settings', 'system']);
   usePageTitle(t('common:nav.profile'));
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const [name, setName] = useState(user?.name ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
+  const [setupStep, setSetupStep] = useState<'idle' | 'password' | 'qr' | 'done'>('idle');
+  const [setupData, setSetupData] = useState<{ secret: string; uri: string; backup_codes: string[] } | null>(null);
+  const [verifyCode, setVerifyCode] = useState('');
+  const [setupPassword, setSetupPassword] = useState('');
+  const [disablePassword, setDisablePassword] = useState('');
+  const [showDisable, setShowDisable] = useState(false);
+  const is2FAEnabled = user?.totp_enabled ?? false;
 
   // Quotas
   const { data: quotaData } = useQuery({
@@ -66,6 +77,40 @@ export function ProfilePage() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmNewPassword('');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const setupMutation = useMutation({
+    mutationFn: (password: string) => authApi.twoFASetup(password),
+    onSuccess: (data) => {
+      setSetupData(data);
+      setSetupStep('qr');
+      setSetupPassword('');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const verifySetupMutation = useMutation({
+    mutationFn: () => authApi.twoFAVerifySetup(verifyCode),
+    onSuccess: () => {
+      setSetupStep('done');
+      setVerifyCode('');
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      toast.success(t('common:profile.twofa.enabled'));
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: () => authApi.twoFADisable(disablePassword),
+    onSuccess: () => {
+      setShowDisable(false);
+      setDisablePassword('');
+      setSetupStep('idle');
+      setSetupData(null);
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      toast.success(t('common:profile.twofa.disabled'));
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -205,12 +250,139 @@ export function ProfilePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>{t('common:profile.twoFactorAuth')}</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                {t('common:profile.twofa.title')}
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                {t('common:profile.twoFactorStatus')}
-              </p>
+            <CardContent className="space-y-4">
+              {/* Status */}
+              <div className="flex items-center gap-2">
+                {is2FAEnabled ? (
+                  <>
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    <span className="font-medium">{t('common:profile.twofa.enabled')}</span>
+                    <Badge variant="outline" className="border-green-500/50 text-green-500">
+                      {t('common:profile.twofa.enabled')}
+                    </Badge>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-muted-foreground">{t('common:profile.twofa.disabled')}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Enable flow */}
+              {!is2FAEnabled && setupStep === 'idle' && (
+                <Button onClick={() => setSetupStep('password')}>
+                  {t('common:profile.twofa.enable')}
+                </Button>
+              )}
+
+              {!is2FAEnabled && setupStep === 'password' && (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">{t('common:profile.twofa.enterPassword')}</p>
+                  <Input
+                    type="password"
+                    placeholder={t('common:profile.currentPassword')}
+                    value={setupPassword}
+                    onChange={(e) => setSetupPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && setupPassword && setupMutation.mutate(setupPassword)}
+                  />
+                  <div className="flex gap-2">
+                    <Button onClick={() => setupMutation.mutate(setupPassword)} disabled={!setupPassword || setupMutation.isPending}>
+                      {setupMutation.isPending ? '...' : t('common:profile.twofa.confirm')}
+                    </Button>
+                    <Button variant="outline" onClick={() => { setSetupStep('idle'); setSetupPassword(''); }}>
+                      {t('common:cancel')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!is2FAEnabled && setupStep === 'qr' && setupData && (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">{t('common:profile.twofa.scanQr')}</p>
+
+                  <QRCodeCanvas uri={setupData.uri} />
+
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">Secret key (manual entry)</p>
+                    <code className="text-sm font-mono">{setupData.secret}</code>
+                  </div>
+
+                  {/* Backup codes */}
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">{t('common:profile.twofa.backupCodes')}</p>
+                    <p className="text-xs text-muted-foreground">{t('common:profile.twofa.backupDesc')}</p>
+                    <div className="grid grid-cols-2 gap-2 p-3 bg-muted rounded-lg">
+                      {setupData.backup_codes.map((code, i) => (
+                        <code key={i} className="text-sm font-mono">
+                          {code}
+                        </code>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Verify */}
+                  <div className="space-y-2">
+                    <Label htmlFor="verify-code">{t('common:profile.twofa.enterCode')}</Label>
+                    <Input
+                      id="verify-code"
+                      value={verifyCode}
+                      onChange={(e) => setVerifyCode(e.target.value)}
+                      placeholder="000000"
+                      maxLength={6}
+                      className="max-w-xs"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={() => verifySetupMutation.mutate()}
+                    disabled={verifySetupMutation.isPending || !verifyCode}
+                  >
+                    {verifySetupMutation.isPending ? '...' : t('common:profile.twofa.enable')}
+                  </Button>
+                </div>
+              )}
+
+              {setupStep === 'done' && !is2FAEnabled && (
+                <p className="text-sm text-green-500">{t('common:profile.twofa.enabled')}</p>
+              )}
+
+              {/* Disable flow */}
+              {is2FAEnabled && !showDisable && (
+                <Button variant="destructive" onClick={() => setShowDisable(true)}>
+                  {t('common:profile.twofa.disable')}
+                </Button>
+              )}
+
+              {is2FAEnabled && showDisable && (
+                <div className="space-y-3 p-4 border border-destructive/50 rounded-lg">
+                  <Label htmlFor="disable-password">{t('common:profile.twofa.confirmPassword')}</Label>
+                  <Input
+                    id="disable-password"
+                    type="password"
+                    value={disablePassword}
+                    onChange={(e) => setDisablePassword(e.target.value)}
+                    placeholder="Password"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="destructive"
+                      onClick={() => disableMutation.mutate()}
+                      disabled={disableMutation.isPending || !disablePassword}
+                    >
+                      {disableMutation.isPending ? '...' : t('common:profile.twofa.disable')}
+                    </Button>
+                    <Button variant="outline" onClick={() => { setShowDisable(false); setDisablePassword(''); }}>
+                      {t('common:profile.twofa.cancel')}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -314,5 +486,25 @@ export function ProfilePage() {
         </TabsContent>
       </Tabs>
     </PageWrapper>
+  );
+}
+
+function QRCodeCanvas({ uri }: { uri: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (canvasRef.current && uri) {
+      QRCode.toCanvas(canvasRef.current, uri, {
+        width: 200,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      }).catch(() => {});
+    }
+  }, [uri]);
+
+  return (
+    <div className="flex justify-center p-4 bg-white rounded-lg w-fit">
+      <canvas ref={canvasRef} />
+    </div>
   );
 }

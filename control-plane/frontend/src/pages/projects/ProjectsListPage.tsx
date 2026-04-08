@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, FolderKanban, Cpu, HardDrive, Server, Star, AlertTriangle } from 'lucide-react';
+import { Plus, FolderKanban, Cpu, HardDrive, Server, Star, AlertTriangle, Shield, Database, Gauge } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -79,6 +79,9 @@ export function ProjectsListPage() {
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodePings, setNodePings] = useState<Record<string, number>>({});
+  const [disclaimerOpen, setDisclaimerOpen] = useState(false);
+  const [disclaimerCountdown, setDisclaimerCountdown] = useState(10);
+  const [pendingFormData, setPendingFormData] = useState<CreateForm | null>(null);
 
   const { data: nodesData, isLoading: nodesLoading } = useQuery({
     queryKey: ['nodes', 'status'],
@@ -114,6 +117,18 @@ export function ProjectsListPage() {
     }
   }, [nodesData, measurePings]);
 
+  useEffect(() => {
+    if (!disclaimerOpen) return;
+    setDisclaimerCountdown(10);
+    const interval = setInterval(() => {
+      setDisclaimerCountdown((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [disclaimerOpen]);
+
   const form = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
     defaultValues: { name: '', slug: '', description: '' },
@@ -147,7 +162,7 @@ export function ProjectsListPage() {
               <DialogTitle>{t('projects.createProject')}</DialogTitle>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit((d) => createMutation.mutate(d))} className="space-y-4">
+              <form onSubmit={form.handleSubmit((d) => { setPendingFormData(d); setDialogOpen(false); setDisclaimerOpen(true); })} className="space-y-4">
                 <FormField
                   control={form.control}
                   name="name"
@@ -339,6 +354,61 @@ export function ProjectsListPage() {
           </Button>
         </div>
       )}
+      <Dialog open={disclaimerOpen} onOpenChange={(o) => { if (!o) { setDisclaimerOpen(false); setPendingFormData(null); } }}>
+        <DialogContent className="max-w-lg">
+          <div className="flex flex-col items-center text-center pt-2">
+            <div className="h-16 w-16 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
+              <Shield className="h-8 w-8 text-amber-500" />
+            </div>
+            <DialogTitle className="text-xl mb-2">{t('projects.disclaimer.title')}</DialogTitle>
+            <p className="text-sm text-muted-foreground mb-6">{t('projects.disclaimer.subtitle')}</p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 rounded-lg border p-3">
+              <Gauge className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">{t('projects.disclaimer.quotas.title')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('projects.disclaimer.quotas.desc')}</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-lg border p-3">
+              <Database className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">{t('projects.disclaimer.data.title')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('projects.disclaimer.data.desc')}</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
+              <Server className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium">{t('projects.disclaimer.ownNode.title')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('projects.disclaimer.ownNode.desc')}</p>
+              </div>
+            </div>
+          </div>
+
+          <Button
+            className="w-full mt-4"
+            disabled={disclaimerCountdown > 0 || createMutation.isPending}
+            onClick={() => {
+              if (pendingFormData) {
+                createMutation.mutate(pendingFormData);
+                setDisclaimerOpen(false);
+                setPendingFormData(null);
+              }
+            }}
+          >
+            {disclaimerCountdown > 0
+              ? `${t('projects.disclaimer.accept')} (${disclaimerCountdown})`
+              : createMutation.isPending ? t('actions.creating') : t('projects.disclaimer.accept')
+            }
+          </Button>
+        </DialogContent>
+      </Dialog>
+
     </PageWrapper>
   );
 }

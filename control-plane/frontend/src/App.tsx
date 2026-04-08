@@ -28,8 +28,6 @@ const DataBrowserPage = lazy(() => import('@/pages/data/DataBrowserPage'), 'Data
 const RecordFormPage = lazy(() => import('@/pages/data/RecordFormPage'), 'RecordFormPage');
 const ImportPage = lazy(() => import('@/pages/data/ImportPage'), 'ImportPage');
 const DataExplorerPage = lazy(() => import('@/pages/data/DataExplorerPage'), 'DataExplorerPage');
-const DataPipelinePage = lazy(() => import('@/pages/data/DataPipelinePage'), 'DataPipelinePage');
-
 // API Builder
 const EndpointsListPage = lazy(() => import('@/pages/api-builder/EndpointsListPage'), 'EndpointsListPage');
 const EndpointEditorPage = lazy(() => import('@/pages/api-builder/EndpointEditorPage'), 'EndpointEditorPage');
@@ -37,6 +35,12 @@ const SDKPage = lazy(() => import('@/pages/api-builder/SDKPage'), 'SDKPage');
 const SwaggerPage = lazy(() => import('@/pages/api-builder/SwaggerPage'), 'SwaggerPage');
 const GraphQLPage = lazy(() => import('@/pages/api-builder/GraphQLPage'), 'GraphQLPage');
 const APIPlaygroundPage = lazy(() => import('@/pages/api-builder/APIPlaygroundPage'), 'APIPlaygroundPage');
+
+// Integrations
+const DiscordWebhookPage = lazy(() => import('@/pages/integrations/DiscordWebhookPage'), 'DiscordWebhookPage');
+const TelegramBotPage = lazy(() => import('@/pages/integrations/TelegramBotPage'), 'TelegramBotPage');
+const UptimeMonitorPage = lazy(() => import('@/pages/integrations/UptimeMonitorPage'), 'UptimeMonitorPage');
+const SboxAuthPage = lazy(() => import('@/pages/sbox-auth/SboxAuthPage'), 'SboxAuthPage');
 
 // SQL
 const SQLConsolePage = lazy(() => import('@/pages/sql/SQLConsolePage'), 'SQLConsolePage');
@@ -46,8 +50,6 @@ const QueryBuilderPage = lazy(() => import('@/pages/sql/QueryBuilderPage'), 'Que
 const WebhooksListPage = lazy(() => import('@/pages/webhooks/WebhooksListPage'), 'WebhooksListPage');
 const CronJobsListPage = lazy(() => import('@/pages/cron/CronJobsListPage'), 'CronJobsListPage');
 const CronJobEditorPage = lazy(() => import('@/pages/cron/CronJobEditorPage'), 'CronJobEditorPage');
-const FlowsListPage = lazy(() => import('@/pages/flows/FlowsListPage'), 'FlowsListPage');
-const FlowEditorPage = lazy(() => import('@/pages/flows/FlowEditorPage'), 'FlowEditorPage');
 
 // Dashboard
 const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'), 'DashboardPage');
@@ -67,7 +69,6 @@ const ProjectSettingsPage = lazy(() => import('@/pages/settings/ProjectSettingsP
 const SecurityPage = lazy(() => import('@/pages/settings/SecurityPage'), 'SecurityPage');
 const BackupsPage = lazy(() => import('@/pages/settings/BackupsPage'), 'BackupsPage');
 const PluginsPage = lazy(() => import('@/pages/settings/PluginsPage'), 'PluginsPage');
-const SecretsPage = lazy(() => import('@/pages/settings/SecretsPage'), 'SecretsPage');
 const MyNodesPage = lazy(() => import('@/pages/settings/MyNodesPage'), 'MyNodesPage');
 
 // Profile, WebSocket
@@ -163,10 +164,6 @@ export default function App() {
               <Route path="/projects/:slug/cron" element={<S><CronJobsListPage /></S>} />
               <Route path="/projects/:slug/cron/:id" element={<S><CronJobEditorPage /></S>} />
 
-              {/* Flows */}
-              <Route path="/projects/:slug/flows" element={<S><FlowsListPage /></S>} />
-              <Route path="/projects/:slug/flows/:id" element={<S><FlowEditorPage /></S>} />
-
               {/* Query Builder */}
               <Route path="/projects/:slug/query-builder" element={<S><QueryBuilderPage /></S>} />
 
@@ -176,8 +173,11 @@ export default function App() {
               {/* API Playground */}
               <Route path="/projects/:slug/api-playground" element={<S><APIPlaygroundPage /></S>} />
 
-              {/* Pipelines */}
-              <Route path="/projects/:slug/pipelines" element={<S><DataPipelinePage /></S>} />
+              {/* Integrations */}
+              <Route path="/projects/:slug/integrations/discord" element={<S><DiscordWebhookPage /></S>} />
+              <Route path="/projects/:slug/integrations/telegram" element={<S><TelegramBotPage /></S>} />
+              <Route path="/projects/:slug/integrations/uptime" element={<S><UptimeMonitorPage /></S>} />
+              <Route path="/projects/:slug/integrations/sbox-auth" element={<S><SboxAuthPage /></S>} />
 
               {/* Dashboards */}
               <Route path="/projects/:slug/dashboards" element={<S><DashboardsListPage /></S>} />
@@ -193,7 +193,6 @@ export default function App() {
               <Route path="/projects/:slug/settings/project" element={<S><ProjectSettingsPage /></S>} />
               <Route path="/projects/:slug/settings/security" element={<S><SecurityPage /></S>} />
               <Route path="/projects/:slug/settings/backups" element={<S><BackupsPage /></S>} />
-              <Route path="/projects/:slug/settings/secrets" element={<S><SecretsPage /></S>} />
               <Route path="/projects/:slug/settings/plugins" element={<S><PluginsPage /></S>} />
 
               {/* My Nodes (personal) */}

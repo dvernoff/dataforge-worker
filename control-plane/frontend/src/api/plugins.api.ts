@@ -4,6 +4,9 @@ export const pluginsApi = {
   list: (projectId: string) =>
     api.get<{ plugins: Record<string, unknown>[] }>(`/projects/${projectId}/plugins`),
 
+  getEnabledFeatures: (projectId: string) =>
+    api.get<{ features: string[] }>(`/projects/${projectId}/plugins/features`),
+
   listCpPlugins: () =>
     api.get<{ plugins: Record<string, unknown>[] }>('/cp-plugins'),
 

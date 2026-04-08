@@ -114,6 +114,7 @@
       "ipList": "IP Addresses",
       "ipListHint": "One IP per line",
       "applyTo": "Apply to",
+      "appliesTo": "Applies to external API requests only. Panel access is never blocked.",
       "ui": "Admin UI",
       "api": "External API"
     },
@@ -157,60 +158,74 @@
         "context": "Context"
       },
       "created": "RLS rule created",
-      "deleted": "RLS rule deleted"
+      "deleted": "RLS rule deleted",
+      "explanation": "Row-Level Security filters data for external API consumers. When your app's users call your API endpoints, they only see rows that match the rules below. The admin panel is never restricted — you always see all data when working in DataForge.",
+      "whenToUse": "Use RLS when your API serves multiple users and each should only access their own data. For example: a game where players see only their inventory, or a SaaS where tenants see only their organization's records.",
+      "exampleUser": "orders.user_id = caller's ID",
+      "exampleRole": "posts.status = 'published'",
+      "exampleStatic": "data.region IN ('US','EU')",
+      "panelNote": "Admin panel is never affected by RLS rules",
+      "rulePrefix": "In table",
+      "ruleWhere": "where"
     }
   },
   "backups": {
     "title": "Backups",
     "createBackup": "Create Backup",
+    "creating": "Creating backup...",
+    "created": "Backup created successfully",
     "noBackups": "No backups yet",
     "noBackupsDesc": "Create your first backup to protect your data",
-    "creating": "Backup started",
-    "schedule": "Schedule",
-    "cronExpression": "Cron Expression",
-    "maxBackups": "Max Backups",
-    "active": "Active",
+    "warning": "Download backups regularly — we do not guarantee data safety on the server",
+    "rateLimitLeft": "{{left}} of {{limit}} remaining today",
+    "rateLimitLabel": "Today",
+    "rateLimitReached": "Daily limit reached. Try again tomorrow.",
+    "stats": {
+      "total": "Total backups",
+      "size": "Total size",
+      "quota": "Quota"
+    },
+    "schedule": "Auto-backups",
+    "scheduleDesc": "Old backups are deleted automatically when the limit is reached",
     "scheduleSaved": "Schedule saved",
+    "intervalLabel": "Frequency",
+    "maxBackups": "Keep max backups",
+    "intervals": {
+      "12h": "Every 12h",
+      "24h": "Daily",
+      "48h": "Every 2 days",
+      "7d": "Weekly"
+    },
     "headers": {
       "date": "Date",
       "type": "Type",
       "status": "Status",
-      "size": "Size"
+      "size": "Size",
+      "tables": "Tables"
     },
     "types": {
       "manual": "Manual",
-      "scheduled": "Scheduled"
+      "scheduled": "Auto"
     },
     "status": {
       "pending": "Pending",
       "running": "Running",
-      "completed": "Completed",
+      "completed": "Done",
       "failed": "Failed"
     },
     "deleteConfirm": {
       "title": "Delete Backup",
-      "desc": "Are you sure you want to delete this backup? This action cannot be undone."
+      "desc": "Are you sure? This cannot be undone."
     },
-    "quotaUsage": "Backup Quota",
-    "used": "used",
-    "quotaReached": "Backup quota reached. Delete old backups or increase your limit.",
-    "maxScheduleHint": "Maximum allowed by quota: {{max}}",
-    "restoreSuccess": "Backup restored successfully"
-  },
-  "secrets": {
-    "title": "Secrets Vault",
-    "addSecret": "Add Secret",
-    "noSecrets": "No secrets configured",
-    "key": "Key",
-    "value": "Value",
-    "description": "Description",
-    "valuePlaceholder": "Enter secret value",
-    "descriptionPlaceholder": "What is this secret used for?",
-    "reveal": "Reveal",
-    "hide": "Hide",
-    "created": "Secret created",
-    "deleted": "Secret deleted",
-    "info": "Use {{SECRET.KEY_NAME}} in webhooks, SQL, and flows to reference secrets securely."
+    "restoreConfirm": {
+      "title": "Restore Backup",
+      "desc": "This will replace ALL current data with the backup. Are you sure?"
+    },
+    "restoreSuccess": "Data restored successfully",
+    "deleted": "Backup deleted",
+    "importBackup": "Import Backup",
+    "importing": "Importing...",
+    "imported": "Backup imported successfully"
   },
   "projectSettings": {
     "title": "Project Settings",
@@ -329,7 +344,6 @@
       "max_files": "Files",
       "max_api_requests": "API Requests / Day",
       "max_endpoints": "Endpoints",
-      "max_webhooks": "Webhooks",
       "max_cron": "Cron Jobs",
       "max_backups": "Backups",
       "max_query_timeout_ms": "Query Timeout",

@@ -4,6 +4,19 @@ import { AppError } from '../../middleware/error-handler.js';
 export class WebhooksService {
   constructor(private db: Knex) {}
 
+  private async ensureTableNamesColumn() {
+    const hasColumn = await this.db.schema.hasColumn('webhooks', 'table_names');
+    if (!hasColumn) {
+      await this.db.schema.alterTable('webhooks', (t) => {
+        t.specificType('table_names', 'text[]').nullable();
+      });
+      await this.db.raw(`UPDATE webhooks SET table_names = ARRAY[table_name] WHERE table_names IS NULL`);
+      await this.db.schema.alterTable('webhooks', (t) => {
+        t.dropColumn('table_name');
+      });
+    }
+  }
+
   private async validateTableInProjectSchema(projectId: string, tableName: string) {
     const project = await this.db('projects').where({ id: projectId }).select('db_schema').first();
     if (!project?.db_schema) {
@@ -22,9 +35,30 @@ export class WebhooksService {
     }
   }
 
+  private async validateTablesInProjectSchema(projectId: string, tableNames: string[]) {
+    const project = await this.db('projects').where({ id: projectId }).select('db_schema').first();
+    if (!project?.db_schema) {
+      throw new AppError(400, 'Project has no database schema assigned');
+    }
+
+    const results = await Promise.all(
+      tableNames.map(name =>
+        this.db('information_schema.tables')
+          .where({ table_schema: project.db_schema, table_name: name })
+          .first()
+          .then(r => ({ name, exists: !!r }))
+      )
+    );
+
+    const notFound = results.filter(r => !r.exists).map(r => r.name);
+    if (notFound.length > 0) {
+      throw new AppError(400, `Tables not found: ${notFound.join(', ')}`);
+    }
+  }
+
   async create(projectId: string, userId: string, input: {
     name?: string;
-    table_name: string;
+    table_names: string[];
     events: string[];
     url: string;
     method?: string;
@@ -34,13 +68,14 @@ export class WebhooksService {
     retry_count?: number;
     is_active?: boolean;
   }) {
-    await this.validateTableInProjectSchema(projectId, input.table_name);
+    await this.ensureTableNamesColumn();
+    await this.validateTablesInProjectSchema(projectId, input.table_names);
 
     const [webhook] = await this.db('webhooks')
       .insert({
         project_id: projectId,
         name: input.name ?? null,
-        table_name: input.table_name,
+        table_names: input.table_names,
         events: input.events,
         url: input.url,
         method: input.method ?? 'POST',
@@ -56,31 +91,37 @@ export class WebhooksService {
   }
 
   async findAll(projectId: string) {
+    await this.ensureTableNamesColumn();
     const webhooks = await this.db('webhooks')
       .where({ project_id: projectId })
       .orderBy('created_at', 'desc');
 
-    const result = [];
-    for (const wh of webhooks) {
-      const [stats] = await this.db('webhook_logs')
-        .where({ webhook_id: wh.id })
-        .select(
-          this.db.raw('COUNT(*)::int as total'),
-          this.db.raw('COUNT(*) FILTER (WHERE response_status >= 200 AND response_status < 300)::int as success_count'),
-          this.db.raw('MAX(sent_at) as last_triggered'),
-        );
+    if (webhooks.length === 0) return [];
 
-      result.push({
+    const stats = await this.db('webhook_logs')
+      .whereIn('webhook_id', webhooks.map((w: { id: string }) => w.id))
+      .groupBy('webhook_id')
+      .select(
+        'webhook_id',
+        this.db.raw('COUNT(*)::int as total'),
+        this.db.raw('COUNT(*) FILTER (WHERE response_status >= 200 AND response_status < 300)::int as success_count'),
+        this.db.raw('MAX(sent_at) as last_triggered'),
+      );
+
+    const statsMap = new Map(stats.map((s: any) => [s.webhook_id, s]));
+
+    return webhooks.map((wh: any) => {
+      const s = statsMap.get(wh.id);
+      return {
         ...wh,
+        secret: wh.secret ? String(wh.secret).substring(0, 3) + '••••' : null,
         stats: {
-          total: stats?.total ?? 0,
-          success_count: stats?.success_count ?? 0,
-          last_triggered: stats?.last_triggered ?? null,
+          total: s?.total ?? 0,
+          success_count: s?.success_count ?? 0,
+          last_triggered: s?.last_triggered ?? null,
         },
-      });
-    }
-
-    return result;
+      };
+    });
   }
 
   async findById(id: string, projectId: string) {
@@ -90,13 +131,14 @@ export class WebhooksService {
   }
 
   async update(id: string, projectId: string, input: Record<string, unknown>) {
-    if (input.table_name !== undefined) {
-      await this.validateTableInProjectSchema(projectId, String(input.table_name));
+    await this.ensureTableNamesColumn();
+    if (input.table_names !== undefined) {
+      await this.validateTablesInProjectSchema(projectId, input.table_names as string[]);
     }
 
     const updateData: Record<string, unknown> = {};
     if (input.name !== undefined) updateData.name = input.name;
-    if (input.table_name !== undefined) updateData.table_name = input.table_name;
+    if (input.table_names !== undefined) updateData.table_names = input.table_names;
     if (input.events !== undefined) updateData.events = input.events;
     if (input.url !== undefined) updateData.url = input.url;
     if (input.method !== undefined) updateData.method = input.method;
@@ -116,6 +158,7 @@ export class WebhooksService {
   }
 
   async delete(id: string, projectId: string) {
+    await this.db('webhook_logs').where({ webhook_id: id }).delete();
     const deleted = await this.db('webhooks').where({ id, project_id: projectId }).delete();
     if (!deleted) throw new AppError(404, 'Webhook not found');
   }

@@ -17,5 +17,9 @@ COPY --from=builder /app/shared ../shared
 COPY control-plane/backend/entrypoint.sh ./entrypoint.sh
 RUN chmod +x entrypoint.sh
 EXPOSE 4000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -qO- http://localhost:4000/api/health || exit 1
+
 USER node
 ENTRYPOINT ["sh", "entrypoint.sh"]

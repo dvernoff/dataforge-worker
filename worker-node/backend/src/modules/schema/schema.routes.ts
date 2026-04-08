@@ -6,6 +6,8 @@ import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
 import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { z } from 'zod';
 import { AppError } from '../../middleware/error-handler.js';
+import { validateIdentifier } from '../../utils/sql-guard.js';
+import { checkResourceQuota } from '../../middleware/quota-enforcement.middleware.js';
 
 const columnSchema = z.object({
   name: z.string().min(1).max(63).regex(/^[a-z_][a-z0-9_]*$/),
@@ -83,12 +85,18 @@ export async function schemaRoutes(app: FastifyInstance) {
 
   app.get('/:projectId/tables/:tableName', async (request) => {
     const { tableName } = request.params as { tableName: string };
+    validateIdentifier(tableName, 'table name');
     const dbSchema = resolveProjectSchema(request);
     const table = await schemaService.getTableInfo(dbSchema, tableName);
     return { table };
   });
 
-  app.post('/:projectId/tables', async (request) => {
+  app.post('/:projectId/tables', async (request, reply) => {
+    if (request.isSharedNode && request.quotas) {
+      const dbSchema = resolveProjectSchema(request);
+      const blocked = await checkResourceQuota(app.db, request.projectId, 'tables', request.quotas, dbSchema);
+      if (blocked) return reply.status(429).send({ error: blocked, errorCode: 'QUOTA_EXCEEDED' });
+    }
     const body = createTableSchema.parse(request.body);
     const dbSchema = resolveProjectSchema(request);
     const sql = await schemaService.createTable(dbSchema, body);
@@ -104,6 +112,7 @@ export async function schemaRoutes(app: FastifyInstance) {
 
   app.put('/:projectId/tables/:tableName/columns', async (request) => {
     const { tableName } = request.params as { tableName: string };
+    validateIdentifier(tableName, 'table name');
     const body = alterColumnsSchema.parse(request.body);
     const dbSchema = resolveProjectSchema(request);
     const sqls = await schemaService.alterColumns(dbSchema, tableName, body.changes);
@@ -112,6 +121,7 @@ export async function schemaRoutes(app: FastifyInstance) {
 
   app.delete('/:projectId/tables/:tableName', async (request) => {
     const { tableName } = request.params as { tableName: string };
+    validateIdentifier(tableName, 'table name');
     const dbSchema = resolveProjectSchema(request);
     const projectId = request.projectId;
     const deleted = await schemaService.dropTable(dbSchema, tableName, projectId);
@@ -120,6 +130,7 @@ export async function schemaRoutes(app: FastifyInstance) {
 
   app.post('/:projectId/tables/:tableName/foreign-keys', async (request) => {
     const { tableName } = request.params as { tableName: string };
+    validateIdentifier(tableName, 'table name');
     const body = foreignKeySchema.parse(request.body);
     const dbSchema = resolveProjectSchema(request);
     const sql = await schemaService.addForeignKey(dbSchema, tableName, body);
@@ -130,6 +141,8 @@ export async function schemaRoutes(app: FastifyInstance) {
     const { tableName, constraintName } = request.params as {
       tableName: string; constraintName: string;
     };
+    validateIdentifier(tableName, 'table name');
+    validateIdentifier(constraintName, 'constraint name');
     const dbSchema = resolveProjectSchema(request);
     await schemaService.dropForeignKey(dbSchema, tableName, constraintName);
     return reply.status(204).send();
@@ -137,6 +150,7 @@ export async function schemaRoutes(app: FastifyInstance) {
 
   app.post('/:projectId/tables/:tableName/indexes', async (request) => {
     const { tableName } = request.params as { tableName: string };
+    validateIdentifier(tableName, 'table name');
     const body = indexDefSchema.parse(request.body);
     const dbSchema = resolveProjectSchema(request);
     const sql = await schemaService.addIndex(dbSchema, tableName, body);
@@ -144,7 +158,9 @@ export async function schemaRoutes(app: FastifyInstance) {
   });
 
   app.delete('/:projectId/tables/:tableName/indexes/:indexName', async (request, reply) => {
-    const { indexName } = request.params as { indexName: string };
+    const { tableName, indexName } = request.params as { tableName: string; indexName: string };
+    validateIdentifier(tableName, 'table name');
+    validateIdentifier(indexName, 'index name');
     const dbSchema = resolveProjectSchema(request);
     await schemaService.dropIndex(dbSchema, indexName);
     return reply.status(204).send();
@@ -152,6 +168,7 @@ export async function schemaRoutes(app: FastifyInstance) {
 
   app.post('/:projectId/tables/:tableName/computed', async (request) => {
     const { tableName } = request.params as { tableName: string };
+    validateIdentifier(tableName, 'table name');
     const body = computedColumnSchema.parse(request.body);
     const dbSchema = resolveProjectSchema(request);
     const sql = await computedService.addComputedColumn(
@@ -162,6 +179,8 @@ export async function schemaRoutes(app: FastifyInstance) {
 
   app.delete('/:projectId/tables/:tableName/computed/:columnName', async (request, reply) => {
     const { tableName, columnName } = request.params as { tableName: string; columnName: string };
+    validateIdentifier(tableName, 'table name');
+    validateIdentifier(columnName, 'column name');
     const dbSchema = resolveProjectSchema(request);
     await computedService.dropComputedColumn(dbSchema, tableName, columnName);
     return reply.status(204).send();

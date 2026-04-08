@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Play, Save, Plus, Terminal, Globe } from 'lucide-react';
+import { ArrowLeft, Play, Save, Plus, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,14 +17,12 @@ import { PageWrapper } from '@/components/shared/PageWrapper';
 import { CronBuilder } from '@/components/cron/CronBuilder';
 import { useCurrentProject } from '@/hooks/useProject';
 import { cronApi } from '@/api/cron.api';
-import { endpointsApi } from '@/api/endpoints.api';
 import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { cn } from '@/lib/utils';
 
 const ACTION_TYPES = [
   { value: 'sql', icon: Terminal },
-  { value: 'api_call', icon: Globe },
 ] as const;
 
 export function CronJobEditorPage() {
@@ -42,20 +40,12 @@ export function CronJobEditorPage() {
     action_type: 'sql',
     action_config: {} as Record<string, unknown>,
   });
-  const [urlMode, setUrlMode] = useState<'local' | 'external'>('external');
 
   // Load existing job (edit mode)
   const { data, isLoading } = useQuery({
     queryKey: ['cron-job', project?.id, id],
     queryFn: () => cronApi.getById(project!.id, id!),
     enabled: !!project?.id && !!id && !isNew,
-  });
-
-  // Load project endpoints & webhooks for picker
-  const { data: endpointsData } = useQuery({
-    queryKey: ['endpoints', project?.id],
-    queryFn: () => endpointsApi.list(project!.id),
-    enabled: !!project?.id && form.action_type === 'api_call',
   });
 
   useEffect(() => {
@@ -137,8 +127,6 @@ export function CronJobEditorPage() {
 
   const recentRuns = !isNew ? (((data?.job as Record<string, unknown>)?.recent_runs ?? []) as Record<string, unknown>[]) : [];
   const slug = project?.slug ?? '';
-  const nodeUrl = project?.node_url?.replace(/\/$/, '') ?? '';
-  const localEndpoints = (endpointsData?.endpoints ?? []).filter((ep) => ep.is_active);
 
   if (isLoading && !isNew) {
     return <PageWrapper><Skeleton className="h-96" /></PageWrapper>;
@@ -247,95 +235,6 @@ export function CronJobEditorPage() {
                   className="mt-1 font-mono text-sm"
                   rows={6}
                 />
-              </div>
-            )}
-
-            {/* API Call form */}
-            {form.action_type === 'api_call' && (
-              <div className="space-y-4">
-                {/* URL source tabs */}
-                <div>
-                  <Label className="mb-2 block">{t('cron:form.apiUrl')}</Label>
-                  <div className="flex gap-1 mb-2">
-                    <button
-                      type="button"
-                      onClick={() => setUrlMode('local')}
-                      className={cn('px-3 py-1 text-xs rounded-md transition-colors', urlMode === 'local' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground')}
-                    >
-                      {t('cron:urlSource.local')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setUrlMode('external')}
-                      className={cn('px-3 py-1 text-xs rounded-md transition-colors', urlMode === 'external' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground')}
-                    >
-                      {t('cron:urlSource.external')}
-                    </button>
-                  </div>
-                  {urlMode === 'local' ? (
-                    localEndpoints.length > 0 ? (
-                      <Select
-                        value=""
-                        onValueChange={(path) => {
-                          const fullUrl = `${nodeUrl}/api/v1/${project?.slug}${path}`;
-                          updateConfig('url', fullUrl);
-                          setUrlMode('external'); // switch to show URL
-                        }}
-                      >
-                        <SelectTrigger><span className="text-muted-foreground">{t('cron:urlSource.selectEndpoint')}</span></SelectTrigger>
-                        <SelectContent>
-                          {localEndpoints.map((ep) => (
-                            <SelectItem key={ep.id} value={ep.path}>
-                              <span className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-[10px] px-1">{ep.method}</Badge>
-                                <span className="font-mono text-sm">{ep.path}</span>
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <p className="text-sm text-muted-foreground py-2">{t('cron:urlSource.noEndpoints')}</p>
-                    )
-                  ) : (
-                    <Input
-                      value={String(form.action_config.url ?? '')}
-                      onChange={(e) => updateConfig('url', e.target.value)}
-                      placeholder={t('cron:form.apiUrlPlaceholder')}
-                    />
-                  )}
-                </div>
-                <div>
-                  <Label>{t('cron:form.apiMethod')}</Label>
-                  <Select value={String(form.action_config.method ?? 'GET')} onValueChange={(v) => updateConfig('method', v)}>
-                    <SelectTrigger className="mt-1 w-32"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => (
-                        <SelectItem key={m} value={m}>{m}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>{t('cron:form.apiHeaders')}</Label>
-                  <Textarea
-                    value={typeof form.action_config.headers === 'object' ? JSON.stringify(form.action_config.headers, null, 2) : String(form.action_config.headers ?? '{}')}
-                    onChange={(e) => { try { updateConfig('headers', JSON.parse(e.target.value)); } catch { /* ignore */ } }}
-                    placeholder='{"Authorization": "Bearer ..."}'
-                    className="mt-1 font-mono text-sm"
-                    rows={3}
-                  />
-                </div>
-                <div>
-                  <Label>{t('cron:form.apiBody')}</Label>
-                  <Textarea
-                    value={typeof form.action_config.body === 'object' ? JSON.stringify(form.action_config.body, null, 2) : String(form.action_config.body ?? '')}
-                    onChange={(e) => { try { updateConfig('body', JSON.parse(e.target.value)); } catch { /* ignore */ } }}
-                    placeholder='{"key": "value"}'
-                    className="mt-1 font-mono text-sm"
-                    rows={4}
-                  />
-                </div>
               </div>
             )}
 

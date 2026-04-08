@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import crypto from 'crypto';
+import { isModuleEnabled } from '../../utils/module-check.js';
 
 type WebSocket = import('ws').WebSocket;
 
@@ -29,6 +30,8 @@ const RATE_LIMIT_MAX_MESSAGES = 20;
 export class WebSocketService {
   private channels = new Map<string, Set<ChannelSubscription>>();
   private connectionCount = new Map<string, number>();
+  private messagesSent = new Map<string, number>();
+  private messagesReceived = new Map<string, number>();
   private static instance: WebSocketService | null = null;
 
   static getInstance(): WebSocketService {
@@ -40,6 +43,31 @@ export class WebSocketService {
 
   getProjectConnectionCount(projectSlug: string): number {
     return this.connectionCount.get(projectSlug) ?? 0;
+  }
+
+  incrementMessagesSent(projectId: string) {
+    this.messagesSent.set(projectId, (this.messagesSent.get(projectId) ?? 0) + 1);
+  }
+
+  incrementMessagesReceived(projectId: string) {
+    this.messagesReceived.set(projectId, (this.messagesReceived.get(projectId) ?? 0) + 1);
+  }
+
+  getStats(projectId: string) {
+    let connections = 0;
+    for (const subs of this.channels.values()) {
+      for (const sub of subs) {
+        if (sub.socket.readyState === 1) {
+          const channelKey = [...this.channels.entries()].find(([, s]) => s === subs)?.[0] ?? '';
+          if (channelKey.includes(projectId)) { connections++; break; }
+        }
+      }
+    }
+    return {
+      connectedClients: this.connectionCount.get(projectId) ?? connections,
+      messagesSent: this.messagesSent.get(projectId) ?? 0,
+      messagesReceived: this.messagesReceived.get(projectId) ?? 0,
+    };
   }
 
   private incrementProjectConnections(projectSlug: string) {
@@ -110,6 +138,7 @@ export class WebSocketService {
 
     this.broadcast(`project:${projectId}`, message);
     this.broadcast(`table:${projectId}:${tableName}`, message);
+    this.incrementMessagesSent(projectId);
   }
 
   getChannelCount(): number {
@@ -124,9 +153,12 @@ export class WebSocketService {
 export async function websocketRoutes(app: FastifyInstance) {
   const wsService = WebSocketService.getInstance();
 
-  app.get('/ws/v1/:projectSlug', { websocket: true } as Record<string, unknown>, async (request: unknown, reply: unknown) => {
-    const socket = (request as Record<string, unknown>).socket as WebSocket;
-    const req = request as FastifyRequest<{ Params: { projectSlug: string }; Querystring: Record<string, string> }>;
+  app.get('/api/projects/:projectId/ws-stats', async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    return wsService.getStats(projectId);
+  });
+
+  app.get('/ws/v1/:projectSlug', { websocket: true } as Record<string, unknown>, async (socket: WebSocket, req: FastifyRequest) => {
     const projectSlug = (req.params as Record<string, string>).projectSlug ?? '';
     const query = (req.query ?? {}) as Record<string, string>;
 
@@ -145,16 +177,16 @@ export async function websocketRoutes(app: FastifyInstance) {
       if (actualToken) {
         try {
           const tokenHash = crypto.createHash('sha256').update(actualToken).digest('hex');
-          const tokenRow = await app.db('api_tokens')
-            .join('projects', 'api_tokens.project_id', 'projects.id')
-            .where('projects.slug', projectSlug)
-            .where('api_tokens.token_hash', tokenHash)
-            .whereNull('api_tokens.revoked_at')
-            .select('projects.id as project_id')
-            .first();
-
-          if (!tokenRow) {
+          const cached = await app.redis.get(`api_token:${tokenHash}`);
+          if (!cached) {
             socket.send(JSON.stringify({ type: 'error', code: 'AUTH_FAILED', message: 'Invalid API token for this project.' }));
+            socket.close(4001, 'Invalid token');
+            return;
+          }
+          const tokenData = JSON.parse(cached);
+          const project = await app.db('projects').where({ slug: projectSlug }).select('id').first();
+          if (!project || tokenData.project_id !== project.id) {
+            socket.send(JSON.stringify({ type: 'error', code: 'AUTH_FAILED', message: 'API token does not belong to this project.' }));
             socket.close(4001, 'Invalid token');
             return;
           }
@@ -163,6 +195,18 @@ export async function websocketRoutes(app: FastifyInstance) {
           socket.close(4001, 'Auth error');
           return;
         }
+      }
+    }
+
+    let projectId = '';
+    const project = await app.db('projects').where({ slug: projectSlug }).select('id').first();
+    if (project) {
+      projectId = project.id;
+      const wsEnabled = await isModuleEnabled(app.db, project.id, 'feature-websocket');
+      if (!wsEnabled) {
+        socket.send(JSON.stringify({ type: 'error', code: 'MODULE_DISABLED', message: 'WebSocket is not enabled for this project.' }));
+        socket.close(4003, 'Module disabled');
+        return;
       }
     }
 
@@ -187,6 +231,7 @@ export async function websocketRoutes(app: FastifyInstance) {
 
     socket.on('message', (...args: unknown[]) => {
       const raw = args[0];
+      wsService.incrementMessagesReceived(projectId);
 
       const now = Date.now();
       messageTimestamps = messageTimestamps.filter(ts => now - ts < RATE_LIMIT_WINDOW_MS);
@@ -217,7 +262,7 @@ export async function websocketRoutes(app: FastifyInstance) {
               return;
             }
 
-            const fullChannel = `${msg.channel.split(':')[0]}:${projectSlug}:${msg.channel.split(':')[1]}`;
+            const fullChannel = `${msg.channel.split(':')[0]}:${projectId}:${msg.channel.split(':')[1]}`;
             wsService.subscribe(fullChannel, socket, projectSlug);
             clientChannels.add(fullChannel);
 
@@ -235,7 +280,7 @@ export async function websocketRoutes(app: FastifyInstance) {
               return;
             }
 
-            const fullCh = `${msg.channel.split(':')[0]}:${projectSlug}:${msg.channel.split(':')[1]}`;
+            const fullCh = `${msg.channel.split(':')[0]}:${projectId}:${msg.channel.split(':')[1]}`;
             wsService.unsubscribe(fullCh, socket);
             clientChannels.delete(fullCh);
 

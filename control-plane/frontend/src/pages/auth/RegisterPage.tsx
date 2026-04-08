@@ -189,24 +189,25 @@ export function RegisterPage() {
                   )}
                 />
 
-                {inviteRequired && (
-                  <FormField
-                    control={form.control}
-                    name="inviteKey"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('register.inviteKey')}</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input className="pl-10" placeholder={t('register.inviteKeyPlaceholder')} {...field} />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                <FormField
+                  control={form.control}
+                  name="inviteKey"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {t('register.inviteKey')}
+                        {!inviteRequired && <span className="text-muted-foreground ml-1 text-xs">({t('register.optional')})</span>}
+                      </FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input className="pl-10" placeholder={t('register.inviteKeyPlaceholder')} {...field} />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {!requireInvite && !skipInvite && (
                   <button

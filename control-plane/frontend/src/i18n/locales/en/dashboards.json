@@ -25,10 +25,17 @@
   "previewMode": "Preview",
   "editMode": "Edit",
   "runToSeeData": "Click Preview to load data",
+  "noData": "No data returned",
+  "total": "Total",
   "types": {
     "number": "Number (single value)",
     "chart": "Chart (bar)",
     "table": "Table (query result)",
     "text": "Text (markdown)"
+  },
+  "hints": {
+    "number": "Query should return a single value, e.g. SELECT COUNT(*) FROM users",
+    "chart": "First column = label, second column = value. E.g. SELECT status, COUNT(*) as count FROM orders GROUP BY status",
+    "table": "Any SELECT query. Results shown as a table."
   }
 }

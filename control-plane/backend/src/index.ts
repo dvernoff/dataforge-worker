@@ -21,10 +21,10 @@ import { proxyRoutes } from './modules/proxy/proxy.routes.js';
 import { quotasRoutes } from './modules/quotas/quotas.routes.js';
 import { securityRoutes } from './modules/security/security.routes.js';
 import { backupsRoutes } from './modules/backups/backups.routes.js';
+import { BackupScheduler } from './modules/backups/backup-scheduler.js';
 import { sdkRoutes } from './modules/sdk/sdk.routes.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { errorsRoutes } from './modules/errors/errors.routes.js';
-import { secretsRoutes } from './modules/secrets/secrets.routes.js';
 import { settingsRoutes } from './modules/settings/settings.routes.js';
 import { cpPluginsRoutes } from './modules/plugins/cp-plugins.routes.js';
 import { rolesRoutes } from './modules/roles/roles.routes.js';
@@ -77,7 +77,6 @@ await app.register(backupsRoutes, { prefix: '/api/projects' });
 await app.register(sdkRoutes, { prefix: '/api/projects' });
 await app.register(healthRoutes, { prefix: '/api/health' });
 await app.register(errorsRoutes, { prefix: '/api/errors' });
-await app.register(secretsRoutes, { prefix: '/api/projects' });
 await app.register(settingsRoutes, { prefix: '/api/system' });
 await app.register(cpPluginsRoutes, { prefix: '/api/cp-plugins' });
 await app.register(rolesRoutes, { prefix: '/api/system/roles' });
@@ -91,7 +90,7 @@ app.get('/api/system/settings/public', async () => {
   if (!exists) {
     return { settings: { registration_enabled: 'true', require_invite: 'true', default_role: 'viewer' } };
   }
-  const keys = ['registration_enabled', 'require_invite', 'default_role', 'time_travel_days'];
+  const keys = ['registration_enabled', 'require_invite', 'default_role', 'request_retention_days', 'audit_retention_days', 'backup_retention_days'];
   const rows = await app.db('system_settings').whereIn('key', keys).select('key', 'value');
   const settings: Record<string, string> = { registration_enabled: 'true', require_invite: 'true', default_role: 'viewer' };
   for (const row of rows) {
@@ -104,6 +103,25 @@ app.get('/api/system/settings/public', async () => {
 try {
   await app.listen({ port: env.PORT, host: env.HOST });
   app.log.info(`DataForge Control Plane running on http://${env.HOST}:${env.PORT}`);
+
+  const backupScheduler = new BackupScheduler(app.db, app.redis);
+  backupScheduler.start();
+  app.log.info('Backup scheduler started');
+
+  setInterval(async () => {
+    try {
+      let auditDays = 30;
+      try {
+        const setting = await app.db('system_settings').where({ key: 'audit_retention_days' }).first();
+        if (setting?.value) auditDays = Math.max(1, Number(setting.value));
+      } catch {}
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - auditDays);
+      const cutoffISO = cutoff.toISOString();
+      try { await app.db('audit_logs').where('created_at', '<', cutoffISO).del(); } catch {}
+      try { await app.db('tracked_errors').where('created_at', '<', cutoffISO).del(); } catch {}
+    } catch {}
+  }, 60 * 60 * 1000);
 } catch (err) {
   app.log.error(err);
   process.exit(1);

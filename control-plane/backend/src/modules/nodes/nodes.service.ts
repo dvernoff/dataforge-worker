@@ -342,6 +342,7 @@ export class NodesService {
         headers: {
           'Content-Type': 'application/json',
           'x-node-api-key': apiKey,
+          ...(env.INTERNAL_SECRET ? { 'x-internal-secret': env.INTERNAL_SECRET } : {}),
         },
       });
 

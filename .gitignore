@@ -18,7 +18,8 @@ tmp/
 pg_control/
 pg_worker/
 redis_data/
-/backups/
+**/backups/*.gz
+**/backups/*.json.gz
 
 # OS
 *.swp

@@ -1,4 +1,5 @@
 import type { Knex } from 'knex';
+import { isModuleEnabled } from '../../utils/module-check.js';
 
 interface ColumnInfo {
   name: string;
@@ -344,44 +345,48 @@ export class OpenAPIService {
       paths[pathKey][method] = op;
     }
 
-    paths['/graphql'] = {
-      post: {
-        summary: 'GraphQL endpoint',
-        description: 'Execute GraphQL queries and mutations against all project tables.',
-        tags: ['GraphQL'],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                required: ['query'],
-                properties: {
-                  query: { type: 'string', description: 'GraphQL query or mutation' },
-                  variables: { type: 'object', description: 'Query variables' },
-                },
-              },
-            },
-          },
-        },
-        responses: {
-          '200': {
-            description: 'GraphQL response',
+    const graphqlEnabled = await isModuleEnabled(this.db, projectId, 'feature-graphql');
+
+    if (graphqlEnabled) {
+      paths['/graphql'] = {
+        post: {
+          summary: 'GraphQL endpoint',
+          description: 'Execute GraphQL queries and mutations against all project tables.',
+          tags: ['GraphQL'],
+          requestBody: {
+            required: true,
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
+                  required: ['query'],
                   properties: {
-                    data: { type: 'object' },
-                    errors: { type: 'array', items: { type: 'object' } },
+                    query: { type: 'string', description: 'GraphQL query or mutation' },
+                    variables: { type: 'object', description: 'Query variables' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'GraphQL response',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      data: { type: 'object' },
+                      errors: { type: 'array', items: { type: 'object' } },
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-    };
+      };
+    }
 
     return spec;
   }

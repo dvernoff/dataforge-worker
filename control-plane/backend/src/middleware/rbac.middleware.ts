@@ -13,7 +13,7 @@ const roleHierarchy: Record<ProjectRole, number> = {
   viewer: 1,
 };
 
-const MEMBERSHIP_CACHE_TTL = 10; // seconds
+const MEMBERSHIP_CACHE_TTL = 60;
 
 export function requireRole(...roles: ProjectRole[]) {
   const minLevel = Math.min(...roles.map((r) => roleHierarchy[r]));

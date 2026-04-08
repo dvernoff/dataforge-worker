@@ -8,7 +8,6 @@ const PROJECT_QUOTA_FIELDS = [
   'max_api_requests',
   'max_storage_mb',
   'max_endpoints',
-  'max_webhooks',
   'max_files',
   'max_backups',
   'max_cron',
@@ -24,7 +23,10 @@ const HARDCODED_DEFAULTS: Record<string, number> = {
   max_api_requests: 10000,
   max_storage_mb: 1000,
   max_endpoints: 50,
-  max_webhooks: 20,
+  max_webhooks: 10,
+  max_discord_webhooks: 3,
+  max_telegram_bots: 2,
+  max_uptime_monitors: 10,
   max_files: 500,
   max_backups: 10,
   max_cron: 10,
@@ -41,6 +43,9 @@ export interface ProjectQuotaInput {
   max_storage_mb?: number;
   max_endpoints?: number;
   max_webhooks?: number;
+  max_discord_webhooks?: number;
+  max_telegram_bots?: number;
+  max_uptime_monitors?: number;
   max_files?: number;
   max_backups?: number;
   max_cron?: number;
@@ -60,6 +65,9 @@ export interface PlanInput {
   max_storage_mb?: number;
   max_endpoints?: number;
   max_webhooks?: number;
+  max_discord_webhooks?: number;
+  max_telegram_bots?: number;
+  max_uptime_monitors?: number;
   max_files?: number;
   max_backups?: number;
   max_cron?: number;
@@ -134,7 +142,6 @@ export class ProjectQuotasService {
       api_requests: 0,
       storage_mb: workerUsage.storage_mb,
       endpoints: workerUsage.endpoints,
-      webhooks: workerUsage.webhooks,
       files: workerUsage.files,
       backups: backupsCount,
       cron: workerUsage.cron,
@@ -143,9 +150,9 @@ export class ProjectQuotasService {
 
   private async fetchWorkerProjectUsage(projectId: string): Promise<{
     tables: number; records: number; storage_mb: number; files: number;
-    cron: number; endpoints: number; webhooks: number;
+    cron: number; endpoints: number;
   }> {
-    const defaults = { tables: 0, records: 0, storage_mb: 0, files: 0, cron: 0, endpoints: 0, webhooks: 0 };
+    const defaults = { tables: 0, records: 0, storage_mb: 0, files: 0, cron: 0, endpoints: 0 };
     try {
       const row = await this.db('projects as p')
         .join('nodes as n', 'p.node_id', 'n.id')
@@ -170,12 +177,11 @@ export class ProjectQuotasService {
 
   async checkProjectCreateQuota(
     projectId: string,
-    resourceType: 'tables' | 'endpoints' | 'webhooks' | 'cron' | 'files' | 'backups',
+    resourceType: 'tables' | 'endpoints' | 'cron' | 'files' | 'backups',
   ): Promise<string | null> {
     const quotaFieldMap: Record<string, string> = {
       tables: 'max_tables',
       endpoints: 'max_endpoints',
-      webhooks: 'max_webhooks',
       cron: 'max_cron',
       files: 'max_files',
       backups: 'max_backups',

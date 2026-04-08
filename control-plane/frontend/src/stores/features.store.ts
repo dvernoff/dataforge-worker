@@ -2,14 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 // Features that are ON by default for new projects
-const DEFAULT_ENABLED_FEATURES: string[] = ['feature-cron'];
+const DEFAULT_ENABLED_FEATURES: string[] = ['feature-cron', 'feature-backups', 'feature-analytics'];
 
 interface FeaturesState {
-  // Map of projectSlug -> enabled feature IDs
   projectFeatures: Record<string, string[]>;
   isFeatureEnabled: (projectSlug: string | undefined, featureId: string) => boolean;
   setFeatureEnabled: (projectSlug: string, featureId: string, enabled: boolean) => void;
   getEnabledFeatures: (projectSlug: string | undefined) => string[];
+  syncFromBackend: (projectSlug: string, featureIds: string[]) => void;
 }
 
 export const useFeaturesStore = create<FeaturesState>()(
@@ -26,6 +26,10 @@ export const useFeaturesStore = create<FeaturesState>()(
         if (!projectSlug) return [];
         return get().projectFeatures[projectSlug] ?? [...DEFAULT_ENABLED_FEATURES];
       },
+      syncFromBackend: (projectSlug: string, featureIds: string[]) =>
+        set((state) => ({
+          projectFeatures: { ...state.projectFeatures, [projectSlug]: featureIds },
+        })),
       setFeatureEnabled: (projectSlug: string, featureId: string, enabled: boolean) =>
         set((state) => {
           const current = state.projectFeatures[projectSlug] ?? [...DEFAULT_ENABLED_FEATURES];

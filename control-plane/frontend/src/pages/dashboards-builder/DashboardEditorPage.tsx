@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Plus, Save, Eye, EyeOff, Trash2, ArrowLeft, Share2, Hash, BarChart3, Table2, FileText } from 'lucide-react';
+import { Plus, Eye, Trash2, ArrowLeft, GripVertical, Hash, BarChart3, Table2, FileText, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -19,6 +19,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { Progress } from '@/components/ui/progress';
 import { PageWrapper } from '@/components/shared/PageWrapper';
 import { useCurrentProject } from '@/hooks/useProject';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -32,6 +33,17 @@ const WIDGET_ICONS: Record<string, typeof Hash> = {
   text: FileText,
 };
 
+const CHART_COLORS = [
+  'hsl(142, 71%, 45%)',
+  'hsl(217, 91%, 60%)',
+  'hsl(38, 92%, 50%)',
+  'hsl(0, 84%, 60%)',
+  'hsl(280, 65%, 60%)',
+  'hsl(180, 70%, 45%)',
+  'hsl(330, 80%, 55%)',
+  'hsl(60, 80%, 50%)',
+];
+
 export function DashboardEditorPage() {
   const { t } = useTranslation(['dashboards', 'common']);
   const { id: dashboardId, slug } = useParams<{ id: string; slug: string }>();
@@ -42,12 +54,13 @@ export function DashboardEditorPage() {
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [name, setName] = useState('');
   const [isPublic, setIsPublic] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
+  const [previewMode, setPreviewMode] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editWidget, setEditWidget] = useState<Widget | null>(null);
   const [widgetResults, setWidgetResults] = useState<Record<string, Record<string, unknown>>>({});
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  // Widget form
   const [wType, setWType] = useState<Widget['type']>('number');
   const [wTitle, setWTitle] = useState('');
   const [wSql, setWSql] = useState('');
@@ -61,11 +74,17 @@ export function DashboardEditorPage() {
     enabled: !!project?.id && !!dashboardId,
   });
 
+  const hasLoaded = useRef(false);
+
   useEffect(() => {
     if (data?.dashboard) {
       setWidgets(data.dashboard.widgets ?? []);
       setName(data.dashboard.name);
       setIsPublic(data.dashboard.is_public ?? false);
+      if (!hasLoaded.current && (data.dashboard.widgets ?? []).length > 0) {
+        hasLoaded.current = true;
+        setTimeout(() => executeMutation.mutate(), 100);
+      }
     }
   }, [data]);
 
@@ -77,7 +96,10 @@ export function DashboardEditorPage() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard', project?.id, dashboardId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboards', project?.id] });
       toast.success(t('dashboards:saved'));
+      setPreviewMode(true);
+      executeMutation.mutate();
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -108,6 +130,17 @@ export function DashboardEditorPage() {
     setAddDialogOpen(true);
   };
 
+  const autoSave = (updatedWidgets: Widget[]) => {
+    if (!project?.id || !dashboardId) return;
+    dashboardsApi.update(project.id, dashboardId, { name, widgets: updatedWidgets, is_public: isPublic })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['dashboard', project?.id, dashboardId] });
+        queryClient.invalidateQueries({ queryKey: ['dashboards', project?.id] });
+        executeMutation.mutate();
+      })
+      .catch((err: Error) => toast.error(err.message));
+  };
+
   const handleSaveWidget = () => {
     const widget: Widget = {
       id: editWidget?.id ?? crypto.randomUUID(),
@@ -117,16 +150,45 @@ export function DashboardEditorPage() {
       content: wType === 'text' ? wContent : undefined,
     };
 
+    let updated: Widget[];
     if (editWidget) {
-      setWidgets(widgets.map((w) => w.id === editWidget.id ? widget : w));
+      updated = widgets.map((w) => w.id === editWidget.id ? widget : w);
     } else {
-      setWidgets([...widgets, widget]);
+      updated = [...widgets, widget];
     }
+    setWidgets(updated);
     setAddDialogOpen(false);
+    autoSave(updated);
   };
 
   const deleteWidget = (id: string) => {
-    setWidgets(widgets.filter((w) => w.id !== id));
+    const updated = widgets.filter((w) => w.id !== id);
+    setWidgets(updated);
+    autoSave(updated);
+  };
+
+  const handleDragStart = (idx: number) => {
+    setDragIdx(idx);
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    setDragOverIdx(idx);
+  };
+
+  const handleDrop = (idx: number) => {
+    if (dragIdx === null || dragIdx === idx) {
+      setDragIdx(null);
+      setDragOverIdx(null);
+      return;
+    }
+    const updated = [...widgets];
+    const [moved] = updated.splice(dragIdx, 1);
+    updated.splice(idx, 0, moved);
+    setWidgets(updated);
+    setDragIdx(null);
+    setDragOverIdx(null);
+    autoSave(updated);
   };
 
   const renderWidgetContent = (widget: Widget) => {
@@ -153,21 +215,35 @@ export function DashboardEditorPage() {
     }
 
     if (widget.type === 'chart') {
-      // Simple bar representation
+      if (rows.length === 0) {
+        return <p className="text-sm text-muted-foreground">{t('dashboards:noData')}</p>;
+      }
+      const keys = Object.keys(rows[0]);
+      const labelKey = keys[0];
+      const valueKey = keys[1] ?? keys[0];
+      const maxVal = Math.max(...rows.map((r) => Number(r[valueKey] ?? 0)), 1);
+      const total = rows.reduce((sum, r) => sum + Number(r[valueKey] ?? 0), 0);
+
       return (
-        <div className="space-y-1">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+            <span>{labelKey}</span>
+            <span>{t('dashboards:total')}: {total.toLocaleString()}</span>
+          </div>
           {rows.slice(0, 10).map((row, i) => {
-            const label = String(Object.values(row)[0] ?? '');
-            const val = Number(Object.values(row)[1] ?? 0);
-            const maxVal = Math.max(...rows.map((r) => Number(Object.values(r)[1] ?? 0)));
-            const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
+            const label = String(row[labelKey] ?? '');
+            const val = Number(row[valueKey] ?? 0);
+            const pct = (val / maxVal) * 100;
+            const color = CHART_COLORS[i % CHART_COLORS.length];
             return (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <span className="w-24 truncate text-muted-foreground">{label}</span>
-                <div className="flex-1 bg-muted rounded-full h-4">
-                  <div className="bg-primary h-4 rounded-full" style={{ width: `${pct}%` }} />
+              <div key={i} className="space-y-0.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="truncate mr-2">{label}</span>
+                  <span className="font-medium shrink-0">{val.toLocaleString()}</span>
                 </div>
-                <span className="w-12 text-right">{val}</span>
+                <div className="w-full bg-muted rounded-full h-2">
+                  <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+                </div>
               </div>
             );
           })}
@@ -175,9 +251,8 @@ export function DashboardEditorPage() {
       );
     }
 
-    // table type
     return (
-      <div className="overflow-auto max-h-[200px]">
+      <div className="overflow-auto max-h-[250px]">
         <Table>
           <TableHeader>
             <TableRow>
@@ -207,25 +282,29 @@ export function DashboardEditorPage() {
           <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${slug}/dashboards`)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="text-lg font-bold border-none bg-transparent px-0 focus-visible:ring-0 w-auto"
-          />
+          {previewMode ? (
+            <h1 className="text-lg font-bold">{name}</h1>
+          ) : (
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => { if (name && project?.id && dashboardId) dashboardsApi.update(project.id, dashboardId, { name }).catch(() => {}); }}
+              className="text-lg font-bold border-none bg-transparent px-0 focus-visible:ring-0 w-auto"
+            />
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2">
-            <Switch checked={isPublic} onCheckedChange={setIsPublic} />
-            <Label className="text-sm">{t('dashboards:public')}</Label>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => { setPreviewMode(!previewMode); if (!previewMode) executeMutation.mutate(); }}>
-            {previewMode ? <EyeOff className="h-4 w-4 mr-1" /> : <Eye className="h-4 w-4 mr-1" />}
-            {previewMode ? t('dashboards:editMode') : t('dashboards:previewMode')}
-          </Button>
-          <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
-            <Save className="h-4 w-4 mr-1" />
-            {saveMutation.isPending ? t('common:actions.saving') : t('common:actions.save')}
-          </Button>
+          {previewMode ? (
+            <Button variant="outline" size="sm" onClick={() => setPreviewMode(false)}>
+              <Pencil className="h-4 w-4 mr-1" />
+              {t('dashboards:editMode')}
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => { setPreviewMode(true); executeMutation.mutate(); }}>
+              <Eye className="h-4 w-4 mr-1" />
+              {t('dashboards:previewMode')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -236,34 +315,47 @@ export function DashboardEditorPage() {
         </Button>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {widgets.map((widget) => {
+      <div className="columns-1 md:columns-2 lg:columns-3 gap-4 [&>*]:mb-4 [&>*]:break-inside-avoid">
+        {widgets.map((widget, idx) => {
           const Icon = WIDGET_ICONS[widget.type] ?? Hash;
+          const isDragOver = dragOverIdx === idx && dragIdx !== idx;
           return (
-            <Card key={widget.id} className="relative group">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm flex items-center gap-1.5">
-                    <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                    {widget.title}
-                  </CardTitle>
-                  {!previewMode && (
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEditDialog(widget)}>
-                        <FileText className="h-3 w-3" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteWidget(widget.id)}>
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <Badge variant="outline" className="text-[10px] w-fit">{widget.type}</Badge>
-              </CardHeader>
-              <CardContent>
-                {renderWidgetContent(widget)}
-              </CardContent>
-            </Card>
+            <div
+              key={widget.id}
+              draggable={!previewMode}
+              onDragStart={() => handleDragStart(idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDragEnd={() => { setDragIdx(null); setDragOverIdx(null); }}
+              onDrop={() => handleDrop(idx)}
+              className={isDragOver ? 'ring-2 ring-primary rounded-lg' : ''}
+            >
+              <Card className="relative group">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm flex items-center gap-1.5">
+                      {!previewMode && (
+                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground cursor-grab opacity-0 group-hover:opacity-100 shrink-0" />
+                      )}
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      {widget.title}
+                    </CardTitle>
+                    {!previewMode && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEditDialog(widget)}>
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteWidget(widget.id)}>
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {renderWidgetContent(widget)}
+                </CardContent>
+              </Card>
+            </div>
           );
         })}
       </div>
@@ -274,7 +366,6 @@ export function DashboardEditorPage() {
         </div>
       )}
 
-      {/* Add/Edit Widget Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -285,7 +376,7 @@ export function DashboardEditorPage() {
               <Label>{t('dashboards:widgetType')}</Label>
               <Select value={wType} onValueChange={(v) => setWType(v as Widget['type'])}>
                 <SelectTrigger>
-                  {t(`dashboards:types.${wType}`)}
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="number">{t('dashboards:types.number')}</SelectItem>
@@ -307,7 +398,12 @@ export function DashboardEditorPage() {
             ) : (
               <div className="space-y-2">
                 <Label>{t('dashboards:sqlQuery')}</Label>
-                <Textarea value={wSql} onChange={(e) => setWSql(e.target.value)} placeholder="SELECT COUNT(*) FROM ..." className="font-mono text-xs" rows={4} />
+                <Textarea value={wSql} onChange={(e) => setWSql(e.target.value)} placeholder={wType === 'number' ? 'SELECT COUNT(*) FROM users' : wType === 'chart' ? 'SELECT status, COUNT(*) as count FROM orders GROUP BY status' : 'SELECT * FROM users LIMIT 10'} className="font-mono text-xs" rows={4} />
+                <p className="text-[11px] text-muted-foreground">
+                  {wType === 'number' && t('dashboards:hints.number')}
+                  {wType === 'chart' && t('dashboards:hints.chart')}
+                  {wType === 'table' && t('dashboards:hints.table')}
+                </p>
               </div>
             )}
             <Button onClick={handleSaveWidget} disabled={!wTitle} className="w-full">

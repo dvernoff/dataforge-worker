@@ -39,8 +39,8 @@ export const authApi = {
   me: () =>
     api.get<MeResponse>('/auth/me'),
 
-  twoFASetup: () =>
-    api.post<TwoFASetupResponse>('/auth/2fa/setup'),
+  twoFASetup: (password: string) =>
+    api.post<TwoFASetupResponse>('/auth/2fa/setup', { password }),
 
   twoFAVerifySetup: (token: string) =>
     api.post<{ success: boolean }>('/auth/2fa/verify-setup', { token }),

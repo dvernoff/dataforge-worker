@@ -25,10 +25,17 @@
   "previewMode": "Предпросмотр",
   "editMode": "Редактировать",
   "runToSeeData": "Нажмите Предпросмотр для загрузки данных",
+  "noData": "Нет данных",
+  "total": "Всего",
   "types": {
     "number": "Число (одно значение)",
     "chart": "Диаграмма (столбчатая)",
     "table": "Таблица (результат запроса)",
     "text": "Текст (markdown)"
+  },
+  "hints": {
+    "number": "Запрос должен вернуть одно значение, напр. SELECT COUNT(*) FROM users",
+    "chart": "Первый столбец = подпись, второй = значение. Напр. SELECT status, COUNT(*) as count FROM orders GROUP BY status",
+    "table": "Любой SELECT-запрос. Результаты отобразятся таблицей."
   }
 }

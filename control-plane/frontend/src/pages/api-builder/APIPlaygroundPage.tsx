@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Play, Plus, Save, Trash2, FolderOpen, Clock, ChevronRight,
@@ -26,6 +26,7 @@ import { Label } from '@/components/ui/label';
 import { PageWrapper } from '@/components/shared/PageWrapper';
 import { useCurrentProject } from '@/hooks/useProject';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { api } from '@/api/client';
 import { toast } from 'sonner';
 
 interface SavedRequest {
@@ -84,19 +85,41 @@ export function APIPlaygroundPage() {
   const [activeTab, setActiveTab] = useState('collections');
   const [requestTab, setRequestTab] = useState('headers');
 
-  // Collections & history state (in-memory for now)
+  const storageKey = project?.id ? `df-playground-${project.id}` : null;
+  const [storageLoaded, setStorageLoaded] = useState(false);
+
   const [collections, setCollections] = useState<SavedRequest[]>([]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const rawC = localStorage.getItem(`${storageKey}-collections`);
+      if (rawC) setCollections(JSON.parse(rawC));
+      const rawH = localStorage.getItem(`${storageKey}-history`);
+      if (rawH) setHistory(JSON.parse(rawH));
+    } catch {}
+    setStorageLoaded(true);
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageKey || !storageLoaded) return;
+    try { localStorage.setItem(`${storageKey}-collections`, JSON.stringify(collections)); } catch {}
+  }, [collections, storageKey, storageLoaded]);
+
+  useEffect(() => {
+    if (!storageKey || !storageLoaded) return;
+    try { localStorage.setItem(`${storageKey}-history`, JSON.stringify(history)); } catch {}
+  }, [history, storageKey, storageLoaded]);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [saveCollection, setSaveCollection] = useState('Default');
 
   const sendRequest = useCallback(async () => {
-    if (!url) return;
+    if (!url || !project?.id) return;
     setSending(true);
     setResponse(null);
 
-    const start = performance.now();
     try {
       const reqHeaders: Record<string, string> = {};
       headers.forEach((h) => {
@@ -107,44 +130,21 @@ export function APIPlaygroundPage() {
         reqHeaders['Authorization'] = `Bearer ${authToken}`;
       }
 
-      const options: RequestInit = {
+      const res = await api.post<ResponseData>(`/projects/${project.id}/api-playground/proxy`, {
+        url,
         method,
         headers: reqHeaders,
-      };
-
-      if (body && method !== 'GET' && method !== 'HEAD') {
-        options.body = body;
-      }
-
-      const res = await fetch(url, options);
-      const duration = Math.round(performance.now() - start);
-
-      const responseHeaders: Record<string, string> = {};
-      res.headers.forEach((v, k) => { responseHeaders[k] = v; });
-
-      let responseBody: string;
-      const contentType = res.headers.get('content-type') ?? '';
-      if (contentType.includes('json')) {
-        const json = await res.json();
-        responseBody = JSON.stringify(json, null, 2);
-      } else {
-        responseBody = await res.text();
-      }
-
-      setResponse({
-        status: res.status,
-        statusText: res.statusText,
-        headers: responseHeaders,
-        body: responseBody,
-        duration,
+        body: body && method !== 'GET' && method !== 'HEAD' ? body : undefined,
       });
+
+      setResponse(res);
 
       setHistory((prev) => [{
         id: crypto.randomUUID(),
         method,
         url,
         status: res.status,
-        duration,
+        duration: res.duration,
         timestamp: new Date(),
       }, ...prev].slice(0, 50));
     } catch (err: any) {
@@ -153,12 +153,12 @@ export function APIPlaygroundPage() {
         statusText: 'Network Error',
         headers: {},
         body: err.message ?? 'Failed to connect',
-        duration: Math.round(performance.now() - start),
+        duration: 0,
       });
     } finally {
       setSending(false);
     }
-  }, [url, method, headers, body, auth, authToken]);
+  }, [url, method, headers, body, auth, authToken, project?.id]);
 
   const saveRequest = useCallback(() => {
     if (!saveName) return;

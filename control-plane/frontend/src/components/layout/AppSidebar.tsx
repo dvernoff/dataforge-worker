@@ -7,7 +7,7 @@ import {
   FolderKanban, UserCog, FileText, Globe, LogOut, ChevronDown, Archive,
   Braces, Code, Activity, AlertTriangle, BarChart3, Search,
   Clock, Zap, Puzzle, Lock, LayoutDashboard, BookOpen, Map, PlayCircle,
-  GitBranch, HardDrive, Radio, Layers,
+  HardDrive, Radio, Layers, MessageCircle, Send, Gamepad2,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup,
@@ -30,6 +30,9 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useAuth } from '@/hooks/useAuth';
 import { useProjects } from '@/hooks/useProject';
 import { useFeaturesStore } from '@/stores/features.store';
+import { pluginsApi } from '@/api/plugins.api';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { User } from 'lucide-react';
 
 export function AppSidebar() {
@@ -43,8 +46,22 @@ export function AppSidebar() {
 
   const isSuperadmin = user?.is_superadmin ?? false;
   const basePath = slug ? `/projects/${slug}` : '';
-  const { isFeatureEnabled } = useFeaturesStore();
+  const { isFeatureEnabled, syncFromBackend } = useFeaturesStore();
   const checkFeature = (featureId: string) => isFeatureEnabled(slug, featureId);
+
+  const currentProject = projects?.find((p) => p.slug === slug);
+  const { data: featuresData } = useQuery({
+    queryKey: ['enabled-features', currentProject?.id],
+    queryFn: () => pluginsApi.getEnabledFeatures(currentProject!.id),
+    enabled: !!currentProject?.id,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (featuresData?.features && slug) {
+      syncFromBackend(slug, featuresData.features);
+    }
+  }, [featuresData?.features, slug, syncFromBackend]);
 
   const mainNavAll = [
     { label: t('nav.dashboard'), icon: PanelLeft, path: `${basePath}/dashboard` },
@@ -59,12 +76,14 @@ export function AppSidebar() {
     { label: t('nav.analytics'), icon: BarChart3, path: `${basePath}/analytics`, featureId: 'feature-analytics' },
     { label: t('nav.queryBuilder'), icon: Search, path: `${basePath}/query-builder`, featureId: 'feature-query-builder' },
     { label: t('nav.cron'), icon: Clock, path: `${basePath}/cron`, featureId: 'feature-cron' },
-    { label: t('nav.flows'), icon: Zap, path: `${basePath}/flows`, featureId: 'feature-flows' },
     { label: t('nav.dashboards'), icon: LayoutDashboard, path: `${basePath}/dashboards`, featureId: 'feature-dashboards' },
     { label: t('nav.dbMap'), icon: Map, path: `${basePath}/db-map`, featureId: 'feature-db-map' },
     { label: t('nav.apiPlayground'), icon: PlayCircle, path: `${basePath}/api-playground`, featureId: 'feature-api-playground' },
-    { label: t('nav.pipelines'), icon: GitBranch, path: `${basePath}/pipelines`, featureId: 'feature-data-pipeline' },
     { label: t('nav.auditLog'), icon: ScrollText, path: `${basePath}/audit` },
+    { label: t('nav.discord'), icon: MessageCircle, path: `${basePath}/integrations/discord`, featureId: 'discord-webhook' },
+    { label: t('nav.telegram'), icon: Send, path: `${basePath}/integrations/telegram`, featureId: 'telegram-bot' },
+    { label: t('nav.uptimeMonitor'), icon: Activity, path: `${basePath}/integrations/uptime`, featureId: 'uptime-ping' },
+    { label: t('nav.sboxAuth'), icon: Gamepad2, path: `${basePath}/integrations/sbox-auth`, featureId: 'sbox-auth' },
   ];
 
   const mainNav = mainNavAll.filter(
@@ -77,7 +96,6 @@ export function AppSidebar() {
     { label: t('nav.apiTokens'), icon: Key, path: `${basePath}/settings/tokens` },
     { label: t('nav.security'), icon: Shield, path: `${basePath}/settings/security` },
     { label: t('nav.backups'), icon: Archive, path: `${basePath}/settings/backups`, featureId: 'feature-backups' },
-    { label: t('nav.secrets'), icon: Lock, path: `${basePath}/settings/secrets`, featureId: 'feature-secrets' },
     { label: t('nav.plugins'), icon: Puzzle, path: `${basePath}/settings/plugins` },
     { label: t('nav.projectSettings'), icon: Settings, path: `${basePath}/settings/project` },
   ];

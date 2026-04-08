@@ -1,58 +1,52 @@
-import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTranslation } from 'react-i18next';
+import {
+  Download, Trash2, RotateCcw, ShieldAlert, HardDrive,
+  Clock, Archive, Loader2, Plus, AlertTriangle, Upload,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { PageWrapper } from '@/components/shared/PageWrapper';
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { useCurrentProject } from '@/hooks/useProject';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { Progress } from '@/components/ui/progress';
 import { backupsApi, type Backup } from '@/api/backups.api';
-import { schemaApi } from '@/api/schema.api';
-import { quotasApi } from '@/api/quotas.api';
 import { toast } from 'sonner';
-import { Download, Trash2, Plus, Loader2, AlertTriangle, Database, RotateCcw } from 'lucide-react';
 
-function formatBytes(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return '-';
+function formatBytes(bytes: number | string | null): string {
+  const n = Number(bytes);
+  if (!n || isNaN(n)) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB'];
   let i = 0;
-  let size = bytes;
+  let size = n;
   while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-  return `${size.toFixed(1)} ${units[i]}`;
+  return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (status) {
-    case 'completed': return 'default';
-    case 'running': return 'secondary';
-    case 'pending': return 'outline';
-    case 'failed': return 'destructive';
-    default: return 'outline';
-  }
+function StatusBadge({ status, t }: { status: string; t: any }) {
+  const colors: Record<string, string> = {
+    pending: 'bg-muted text-muted-foreground',
+    running: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+    completed: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+    failed: 'bg-red-500/15 text-red-400 border-red-500/30',
+  };
+  return (
+    <Badge variant="outline" className={`text-[10px] ${colors[status] ?? ''}`}>
+      {status === 'running' && <Loader2 className="h-2.5 w-2.5 mr-1 animate-spin" />}
+      {t(`settings:backups.status.${status}`)}
+    </Badge>
+  );
 }
 
-function parseMetadataTables(backup: Backup): string[] {
-  if (!backup.metadata) return [];
-  try {
-    const meta = typeof backup.metadata === 'string' ? JSON.parse(backup.metadata) : backup.metadata;
-    return meta.tables ?? [];
-  } catch {
-    return [];
-  }
-}
+const INTERVALS = ['12h', '24h', '48h', '7d'] as const;
 
 export function BackupsPage() {
   const { t } = useTranslation(['settings', 'common']);
@@ -60,253 +54,253 @@ export function BackupsPage() {
   const { data: project } = useCurrentProject();
   const queryClient = useQueryClient();
 
-  const [deleteBackupId, setDeleteBackupId] = useState<string | null>(null);
-  const [restoreBackupId, setRestoreBackupId] = useState<string | null>(null);
-  const [cronExpression, setCronExpression] = useState('');
-  const [isActive, setIsActive] = useState(true);
-  const [maxBackups, setMaxBackups] = useState(5);
+  const [deleteTarget, setDeleteTarget] = useState<Backup | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<Backup | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Create backup dialog state
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [selectedTables, setSelectedTables] = useState<string[]>([]);
-
-  // Fetch backups
   const { data: backupsData } = useQuery({
     queryKey: ['backups', project?.id],
     queryFn: () => backupsApi.list(project!.id),
     enabled: !!project?.id,
+    refetchInterval: 10000,
   });
-
-  // Fetch schedule
+  const { data: stats } = useQuery({
+    queryKey: ['backups-stats', project?.id],
+    queryFn: () => backupsApi.stats(project!.id),
+    enabled: !!project?.id,
+    refetchInterval: 10000,
+  });
   const { data: scheduleData } = useQuery({
-    queryKey: ['backups-schedule', project?.id],
+    queryKey: ['backup-schedule', project?.id],
     queryFn: () => backupsApi.getSchedule(project!.id),
     enabled: !!project?.id,
   });
 
-  // Fetch tables for selection
-  const { data: tablesData } = useQuery({
-    queryKey: ['tables', project?.id],
-    queryFn: () => schemaApi.listTables(project!.id),
-    enabled: !!project?.id,
-  });
-
-  useEffect(() => {
-    if (scheduleData?.schedule) {
-      setCronExpression(scheduleData.schedule.cron_expression ?? '');
-      setIsActive(scheduleData.schedule.is_active);
-      setMaxBackups(scheduleData.schedule.max_backups);
-    }
-  }, [scheduleData]);
-
-  // Fetch user quota for backup limits
-  const { data: quotaData } = useQuery({
-    queryKey: ['quotas', 'me'],
-    queryFn: () => quotasApi.getMyQuota(),
-  });
-
   const backups = backupsData?.backups ?? [];
-  const tablesList = tablesData?.tables ?? [];
-  const maxBackupsQuota = quotaData?.quota?.max_backups ?? 10;
-  const currentBackupCount = backups.filter((b) => b.status === 'completed').length;
-  const quotaReached = currentBackupCount >= maxBackupsQuota;
-  const usagePercent = maxBackupsQuota > 0 ? Math.min((currentBackupCount / maxBackupsQuota) * 100, 100) : 0;
+  const schedule = scheduleData?.schedule ?? null;
+  const canCreateManual = (stats?.manualToday ?? 0) < (stats?.manualLimit ?? 2);
+  const maxBackups = stats?.maxBackups ?? 10;
+  const quotaPercent = stats ? Math.min(100, Math.round((stats.count / maxBackups) * 100)) : 0;
+  const manualLeft = (stats?.manualLimit ?? 2) - (stats?.manualToday ?? 0);
 
-  const allTablesSelected = selectedTables.length === tablesList.length && tablesList.length > 0;
+  const invalidate = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['backups', project?.id] });
+    queryClient.invalidateQueries({ queryKey: ['backups-stats', project?.id] });
+  }, [queryClient, project?.id]);
 
-  function handleToggleTable(tableName: string) {
-    setSelectedTables((prev) =>
-      prev.includes(tableName)
-        ? prev.filter((t) => t !== tableName)
-        : [...prev, tableName]
-    );
-  }
-
-  function handleToggleAll() {
-    if (allTablesSelected) {
-      setSelectedTables([]);
-    } else {
-      setSelectedTables(tablesList.map((t) => t.name));
-    }
-  }
-
-  function openCreateDialog() {
-    if (quotaReached) {
-      toast.warning(t('settings:backups.quotaReached'));
-      return;
-    }
-    setSelectedTables([]);
-    setCreateDialogOpen(true);
-  }
-
-  // Create backup
   const createMutation = useMutation({
-    mutationFn: (tables?: string[]) => backupsApi.create(project!.id, tables),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['backups', project?.id] });
-      setCreateDialogOpen(false);
-      toast.success(t('settings:backups.creating'));
-    },
+    mutationFn: () => backupsApi.create(project!.id),
+    onSuccess: () => { toast.success(t('settings:backups.created')); invalidate(); },
     onError: (err: Error) => toast.error(err.message),
   });
-
-  // Delete backup
   const deleteMutation = useMutation({
     mutationFn: (backupId: string) => backupsApi.delete(project!.id, backupId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['backups', project?.id] });
-      setDeleteBackupId(null);
-    },
+    onSuccess: () => { toast.success(t('settings:backups.deleted')); setDeleteTarget(null); invalidate(); },
     onError: (err: Error) => toast.error(err.message),
   });
-
-  // Restore backup
   const restoreMutation = useMutation({
     mutationFn: (backupId: string) => backupsApi.restore(project!.id, backupId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['backups', project?.id] });
-      setRestoreBackupId(null);
-      toast.success(t('settings:backups.restoreSuccess'));
-    },
+    onSuccess: () => { toast.success(t('settings:backups.restoreSuccess')); setRestoreTarget(null); },
     onError: (err: Error) => toast.error(err.message),
   });
-
-  // Download backup
-  const downloadMutation = useMutation({
-    mutationFn: (backupId: string) => backupsApi.download(project!.id, backupId),
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  // Update schedule
   const scheduleMutation = useMutation({
-    mutationFn: () => backupsApi.updateSchedule(project!.id, {
-      cron_expression: cronExpression,
-      is_active: isActive,
-      max_backups: maxBackups,
-    }),
+    mutationFn: (data: { interval?: string; is_active?: boolean; max_backups?: number }) =>
+      backupsApi.updateSchedule(project!.id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['backups-schedule', project?.id] });
       toast.success(t('settings:backups.scheduleSaved'));
+      queryClient.invalidateQueries({ queryKey: ['backup-schedule', project?.id] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
+  const importMutation = useMutation({
+    mutationFn: (file: File) => backupsApi.import(project!.id, file),
+    onSuccess: () => { toast.success(t('settings:backups.imported')); invalidate(); },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const handleImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 100 * 1024 * 1024) { toast.error('File too large (max 100 MB)'); return; }
+    importMutation.mutate(file);
+    e.target.value = '';
+  }, [importMutation]);
+
+  const handleDownload = useCallback(async (backup: Backup) => {
+    try { await backupsApi.download(project!.id, backup.id); } catch (err: any) { toast.error(err.message); }
+  }, [project?.id]);
+
+  const currentMax = schedule?.max_backups ?? 5;
 
   return (
     <PageWrapper>
-      <h1 className="text-2xl font-bold mb-6">{t('settings:backups.title')}</h1>
-
-      {/* Quota Usage */}
-      <Card className="mb-6">
-        <CardContent>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">{t('settings:backups.quotaUsage')}</span>
-            <span className="text-sm text-muted-foreground">
-              {currentBackupCount}/{maxBackupsQuota} {t('settings:backups.used')}
-            </span>
-          </div>
-          <Progress value={usagePercent} className="h-2" />
-          {quotaReached && (
-            <div className="flex items-center gap-2 mt-2 text-sm text-destructive">
-              <AlertTriangle className="h-4 w-4" />
-              {t('settings:backups.quotaReached')}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Backups List */}
-      <Card className="mb-6">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>{t('settings:backups.title')}</CardTitle>
-          <Button onClick={openCreateDialog} disabled={createMutation.isPending}>
-            {createMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Plus className="h-4 w-4 mr-2" />
-            )}
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-2xl font-bold">{t('settings:backups.title')}</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={importMutation.isPending}>
+            {importMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            {t('settings:backups.importBackup')}
+          </Button>
+          <Button size="sm" className="gap-1.5" onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !canCreateManual}>
+            {createMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
             {t('settings:backups.createBackup')}
           </Button>
-        </CardHeader>
-        <CardContent>
-          {backups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Database className="h-12 w-12 text-muted-foreground mb-4" />
-              <h2 className="text-lg font-medium mb-2">{t('settings:backups.noBackups')}</h2>
-              <p className="text-muted-foreground">{t('settings:backups.noBackupsDesc')}</p>
+          <input ref={fileInputRef} type="file" accept=".json,.json.gz,.gz" className="hidden" onChange={handleImportFile} />
+        </div>
+      </div>
+
+      {/* Warning */}
+      <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg bg-amber-500/8 border border-amber-500/15 mb-5">
+        <ShieldAlert className="h-4 w-4 text-amber-400 shrink-0" />
+        <p className="text-xs text-amber-300/80">{t('settings:backups.warning')}</p>
+      </div>
+
+      {/* Hero stats row */}
+      <div className="grid grid-cols-4 gap-3 mb-5">
+        {/* Backups count */}
+        <div className="rounded-xl border bg-card p-4">
+          <Archive className="h-4 w-4 text-primary mb-2" />
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold font-mono">{stats?.count ?? 0}</span>
+            <span className="text-xs text-muted-foreground">/ {maxBackups}</span>
+          </div>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('settings:backups.stats.total')}</span>
+        </div>
+
+        {/* Size */}
+        <div className="rounded-xl border bg-card p-4">
+          <HardDrive className="h-4 w-4 text-blue-400 mb-2" />
+          <span className="text-2xl font-bold font-mono">{formatBytes(stats?.totalSize ?? 0)}</span>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('settings:backups.stats.size')}</div>
+        </div>
+
+        {/* Quota bar */}
+        <div className="rounded-xl border bg-card p-4 flex flex-col justify-center">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('settings:backups.stats.quota')}</span>
+            <span className="text-xs font-mono font-bold">{quotaPercent}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${quotaPercent >= 90 ? 'bg-red-500' : quotaPercent >= 70 ? 'bg-amber-500' : 'bg-primary'}`}
+              style={{ width: `${quotaPercent}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-muted-foreground mt-1.5">{stats?.count ?? 0} / {maxBackups}</span>
+        </div>
+
+        {/* Daily limit */}
+        <div className="rounded-xl border bg-card p-4">
+          <Clock className="h-4 w-4 text-purple-400 mb-2" />
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold font-mono">{Math.max(0, manualLeft)}</span>
+            <span className="text-xs text-muted-foreground">/ {stats?.manualLimit ?? 2}</span>
+          </div>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('settings:backups.rateLimitLabel')}</span>
+        </div>
+      </div>
+
+      {/* Auto-backups + Backup list side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+        {/* Left: Auto-backups config */}
+        <div className="rounded-xl border bg-card p-4 self-start">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-semibold">{t('settings:backups.schedule')}</span>
             </div>
-          ) : (
-            <div className="border rounded-lg overflow-auto">
+            <Switch
+              checked={schedule?.is_active ?? false}
+              onCheckedChange={(checked) => scheduleMutation.mutate({ is_active: checked })}
+            />
+          </div>
+
+          {(schedule?.is_active ?? false) && (
+            <div className="space-y-3 pt-3 border-t">
+              <div>
+                <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5 block">{t('settings:backups.intervalLabel')}</Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {INTERVALS.map((iv) => {
+                    const active = schedule?.cron_expression === iv;
+                    return (
+                      <button
+                        key={iv}
+                        type="button"
+                        onClick={() => scheduleMutation.mutate({ interval: iv })}
+                        className={`px-2 py-1.5 rounded-md text-[11px] font-medium border transition-colors ${
+                          active ? 'border-primary bg-primary/10 text-primary' : 'border-border/50 hover:border-border text-muted-foreground'
+                        }`}
+                      >
+                        {t(`settings:backups.intervals.${iv}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5 block">{t('settings:backups.maxBackups')}</Label>
+                <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="icon" className="h-7 w-7" disabled={currentMax <= 2}
+                    onClick={() => scheduleMutation.mutate({ max_backups: Math.max(2, currentMax - 1) })}>
+                    <span className="font-bold">−</span>
+                  </Button>
+                  <span className="text-sm font-mono font-bold w-8 text-center">{currentMax}</span>
+                  <Button variant="outline" size="icon" className="h-7 w-7" disabled={currentMax >= maxBackups}
+                    onClick={() => scheduleMutation.mutate({ max_backups: Math.min(maxBackups, currentMax + 1) })}>
+                    <span className="font-bold">+</span>
+                  </Button>
+                  <span className="text-[9px] text-muted-foreground/60 ml-1">max {maxBackups}</span>
+                </div>
+              </div>
+
+              <p className="text-[9px] text-muted-foreground/60 leading-relaxed">{t('settings:backups.scheduleDesc')}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Backup list */}
+        <div>
+          {backups.length > 0 ? (
+            <div className="rounded-xl border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t('settings:backups.headers.date')}</TableHead>
-                    <TableHead>{t('settings:backups.headers.type')}</TableHead>
-                    <TableHead>{t('settings:backups.headers.status')}</TableHead>
-                    <TableHead>{t('settings:backups.headers.size')}</TableHead>
-                    <TableHead>Tables</TableHead>
-                    <TableHead className="text-right">{t('common:actions.actions')}</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-wider">{t('settings:backups.headers.date')}</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-wider">{t('settings:backups.headers.type')}</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-wider">{t('settings:backups.headers.status')}</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-wider">{t('settings:backups.headers.size')}</TableHead>
+                    <TableHead className="text-[10px] uppercase tracking-wider">{t('settings:backups.headers.tables')}</TableHead>
+                    <TableHead className="w-[100px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {backups.map((backup: Backup) => {
-                    const tables = parseMetadataTables(backup);
+                  {backups.map((b) => {
+                    let tables: string[] = [];
+                    try { tables = JSON.parse(b.metadata ?? '{}').tables ?? []; } catch {}
                     return (
-                      <TableRow key={backup.id}>
-                        <TableCell className="whitespace-nowrap">
-                          {new Date(backup.created_at).toLocaleString()}
-                        </TableCell>
+                      <TableRow key={b.id}>
+                        <TableCell className="text-xs font-mono">{new Date(b.created_at).toLocaleString()}</TableCell>
                         <TableCell>
-                          <Badge variant="outline">
-                            {t(`settings:backups.types.${backup.type}`)}
-                          </Badge>
+                          <Badge variant="outline" className="text-[10px]">{t(`settings:backups.types.${b.type}`)}</Badge>
                         </TableCell>
+                        <TableCell><StatusBadge status={b.status} t={t} /></TableCell>
+                        <TableCell className="text-xs font-mono">{formatBytes(b.file_size)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{tables.length || '—'}</TableCell>
                         <TableCell>
-                          <Badge variant={statusVariant(backup.status)}>
-                            {t(`settings:backups.status.${backup.status}`)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{formatBytes(backup.file_size)}</TableCell>
-                        <TableCell>
-                          {tables.length > 0 ? (
-                            <span className="text-sm text-muted-foreground">
-                              {tables.length} {tables.length === 1 ? 'table' : 'tables'}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">All tables</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {backup.status === 'completed' && backup.file_path && (
+                          <div className="flex items-center gap-0.5 justify-end">
+                            {b.status === 'completed' && (
                               <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => downloadMutation.mutate(backup.id)}
-                                  disabled={downloadMutation.isPending}
-                                  title="Download"
-                                >
-                                  <Download className="h-4 w-4" />
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownload(b)}>
+                                  <Download className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => setRestoreBackupId(backup.id)}
-                                  title="Restore"
-                                >
-                                  <RotateCcw className="h-4 w-4" />
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setRestoreTarget(b)}>
+                                  <RotateCcw className="h-3.5 w-3.5" />
                                 </Button>
                               </>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => setDeleteBackupId(backup.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(b)}>
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         </TableCell>
@@ -316,139 +310,51 @@ export function BackupsPage() {
                 </TableBody>
               </Table>
             </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center rounded-xl border border-dashed">
+              <Archive className="h-10 w-10 text-muted-foreground/15 mb-3" />
+              <h3 className="text-sm font-medium mb-1">{t('settings:backups.noBackups')}</h3>
+              <p className="text-xs text-muted-foreground max-w-[280px]">{t('settings:backups.noBackupsDesc')}</p>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Schedule */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('settings:backups.schedule')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="cron-expression">{t('settings:backups.cronExpression')}</Label>
-            <Input
-              id="cron-expression"
-              value={cronExpression}
-              onChange={(e) => setCronExpression(e.target.value)}
-              placeholder="0 2 * * *"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="max-backups">{t('settings:backups.maxBackups')}</Label>
-            <Input
-              id="max-backups"
-              type="number"
-              min={1}
-              max={maxBackupsQuota}
-              value={maxBackups}
-              onChange={(e) => setMaxBackups(Math.min(Number(e.target.value), maxBackupsQuota))}
-            />
-            <p className="text-xs text-muted-foreground">
-              {t('settings:backups.maxScheduleHint', { max: maxBackupsQuota })}
-            </p>
-          </div>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="backup-active">{t('settings:backups.active')}</Label>
-            <Switch
-              id="backup-active"
-              checked={isActive}
-              onCheckedChange={setIsActive}
-            />
-          </div>
-          <Button onClick={() => scheduleMutation.mutate()} disabled={scheduleMutation.isPending}>
-            {t('common:actions.save')}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Create Backup Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-md">
+      {/* Delete dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t('settings:backups.createBackup')}</DialogTitle>
-            <DialogDescription>
-              Select tables to include in the backup. Leave all unchecked to back up all tables.
-            </DialogDescription>
+            <DialogTitle>{t('settings:backups.deleteConfirm.title')}</DialogTitle>
+            <DialogDescription>{t('settings:backups.deleteConfirm.desc')}</DialogDescription>
           </DialogHeader>
-
-          <div className="max-h-64 overflow-y-auto space-y-2 py-2">
-            {tablesList.length > 0 && (
-              <div className="flex items-center space-x-2 pb-2 border-b">
-                <Checkbox
-                  id="select-all"
-                  checked={allTablesSelected}
-                  onCheckedChange={handleToggleAll}
-                />
-                <Label htmlFor="select-all" className="font-medium cursor-pointer">
-                  Select All ({tablesList.length} tables)
-                </Label>
-              </div>
-            )}
-            {tablesList.map((table) => (
-              <div key={table.name} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`table-${table.name}`}
-                  checked={selectedTables.includes(table.name)}
-                  onCheckedChange={() => handleToggleTable(table.name)}
-                />
-                <Label htmlFor={`table-${table.name}`} className="cursor-pointer flex-1">
-                  <span>{table.name}</span>
-                  <span className="text-xs text-muted-foreground ml-2">
-                    ({table.row_count} rows)
-                  </span>
-                </Label>
-              </div>
-            ))}
-            {tablesList.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No tables found in this project.
-              </p>
-            )}
-          </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              {t('common:actions.cancel')}
-            </Button>
-            <Button
-              onClick={() => {
-                const tables = selectedTables.length > 0 ? selectedTables : undefined;
-                createMutation.mutate(tables);
-              }}
-              disabled={createMutation.isPending}
-            >
-              {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {t('settings:backups.createBackup')}
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>{t('common:actions.cancel')}</Button>
+            <Button variant="destructive" onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} disabled={deleteMutation.isPending}>
+              {t('common:actions.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm Dialog */}
-      <ConfirmDialog
-        open={deleteBackupId !== null}
-        onOpenChange={(open) => { if (!open) setDeleteBackupId(null); }}
-        title={t('settings:backups.deleteConfirm.title')}
-        description={t('settings:backups.deleteConfirm.desc')}
-        confirmText={t('common:actions.delete')}
-        variant="destructive"
-        onConfirm={() => { if (deleteBackupId) deleteMutation.mutate(deleteBackupId); }}
-        loading={deleteMutation.isPending}
-      />
-
-      {/* Restore Confirm Dialog */}
-      <ConfirmDialog
-        open={restoreBackupId !== null}
-        onOpenChange={(open) => { if (!open) setRestoreBackupId(null); }}
-        title="Restore Backup"
-        description="This will overwrite current data in the backed-up tables with the backup contents. This action cannot be undone. Are you sure you want to proceed?"
-        confirmText="Restore"
-        variant="destructive"
-        onConfirm={() => { if (restoreBackupId) restoreMutation.mutate(restoreBackupId); }}
-        loading={restoreMutation.isPending}
-      />
+      {/* Restore dialog */}
+      <Dialog open={!!restoreTarget} onOpenChange={(open) => { if (!open) setRestoreTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-400" />
+              {t('settings:backups.restoreConfirm.title')}
+            </DialogTitle>
+            <DialogDescription>{t('settings:backups.restoreConfirm.desc')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestoreTarget(null)}>{t('common:actions.cancel')}</Button>
+            <Button onClick={() => restoreTarget && restoreMutation.mutate(restoreTarget.id)} disabled={restoreMutation.isPending}>
+              {restoreMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RotateCcw className="h-4 w-4 mr-1" />}
+              {t('settings:backups.restoreConfirm.title')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

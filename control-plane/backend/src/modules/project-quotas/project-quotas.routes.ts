@@ -11,7 +11,6 @@ const quotaFieldSchema: Record<string, z.ZodTypeAny> = {
   max_api_requests: z.coerce.number().int().min(1).optional(),
   max_storage_mb: z.coerce.number().int().min(1).optional(),
   max_endpoints: z.coerce.number().int().min(1).optional(),
-  max_webhooks: z.coerce.number().int().min(1).optional(),
   max_files: z.coerce.number().int().min(1).optional(),
   max_backups: z.coerce.number().int().min(1).optional(),
   max_cron: z.coerce.number().int().min(1).optional(),

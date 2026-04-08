@@ -56,11 +56,10 @@ export function AnalyticsPage() {
         <h1 className="text-2xl font-bold">{t('title')}</h1>
       </div>
 
-      {/* Metric Cards */}
       {summaryLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24" />
+            <Skeleton key={i} className="h-28" />
           ))}
         </div>
       ) : (
@@ -68,12 +67,13 @@ export function AnalyticsPage() {
           <Card>
             <CardContent>
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                  <BarChart3 className="h-5 w-5 text-blue-600" />
+                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <BarChart3 className="h-5 w-5 text-blue-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('totalRequests')}</p>
-                  <p className="text-2xl font-bold">{summary?.totalRequests ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">{t('totalRequests')}</p>
+                  <p className="text-2xl font-bold">{(summary?.totalRequests ?? 0).toLocaleString()}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('last7days')}</p>
                 </div>
               </div>
             </CardContent>
@@ -82,12 +82,13 @@ export function AnalyticsPage() {
           <Card>
             <CardContent>
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-green-600" />
+                <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-green-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('avgResponseTime')}</p>
+                  <p className="text-xs text-muted-foreground">{t('avgResponseTime')}</p>
                   <p className="text-2xl font-bold">{t('ms', { value: summary?.avgResponseTime ?? 0 })}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('last7days')}</p>
                 </div>
               </div>
             </CardContent>
@@ -96,12 +97,13 @@ export function AnalyticsPage() {
           <Card>
             <CardContent>
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
+                <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+                  <AlertCircle className="h-5 w-5 text-red-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('errorRate')}</p>
+                  <p className="text-xs text-muted-foreground">{t('errorRate')}</p>
                   <p className="text-2xl font-bold">{t('percent', { value: summary?.errorRate ?? 0 })}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('last7days')}</p>
                 </div>
               </div>
             </CardContent>
@@ -110,12 +112,13 @@ export function AnalyticsPage() {
           <Card>
             <CardContent>
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                  <Globe className="h-5 w-5 text-purple-600" />
+                <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                  <Globe className="h-5 w-5 text-purple-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('uniqueIps')}</p>
-                  <p className="text-2xl font-bold">-</p>
+                  <p className="text-xs text-muted-foreground">{t('uniqueIps')}</p>
+                  <p className="text-2xl font-bold">{(summary?.uniqueIps ?? 0).toLocaleString()}</p>
+                  <p className="text-[11px] text-muted-foreground">{t('last7days')}</p>
                 </div>
               </div>
             </CardContent>

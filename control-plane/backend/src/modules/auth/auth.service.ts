@@ -9,27 +9,42 @@ interface RegisterParams {
   email: string;
   password: string;
   name: string;
-  inviteKey: string;
+  inviteKey?: string;
 }
 
 export class AuthService {
   constructor(private db: Knex) {}
 
   async register({ email, password, name, inviteKey }: RegisterParams) {
-    const invite = await this.db('invite_keys')
-      .where({ key: inviteKey, is_active: true })
-      .first();
+    let requireInvite = true;
+    try {
+      const hasSettings = await this.db.schema.hasTable('system_settings');
+      if (hasSettings) {
+        const setting = await this.db('system_settings').where({ key: 'require_invite' }).first();
+        if (setting?.value === 'false') requireInvite = false;
+      }
+    } catch { /* default to require */ }
 
-    if (!invite) {
-      throw new AppError(400, 'Invalid or inactive invite key');
-    }
+    let invite: Record<string, unknown> | null = null;
 
-    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      throw new AppError(400, 'Invite key has expired');
-    }
+    if (inviteKey) {
+      invite = await this.db('invite_keys')
+        .where({ key: inviteKey, is_active: true })
+        .first() ?? null;
 
-    if (invite.max_uses > 0 && invite.current_uses >= invite.max_uses) {
-      throw new AppError(400, 'Invite key has reached maximum uses');
+      if (!invite) {
+        throw new AppError(400, 'Invalid or inactive invite key');
+      }
+
+      if (invite.expires_at && new Date(invite.expires_at as string) < new Date()) {
+        throw new AppError(400, 'Invite key has expired');
+      }
+
+      if ((invite.max_uses as number) > 0 && (invite.current_uses as number) >= (invite.max_uses as number)) {
+        throw new AppError(400, 'Invite key has reached maximum uses');
+      }
+    } else if (requireInvite) {
+      throw new AppError(400, 'Invite key is required');
     }
 
     const existing = await this.db('users').where({ email }).first();
@@ -48,23 +63,24 @@ export class AuthService {
         })
         .returning('*');
 
-      if (invite.project_id) {
-        await trx('project_members').insert({
-          project_id: invite.project_id,
-          user_id: user.id,
-          role: invite.role,
-        });
-      }
+      if (invite) {
+        if (invite.project_id) {
+          await trx('project_members').insert({
+            project_id: invite.project_id,
+            user_id: user.id,
+            role: invite.role,
+          });
+        }
 
-      await trx('invite_keys')
-        .where({ id: invite.id })
-        .increment('current_uses', 1);
-
-      // Deactivate if max uses reached
-      if (invite.max_uses > 0 && invite.current_uses + 1 >= invite.max_uses) {
         await trx('invite_keys')
           .where({ id: invite.id })
-          .update({ is_active: false });
+          .increment('current_uses', 1);
+
+        if ((invite.max_uses as number) > 0 && (invite.current_uses as number) + 1 >= (invite.max_uses as number)) {
+          await trx('invite_keys')
+            .where({ id: invite.id })
+            .update({ is_active: false });
+        }
       }
 
       // Assign default role if configured

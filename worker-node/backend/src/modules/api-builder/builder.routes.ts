@@ -50,7 +50,7 @@ export async function apiBuilderRoutes(app: FastifyInstance) {
         cache_ttl: z.number().int().min(1).optional(),
         cache_key_template: z.string().optional(),
         rate_limit: z.record(z.unknown()).optional(),
-        auth_type: z.enum(['public', 'api_token']).optional(),
+        auth_type: z.enum(['public', 'api_token', 'sbox_session']).optional(),
         is_active: z.boolean().optional(),
       }).parse(request.body);
 
@@ -79,8 +79,12 @@ export async function apiBuilderRoutes(app: FastifyInstance) {
     protectedRoutes.delete('/:projectId/endpoints/:endpointId', async (request, reply) => {
       const { projectId, endpointId } = request.params as { projectId: string; endpointId: string };
 
-      const rlKeys = await app.redis.keys(`rl:ep:${endpointId}:*`);
-      if (rlKeys.length) await app.redis.del(...rlKeys);
+      let rlCursor = '0';
+      do {
+        const [next, keys] = await app.redis.scan(rlCursor, 'MATCH', `rl:ep:${endpointId}:*`, 'COUNT', 200);
+        rlCursor = next;
+        if (keys.length) await app.redis.del(...keys);
+      } while (rlCursor !== '0');
       const project = await app.db('projects').where({ id: projectId }).select('slug').first();
       if (project) {
         await cacheService.invalidateByEndpoint(project.slug, endpointId);
@@ -139,13 +143,82 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
   const executor = new Executor(app.db);
   const cacheService = new CacheService(app.redis);
 
+  const { WebhookDispatcher } = await import('../webhooks/dispatcher.js');
+  const { WebSocketService } = await import('../realtime/websocket.service.js');
+  const webhookDispatcher = new WebhookDispatcher(app.db);
+
+  const slugCache = new Map<string, { project: any; expiry: number }>();
+  const SLUG_CACHE_TTL = 300_000;
+
+  async function resolveProjectBySlug(slug: string) {
+    const cached = slugCache.get(slug);
+    if (cached && cached.expiry > Date.now()) return cached.project;
+    const project = await app.db('projects').where({ slug }).first();
+    if (project) slugCache.set(slug, { project, expiry: Date.now() + SLUG_CACHE_TTL });
+    return project;
+  }
+
+  const RATE_LIMIT_LUA = `
+    local key = KEYS[1]
+    local limit = tonumber(ARGV[1])
+    local window = tonumber(ARGV[2])
+    local current = redis.call('incr', key)
+    if current == 1 then redis.call('expire', key, window) end
+    local ttl = redis.call('ttl', key)
+    return {current, ttl}
+  `;
+
   async function handleDynamicApi(request: any, reply: any, apiVersion: number) {
     const { projectSlug } = request.params as { projectSlug: string; '*': string };
     const wildcardPath = (request.params as Record<string, string>)['*'];
     const path = '/' + wildcardPath;
 
-    const project = await app.db('projects').where({ slug: projectSlug }).first();
+    const project = await resolveProjectBySlug(projectSlug);
     if (!project) return reply.status(404).send({ error: 'Project not found' });
+
+    request.projectId = project.id;
+    request.projectSchema = project.db_schema;
+
+    try {
+      const secRaw = await app.redis.get(`security:${project.id}`);
+      if (secRaw) {
+        const sec = JSON.parse(secRaw);
+        const clientIp = (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? request.ip;
+        if (sec.ip_mode === 'whitelist' && sec.ip_whitelist.length > 0) {
+          if (!sec.ip_whitelist.some((ip: string) => clientIp === ip || clientIp.startsWith(ip.replace(/\/\d+$/, '').replace(/\.\d+$/, '.')))) {
+            return reply.status(403).send({ error: 'IP address not allowed' });
+          }
+        }
+        if (sec.ip_mode === 'blacklist' && sec.ip_blacklist.length > 0) {
+          if (sec.ip_blacklist.some((ip: string) => clientIp === ip || clientIp.startsWith(ip.replace(/\/\d+$/, '').replace(/\.\d+$/, '.')))) {
+            return reply.status(403).send({ error: 'IP address blocked' });
+          }
+        }
+      }
+    } catch {}
+
+    executor.setMutationHook((event, tableName, record) => {
+      const ws = WebSocketService.getInstance();
+      ws.broadcastDataChange(project.id, tableName, event, record);
+
+      app.db('plugin_instances')
+        .where({ project_id: project.id, plugin_id: 'feature-webhooks', is_enabled: true })
+        .first()
+        .then((plugin) => {
+          if (!plugin) return;
+          return app.db('webhooks')
+            .where({ project_id: project.id, is_active: true })
+            .whereRaw('? = ANY(table_names)', [tableName])
+            .whereRaw('? = ANY(events)', [event]);
+        })
+        .then((webhooks) => {
+          if (!webhooks) return;
+          for (const wh of webhooks) {
+            webhookDispatcher.dispatch(wh, event, { table: tableName, event, record, timestamp: new Date().toISOString() }).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    });
 
     const endpointExact = await app.db('api_endpoints')
       .where({
@@ -212,6 +285,56 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
           return reply.status(403).send({ error: 'IP address not allowed' });
         }
       }
+    } else if (endpointFinal.auth_type === 'sbox_session') {
+      const pluginManager = (app as any).pluginManager;
+      if (!pluginManager) {
+        return reply.status(503).send({ error: 'Game auth is not configured' });
+      }
+
+      const pluginInstance = await pluginManager.getEnabledPluginInstance(project.id, 'sbox-auth');
+      if (!pluginInstance) {
+        return reply.status(503).send({ error: 'S&box Auth plugin is not enabled' });
+      }
+
+      const sessionKey = request.headers['x-session-key'] as string;
+      if (!sessionKey) {
+        return reply.status(401).send({ error: 'Session key required (x-session-key header)' });
+      }
+
+      const settings = typeof pluginInstance.settings === 'string'
+        ? JSON.parse(pluginInstance.settings)
+        : pluginInstance.settings;
+
+      const sessionTable = settings.session_table || 'players';
+      const sessionKeyColumn = settings.session_key_column || 'session_key';
+      const steamIdColumn = settings.steam_id_column || 'steam_id';
+      const sessionTtl = Number(settings.session_ttl_minutes) || 0;
+
+      const fullTable = `${project.db_schema}.${sessionTable}`;
+      const player = await app.db(fullTable).where(sessionKeyColumn, sessionKey).first();
+
+      if (!player) {
+        return reply.status(401).send({ error: 'Invalid session key' });
+      }
+
+      if (sessionTtl > 0 && player.last_active_at) {
+        const lastActive = new Date(player.last_active_at).getTime();
+        const expiry = lastActive + sessionTtl * 60 * 1000;
+        if (Date.now() > expiry) {
+          await app.db(fullTable).where(sessionKeyColumn, sessionKey).update({ [sessionKeyColumn]: null });
+          return reply.status(401).send({ error: 'Session expired' });
+        }
+      }
+
+      const debounceKey = `sbox_active:${sessionKey}`;
+      const alreadyUpdated = await app.redis.get(debounceKey);
+      if (!alreadyUpdated) {
+        app.db(fullTable).where(sessionKeyColumn, sessionKey).update({ last_active_at: new Date() }).catch(() => {});
+        app.redis.set(debounceKey, '1', 'EX', 300).catch(() => {});
+      }
+
+      (request as any).playerSteamId = String(player[steamIdColumn] ?? '');
+      (request as any).playerData = player;
     }
 
     const rl = endpointFinal.rate_limit
@@ -222,11 +345,7 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
       const windowSec = Math.ceil(windowMs / 1000);
       const rlKey = `rl:ep:${endpointFinal.id}:${request.ip}`;
 
-      const current = await app.redis.incr(rlKey);
-      if (current === 1) {
-        await app.redis.expire(rlKey, windowSec);
-      }
-      const ttl = await app.redis.ttl(rlKey);
+      const [current, ttl] = await app.redis.eval(RATE_LIMIT_LUA, 1, rlKey, rl.max, windowSec) as [number, number];
 
       reply.header('X-EP-RateLimit-Limit', rl.max);
       reply.header('X-EP-RateLimit-Remaining', Math.max(0, rl.max - current));
@@ -249,6 +368,10 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
       }
     }
 
+    if ((request as any).playerSteamId) {
+      extractedParams.player_steam_id = (request as any).playerSteamId;
+    }
+
     try {
       const result = await executor.execute(
         endpointFinal,
@@ -257,6 +380,7 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
         request.query as Record<string, string>,
         request.body as Record<string, unknown> | null,
         30_000,
+        project.id,
       );
 
       if (endpointFinal.cache_enabled && request.method === 'GET') {

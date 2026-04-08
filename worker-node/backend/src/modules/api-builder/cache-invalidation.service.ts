@@ -20,7 +20,7 @@ export class CacheInvalidationService {
           is_active: true,
         })
         .whereNotNull('cache_invalidation')
-        .whereRaw(`cache_invalidation->>'${eventKey}' = 'true'`)
+        .whereRaw(`cache_invalidation->>? = 'true'`, [eventKey])
         .whereRaw(`source_config->>'table' = ?`, [tableName])
         .select('id');
 

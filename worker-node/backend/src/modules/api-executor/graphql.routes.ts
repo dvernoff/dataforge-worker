@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { GraphQLService } from './graphql.service.js';
 import { AppError } from '../../middleware/error-handler.js';
+import { isModuleEnabled, moduleDisabledError } from '../../utils/module-check.js';
 import crypto from 'crypto';
 
 export async function graphqlRoutes(app: FastifyInstance) {
@@ -11,6 +12,11 @@ export async function graphqlRoutes(app: FastifyInstance) {
 
     const project = await app.db('projects').where({ slug: projectSlug }).first();
     if (!project) return reply.status(404).send({ error: 'Project not found' });
+
+    const graphqlEnabled = await isModuleEnabled(app.db, project.id, 'feature-graphql');
+    if (!graphqlEnabled) {
+      return reply.status(404).send(moduleDisabledError('GraphQL'));
+    }
 
     const apiKey = request.headers['x-api-key'] as string | undefined;
     if (!apiKey) {

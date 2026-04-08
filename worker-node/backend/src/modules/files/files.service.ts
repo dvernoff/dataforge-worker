@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 import { AppError } from '../../middleware/error-handler.js';
 import * as fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import * as path from 'path';
 
 export interface FileRecord {
@@ -49,13 +50,13 @@ export class FilesService {
       throw new AppError(400, 'Invalid path');
     }
 
-    fs.mkdirSync(dir, { recursive: true });
+    await fsPromises.mkdir(dir, { recursive: true });
 
     const ext = path.extname(file.filename);
     const storageName = `${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
     const storagePath = path.join(dir, storageName);
 
-    fs.writeFileSync(storagePath, file.data);
+    await fsPromises.writeFile(storagePath, file.data);
 
     const [record] = await this.db('files')
       .insert({
@@ -82,11 +83,13 @@ export class FilesService {
       throw new AppError(404, 'File not found');
     }
 
-    if (!fs.existsSync(record.storage_path)) {
+    try {
+      await fsPromises.access(record.storage_path);
+    } catch {
       throw new AppError(404, 'File data not found on disk');
     }
 
-    const data = fs.readFileSync(record.storage_path);
+    const data = await fsPromises.readFile(record.storage_path);
     return { record, data };
   }
 
@@ -99,9 +102,7 @@ export class FilesService {
       throw new AppError(404, 'File not found');
     }
 
-    if (fs.existsSync(record.storage_path)) {
-      fs.unlinkSync(record.storage_path);
-    }
+    try { await fsPromises.unlink(record.storage_path); } catch {}
 
     await this.db('files').where({ id: fileId }).delete();
   }

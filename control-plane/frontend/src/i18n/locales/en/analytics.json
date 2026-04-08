@@ -4,6 +4,7 @@
   "avgResponseTime": "Avg Response Time",
   "errorRate": "Error Rate",
   "uniqueIps": "Unique IPs",
+  "last7days": "Last 7 days",
   "ms": "{{value}}ms",
   "percent": "{{value}}%",
   "requestVolume": "Request Volume (Last 7 Days)",

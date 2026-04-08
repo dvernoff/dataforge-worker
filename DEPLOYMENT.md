@@ -1,542 +1,627 @@
-# DataForge -- Руководство по развёртыванию
+# DataForge — Руководство по развёртыванию
+
+## Требования
+
+- Ubuntu 22.04+ / Debian 12+ (или любой Linux с поддержкой Docker)
+- Docker 24+ и Docker Compose v2
+- Домен с настроенным DNS (A-запись на IP сервера)
+- Сервер: минимум 4 ГБ RAM, 2 ядра CPU, 20 ГБ диска
+- Root или sudo доступ
+
+---
+
+## Быстрый старт
+
+```bash
+# 1. Клонируем репозиторий
+git clone https://github.com/your-org/dataforge.git
+cd dataforge
+
+# 2. Создаём файл окружения
+cp .env.example .env
+
+# 3. Генерируем все секреты автоматически
+bash scripts/generate-secrets.sh
+
+# 4. Редактируем .env — указываем домен, email админа, пароль
+nano .env
+
+# 5. Настраиваем файрвол
+sudo bash scripts/setup-firewall.sh
+
+# 6. Запускаем
+docker compose up -d
+
+# 7. Настраиваем SSL (см. раздел ниже)
+
+# 8. Проверяем статус
+docker compose ps
+docker compose logs -f
+```
+
+---
 
 ## Архитектура
 
-DataForge состоит из трёх компонентов:
-
-- **Control Plane (CP)** -- панель управления (backend + frontend)
-- **Worker Node** -- обработчик данных, может быть несколько штук
-- **База данных + Redis** -- у каждого компонента своя PostgreSQL, Redis общий
-
 ```
-[Пользователь] --> [CP Frontend :80] --> [CP Backend :4000] --> [Worker Node :4001]
-                                              |                       |
-                                         [PostgreSQL CP]         [PostgreSQL Worker]
-                                              |                       |
-                                              +------- [Redis] -------+
+              Интернет
+                 |
+          [Файрвол: UFW]
+         порты 22, 80, 443
+                 |
+       +---------+---------+
+       |                   |
+    Host Nginx (443/SSL)   |
+       |                   |
+       +---+-------+-------+
+           |       |
+     :80 (CP)   :8080 (Worker)
+           |       |
+    ┌──────┴───────┴──────┐
+    │   Docker-сеть        │
+    │   (backend)          │
+    │                      │
+    │  nginx-control:80    │
+    │       |              │
+    │  control-backend     │
+    │  control-frontend    │
+    │       |              │
+    │  postgres-control    │
+    │       |              │
+    │     redis            │
+    │       |              │
+    │  nginx-worker:80     │
+    │       |              │
+    │  worker-backend      │
+    │       |              │
+    │  postgres-worker     │
+    └──────────────────────┘
 ```
+
+Все сервисы общаются через внутреннюю Docker-сеть `backend`.
+Наружу выходят только порты nginx. Хостовый nginx обеспечивает SSL.
 
 ---
 
-## 1. Развёртывание Control Plane (VDS #1)
+## Шаг 1: Файрвол (UFW)
 
-### Требования
-
-- Docker + Docker Compose v2
-- 2+ GB RAM, 2+ CPU
-- Открытые порты: 80 (HTTP), 443 (HTTPS, опционально)
-
-### Установка
+### Установка и настройка
 
 ```bash
-# Клонируем репозиторий
-git clone https://github.com/YOUR_ORG/dataforge.git
-cd dataforge
+# Установить UFW (если не установлен)
+sudo apt update && sudo apt install -y ufw
 
-# Создаём .env файл
-cp .env.example .env
-# Редактируем .env -- ОБЯЗАТЕЛЬНО меняем:
-#   JWT_ACCESS_SECRET, JWT_REFRESH_SECRET -- случайные строки (openssl rand -hex 32)
-#   ADMIN_PASSWORD -- пароль суперадмина
-#   SECRETS_ENCRYPTION_KEY -- ключ шифрования (openssl rand -hex 32)
-#   WORKER_NODE_API_KEY -- ключ для локального воркера (openssl rand -hex 32)
-#   CORS_ORIGIN -- домен фронтенда (https://panel.example.com)
+# Сбросить к дефолтам
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
 
-# Запускаем
+# Разрешить SSH (ВАЖНО: сделать первым, чтобы не заблокировать себя)
+sudo ufw allow 22/tcp comment 'SSH'
+
+# Разрешить HTTP и HTTPS (для SSL и редиректа)
+sudo ufw allow 80/tcp comment 'HTTP'
+sudo ufw allow 443/tcp comment 'HTTPS'
+
+# Если Worker API должен быть публично доступен на отдельном порту:
+# sudo ufw allow 8080/tcp comment 'Worker API'
+
+# Включить файрвол
+sudo ufw enable
+
+# Проверить
+sudo ufw status verbose
+```
+
+Или одной командой:
+```bash
+sudo bash scripts/setup-firewall.sh
+```
+
+Ожидаемый результат:
+```
+Status: active
+Default: deny (incoming), allow (outgoing)
+
+To                         Action      From
+--                         ------      ----
+22/tcp                     ALLOW IN    Anywhere        # SSH
+80/tcp                     ALLOW IN    Anywhere        # HTTP
+443/tcp                    ALLOW IN    Anywhere        # HTTPS
+```
+
+### Что заблокировано (не доступно снаружи)
+
+| Порт | Сервис | Статус |
+|------|--------|--------|
+| 5432 | PostgreSQL Control | Заблокирован (только внутри Docker) |
+| 5433 | PostgreSQL Worker | Заблокирован (только внутри Docker) |
+| 6379 | Redis | Заблокирован (только внутри Docker) |
+| 4000 | CP Backend | Заблокирован (только внутри Docker) |
+| 4001 | Worker Backend | Заблокирован (только внутри Docker) |
+| 3000 | Frontend | Заблокирован (только внутри Docker) |
+
+### Совместимость Docker + UFW
+
+Docker по умолчанию обходит UFW, добавляя свои правила iptables. Чтобы это предотвратить:
+
+```bash
+# Создать/отредактировать конфиг Docker
+sudo nano /etc/docker/daemon.json
+```
+
+Добавить:
+```json
+{
+  "iptables": false
+}
+```
+
+Перезапустить Docker:
+```bash
+sudo systemctl restart docker
 docker compose up -d
-
-# Запускаем миграции (только первый раз)
-docker compose --profile migrate up migrate-control-plane migrate-worker
 ```
 
-### Проверка
-
-```bash
-# Health check Control Plane
-curl http://localhost:4000/api/health
-# Ожидаемый ответ: {"status":"ok","service":"dataforge-control-plane",...}
-
-# Health check Worker
-curl http://localhost:4001/api/health
-# Ожидаемый ответ: {"status":"healthy",...}
-
-# Фронтенд
-curl -I http://localhost:80
-```
-
-### Доступ
-
-- Панель: `http://YOUR_IP:80`
-- Логин: `admin@dataforge.local` / пароль из `.env` (`ADMIN_PASSWORD`)
+**Важно:** После этого контейнеры общаются только через Docker-сети. Так как мы используем `expose` (а не `ports`) для всех внутренних сервисов, они остаются недоступны снаружи.
 
 ---
 
-## 2. Добавление удалённого Worker Node (VDS #2, #3, ...)
+## Шаг 2: Домен и DNS
 
-Worker-ноды устанавливаются автоматически через скрипт, который генерируется в панели.
+### Настройка DNS
 
-### Шаг 1: Создать ноду в панели
+Создайте A-записи в DNS вашего домена:
 
-1. Войти в панель как суперадмин или обычный пользователь
-2. Перейти в **Настройки > Мои ноды** (или **Система > Worker Ноды** для суперадмина)
-3. Нажать **"Добавить ноду"**
-4. Указать имя и регион
-5. Скопировать команду установки
-
-### Шаг 2: Запустить на сервере
-
-**Linux / macOS:**
-```bash
-curl -fsSL https://panel.example.com/scripts/install-worker.sh | bash -s -- --token=ТОКЕН --cp=https://panel.example.com
+```
+Тип   Имя                 Значение        TTL
+A     app.yourdomain.com  IP_СЕРВЕРА      300
+A     api.yourdomain.com  IP_СЕРВЕРА      300
 ```
 
-**Windows (PowerShell):**
-```powershell
-irm https://panel.example.com/scripts/install-worker.ps1 -OutFile install-worker.ps1
-.\install-worker.ps1 -Token "ТОКЕН" -CpUrl "https://panel.example.com"
-```
+- `app.yourdomain.com` — панель управления (Control Plane)
+- `api.yourdomain.com` — публичный API (Worker Node)
 
-Скрипт автоматически:
-- Устанавливает Docker-контейнеры (PostgreSQL, Redis, Worker, Watchtower)
-- Регистрирует ноду в Control Plane
-- Генерирует все пароли и ключи
-- Запускает сервисы
-
-### Шаг 3: Проверить
-
-В панели нода должна появиться со статусом **"Online"** в течение 30 секунд.
+### Обновить .env
 
 ```bash
-# На сервере воркера:
-curl http://localhost:4001/api/health
+CORS_ORIGIN=https://app.yourdomain.com
+WORKER_CORS_ORIGIN=https://app.yourdomain.com
 ```
-
-### Требования к серверу воркера
-
-- Docker + Docker Compose v2
-- 1+ GB RAM, 1+ CPU (зависит от нагрузки)
-- Открытый порт 4001 (или другой, указанный в конфиге)
-- Доступ к Control Plane по сети
 
 ---
 
-## 3. Обновление
+## Шаг 3: SSL-сертификат
 
-### Обновление Control Plane
+DataForge не обрабатывает SSL внутри. Есть три варианта:
+
+### Вариант А: Nginx + Certbot (рекомендуется для VPS)
+
+#### 1. Установить Nginx и Certbot
 
 ```bash
-cd /path/to/dataforge
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+```
 
-# Остановить сервисы
-docker compose down
+#### 2. Создать конфигурацию Nginx
 
-# Получить обновления
+```bash
+sudo nano /etc/nginx/sites-available/dataforge
+```
+
+Вставить:
+
+```nginx
+# Редирект HTTP → HTTPS
+server {
+    listen 80;
+    server_name app.yourdomain.com api.yourdomain.com;
+    return 301 https://$host$request_uri;
+}
+
+# Панель управления
+server {
+    listen 443 ssl http2;
+    server_name app.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/app.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.yourdomain.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    client_max_body_size 100M;
+
+    location / {
+        proxy_pass http://127.0.0.1:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Поддержка WebSocket
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+    }
+}
+
+# Публичный API (Worker)
+server {
+    listen 443 ssl http2;
+    server_name api.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Поддержка WebSocket
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+#### 3. Активировать сайт
+
+```bash
+sudo ln -s /etc/nginx/sites-available/dataforge /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+#### 4. Получить SSL-сертификаты
+
+```bash
+# Получить сертификаты для обоих доменов
+sudo certbot --nginx -d app.yourdomain.com -d api.yourdomain.com \
+  --non-interactive --agree-tos --email admin@yourdomain.com
+```
+
+Если не сработает одной командой:
+```bash
+sudo certbot certonly --nginx -d app.yourdomain.com
+sudo certbot certonly --nginx -d api.yourdomain.com
+```
+
+#### 5. Автоматическое продление
+
+Certbot сам настраивает таймер. Проверить:
+
+```bash
+# Статус таймера
+sudo systemctl status certbot.timer
+
+# Тестовое продление
+sudo certbot renew --dry-run
+```
+
+Сертификаты продлеваются автоматически каждые 60-90 дней.
+
+---
+
+### Вариант Б: Cloudflare (самый простой)
+
+Если домен подключён к Cloudflare:
+
+1. В DNS Cloudflare добавить A-записи на IP сервера (оранжевое облако = проксирование)
+2. SSL/TLS > Overview: режим **Full (Strict)**
+3. SSL/TLS > Edge Certificates: включить **Always Use HTTPS**
+4. Готово — Cloudflare сам выдаёт и продлевает сертификат
+
+**Примечание:** При использовании Cloudflare хостовый Nginx для SSL не нужен. Cloudflare проксирует HTTPS:443 → ваш HTTP:80.
+
+---
+
+### Вариант В: Caddy (автоматический SSL без настройки)
+
+```bash
+# Установить Caddy
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install caddy
+```
+
+Настроить:
+```bash
+sudo nano /etc/caddy/Caddyfile
+```
+
+```
+app.yourdomain.com {
+    reverse_proxy localhost:80
+}
+
+api.yourdomain.com {
+    reverse_proxy localhost:8080
+}
+```
+
+```bash
+sudo systemctl restart caddy
+```
+
+Caddy автоматически получает и продлевает SSL-сертификаты. Никакой дополнительной настройки не нужно.
+
+---
+
+## Шаг 4: Проверка
+
+```bash
+# 1. Контейнеры запущены
+docker compose ps
+
+# 2. SSL работает
+curl -I https://app.yourdomain.com
+# Ожидаемый ответ: HTTP/2 200
+
+# 3. API панели
+curl https://app.yourdomain.com/api/health
+# Ожидаемый ответ: {"status":"healthy","timestamp":"..."}
+
+# 4. API воркера
+curl https://api.yourdomain.com/api/health
+# Ожидаемый ответ: {"status":"healthy","timestamp":"..."}
+
+# 5. Файрвол
+sudo ufw status
+
+# 6. Проверка, что внутренние порты не торчат наружу
+nmap -p 3000,4000,4001,5432,5433,6379 IP_СЕРВЕРА
+# Все должны быть "filtered" или "closed"
+```
+
+---
+
+## Переменные окружения
+
+### Обязательные (система не запустится без них)
+
+#### База данных
+
+| Переменная | Описание | Как сгенерировать |
+|------------|----------|-------------------|
+| `POSTGRES_CONTROL_PASSWORD` | Пароль БД Control Plane | `openssl rand -hex 16` |
+| `POSTGRES_WORKER_PASSWORD` | Пароль БД Worker Node | `openssl rand -hex 16` |
+
+#### Аутентификация
+
+| Переменная | Описание | Как сгенерировать |
+|------------|----------|-------------------|
+| `JWT_ACCESS_SECRET` | Ключ подписи JWT (access-токены) | `openssl rand -hex 32` |
+| `JWT_REFRESH_SECRET` | Ключ подписи JWT (refresh-токены) | `openssl rand -hex 32` |
+| `SECRETS_ENCRYPTION_KEY` | AES-256 шифрование секретов (мин. 32 символа) | `openssl rand -hex 16` |
+
+#### Межсервисная связь
+
+| Переменная | Описание | Как сгенерировать |
+|------------|----------|-------------------|
+| `WORKER_NODE_API_KEY` | Общий секрет между CP и Worker | `openssl rand -hex 32` |
+
+#### Первый суперадмин
+
+| Переменная | Описание | Пример |
+|------------|----------|--------|
+| `ADMIN_EMAIL` | Email первого админа | `admin@yourdomain.com` |
+| `ADMIN_PASSWORD` | Пароль первого админа | Надёжный, 12+ символов |
+
+#### CORS / Домен
+
+| Переменная | Описание | Пример |
+|------------|----------|--------|
+| `CORS_ORIGIN` | URL панели управления | `https://app.yourdomain.com` |
+
+### Опциональные (рекомендуется для продакшена)
+
+| Переменная | По умолчанию | Описание |
+|------------|-------------|----------|
+| `INTERNAL_SECRET` | _(пусто)_ | Дополнительная авторизация CP-Worker /internal/ маршрутов |
+| `REDIS_PASSWORD` | _(пусто)_ | Пароль Redis |
+| `ENCRYPTION_KEY` | _(пусто)_ | Ключ шифрования полей |
+| `WORKER_CORS_ORIGIN` | `http://localhost` | Разрешённый origin для публичного API |
+| `CP_PORT` | `80` | Порт панели на хосте |
+| `WORKER_PORT` | `8080` | Порт воркера на хосте |
+| `WORKER_NODE_ID` | `worker-1` | ID воркер-ноды |
+| `JWT_ACCESS_EXPIRES` | `15m` | Время жизни access-токена |
+| `JWT_REFRESH_EXPIRES` | `7d` | Время жизни refresh-токена |
+| `ADMIN_NAME` | `Superadmin` | Имя первого админа |
+| `ANTHROPIC_API_KEY` | _(пусто)_ | API-ключ Anthropic для AI-функций |
+
+---
+
+## База данных
+
+### Миграции
+
+Миграции запускаются автоматически при старте контейнера через `entrypoint.sh`.
+Если миграция упадёт, контейнер завершится с ошибкой.
+
+Запустить вручную:
+
+```bash
+docker compose exec control-backend npx knex migrate:latest --knexfile knexfile.ts
+docker compose exec worker-backend npx knex migrate:latest --knexfile knexfile.ts
+```
+
+### Бэкапы
+
+```bash
+# Ручной бэкап
+docker compose exec -T postgres-control pg_dump -U dataforge dataforge_control | gzip > backup_control_$(date +%Y%m%d).sql.gz
+docker compose exec -T postgres-worker pg_dump -U dataforge dataforge_worker | gzip > backup_worker_$(date +%Y%m%d).sql.gz
+```
+
+Автоматические ежедневные бэкапы (добавить в `crontab -e`):
+
+```cron
+0 3 * * * cd /opt/dataforge && docker compose exec -T postgres-control pg_dump -U dataforge dataforge_control | gzip > /opt/backups/control_$(date +\%Y\%m\%d).sql.gz
+0 3 * * * cd /opt/dataforge && docker compose exec -T postgres-worker pg_dump -U dataforge dataforge_worker | gzip > /opt/backups/worker_$(date +\%Y\%m\%d).sql.gz
+0 4 * * * find /opt/backups -name "*.sql.gz" -mtime +30 -delete
+```
+
+**Примечание:** DataForge также имеет встроенные бэкапы на уровне проектов с настраиваемым сроком хранения (по умолчанию 14 дней). Настраивается в System > Global Settings > Data Retention.
+
+### Восстановление из бэкапа
+
+```bash
+docker compose stop control-backend worker-backend
+gunzip -c backup_control_20240101.sql.gz | docker compose exec -T postgres-control psql -U dataforge dataforge_control
+gunzip -c backup_worker_20240101.sql.gz | docker compose exec -T postgres-worker psql -U dataforge dataforge_worker
+docker compose up -d
+```
+
+---
+
+## Обновление
+
+```bash
 git pull origin main
-
-# Пересобрать и запустить
-docker compose up -d --build
-
-# Миграции (если есть новые)
-docker compose --profile migrate up migrate-control-plane migrate-worker
-```
-
-### Обновление Worker Node (через панель)
-
-1. Войти в панель
-2. Перейти в **Настройки > Мои ноды**
-3. Нажать кнопку **"Обновить"** рядом с нодой
-4. Дождаться, пока статус вернётся в **"Online"** (обычно 1-2 минуты)
-
-Что происходит при обновлении:
-- Control Plane отправляет команду обновления на воркер
-- Воркер передаёт запрос Watchtower
-- Watchtower скачивает новый Docker-образ из реестра
-- Старый контейнер останавливается (graceful shutdown, 30 секунд)
-- Новый контейнер запускается
-- Автоматически выполняются миграции базы данных
-- Воркер отправляет heartbeat с новой версией
-- В панели обновляется версия
-
-### Обновление Worker Node (вручную, через SSH)
-
-```bash
-cd ~/dataforge-worker
-
-# Скачать новый образ
-docker compose pull worker
-
-# Перезапустить
-docker compose up -d worker
-```
-
-### Обновление Worker Node (автоматически)
-
-Watchtower проверяет наличие обновлений раз в 24 часа.
-Если в реестре появился новый образ, он автоматически обновит воркер.
-
----
-
-## 4. Резервное копирование
-
-### Control Plane
-
-```bash
-# Бэкап базы данных CP
-docker exec df-postgres-control pg_dump -U dataforge dataforge_control > backup_cp_$(date +%Y%m%d).sql
-
-# Бэкап базы данных Worker (локального)
-docker exec df-postgres-worker pg_dump -U dataforge dataforge_worker > backup_worker_$(date +%Y%m%d).sql
-```
-
-### Worker Node (удалённый)
-
-```bash
-cd ~/dataforge-worker
-
-# Бэкап базы данных
-docker compose exec postgres pg_dump -U dataforge dataforge_worker > backup_$(date +%Y%m%d).sql
-```
-
-### Восстановление
-
-```bash
-# Восстановить бэкап CP
-cat backup_cp_20260407.sql | docker exec -i df-postgres-control psql -U dataforge dataforge_control
-
-# Восстановить бэкап Worker
-cat backup_worker_20260407.sql | docker exec -i df-postgres-worker psql -U dataforge dataforge_worker
+docker compose build
+docker compose up -d
+# Миграции запустятся автоматически
+docker compose logs -f control-backend worker-backend
 ```
 
 ---
 
-## 5. Мониторинг
+## Мониторинг
 
 ### Health-эндпоинты
 
-| Компонент | URL | Описание |
-|-----------|-----|----------|
-| CP Backend | `GET /api/health` | Базовый статус |
-| CP Backend | `GET /api/health/detailed` | CPU, RAM, диск, статус нод (суперадмин) |
-| Worker | `GET /api/health` | Статус, БД, Redis, метрики |
-
-### Heartbeat
-
-Каждый воркер отправляет heartbeat в CP каждые **30 секунд** с метриками:
-- CPU, RAM, диск
-- Текущая версия
-- Количество подключений
-
-Если heartbeat не приходит более 2 минут, нода считается **Offline**.
-
----
-
-## 6. Структура файлов
-
-### Control Plane (основной сервер)
-
-```
-/path/to/dataforge/
-  .env                          # Переменные окружения
-  docker-compose.yml            # Production compose
-  docker-compose.dev.yml        # Development compose
-  control-plane/
-    backend/                    # CP Backend (Fastify)
-    frontend/                   # CP Frontend (React + Vite)
-  worker-node/
-    backend/                    # Worker Backend (Fastify)
+```bash
+curl https://app.yourdomain.com/api/health
+curl https://api.yourdomain.com/api/health
 ```
 
-### Worker Node (удалённый сервер)
+### Логи
 
+```bash
+docker compose logs -f                           # Все сервисы
+docker compose logs -f control-backend            # CP бэкенд
+docker compose logs -f worker-backend             # Воркер
+docker compose logs --tail 100 control-backend    # Последние 100 строк
 ```
-~/dataforge-worker/
-  .env                          # Автогенерируется при установке
-  docker-compose.yml            # Автогенерируется при установке
+
+### Ресурсы
+
+```bash
+docker stats
 ```
 
 ---
 
-## 7. Переменные окружения
+## Масштабирование (добавление воркеров)
 
-### Control Plane (.env)
+Чтобы добавить воркер на другом сервере:
 
-| Переменная | Описание | Обязательно |
-|-----------|----------|:-----------:|
-| `JWT_ACCESS_SECRET` | Секрет для access-токенов | Да |
-| `JWT_REFRESH_SECRET` | Секрет для refresh-токенов | Да |
-| `ADMIN_EMAIL` | Email суперадмина | Да |
-| `ADMIN_PASSWORD` | Пароль суперадмина | Да |
-| `SECRETS_ENCRYPTION_KEY` | Ключ шифрования секретов | Да |
-| `WORKER_NODE_API_KEY` | Ключ локального воркера | Да |
-| `CORS_ORIGIN` | Разрешённые домены | Да |
-
-### Worker Node (.env)
-
-| Переменная | Описание | Обязательно |
-|-----------|----------|:-----------:|
-| `DATABASE_URL` | URL PostgreSQL | Да |
-| `REDIS_URL` | URL Redis | Да |
-| `NODE_API_KEY` | Ключ авторизации (генерируется при установке) | Да |
-| `CONTROL_PLANE_URL` | URL панели управления | Да |
-| `WATCHTOWER_TOKEN` | Токен для Watchtower API (генерируется при установке) | Да |
-| `NODE_ID` | Идентификатор ноды | Нет |
-| `PORT` | Порт (по умолчанию 4001) | Нет |
+1. Развернуть `worker-backend` + `postgres-worker` + `redis` на новом сервере
+2. Настроить файрвол на новом сервере (те же правила UFW)
+3. Указать `CONTROL_PLANE_URL` на адрес основного CP
+4. Указать те же `WORKER_NODE_API_KEY` и `INTERNAL_SECRET`
+5. Зарегистрировать ноду в панели: System > Nodes
 
 ---
 
-## 8. Устранение проблем
+## Чек-лист безопасности
 
-### Нода не подключается
+Перед запуском в продакшен:
 
-```bash
-# Проверить логи воркера
-docker compose logs -f worker
-
-# Проверить доступность CP с сервера воркера
-curl https://panel.example.com/api/health
-
-# Проверить, что порт 4001 открыт
-curl http://WORKER_IP:4001/api/health
-```
-
-### Обновление зависло
-
-```bash
-# Проверить статус Watchtower
-docker compose logs -f watchtower
-
-# Принудительно обновить вручную
-docker compose pull worker
-docker compose up -d worker
-```
-
-### Миграции не прошли
-
-```bash
-# Проверить логи
-docker compose logs worker | grep -i migrat
-
-# Запустить миграции вручную (dev-режим)
-docker compose --profile migrate up migrate-worker
-
-# Откатить последнюю миграцию
-docker compose exec worker npx knex migrate:rollback
-```
-
-### Сброс пароля суперадмина
-
-```bash
-# Перезапустить CP с новым паролем в .env
-# Отредактировать ADMIN_PASSWORD в .env
-docker compose restart control-backend
-```
+- [ ] Все секреты в `.env` уникальные, случайно сгенерированные
+- [ ] `ADMIN_PASSWORD` надёжный (12+ символов)
+- [ ] `CORS_ORIGIN` указывает на ваш домен (не `localhost`)
+- [ ] SSL/TLS настроен и работает (только HTTPS)
+- [ ] HTTP редиректит на HTTPS
+- [ ] `.env` НЕ закоммичен в git (проверить `.gitignore`)
+- [ ] UFW включён: открыты только порты 22, 80, 443
+- [ ] Docker iptables отключён (`/etc/docker/daemon.json`)
+- [ ] Порты БД (5432) НЕ торчат наружу
+- [ ] Порт Redis (6379) НЕ торчит наружу
+- [ ] Порты бэкендов (4000, 4001, 3000) НЕ торчат наружу
+- [ ] `REDIS_PASSWORD` задан
+- [ ] `INTERNAL_SECRET` задан
+- [ ] Сканирование портов подтверждает: внутренние порты не видны
+- [ ] Регулярные бэкапы настроены и протестированы
+- [ ] Процедура восстановления из бэкапа протестирована
+- [ ] Автоматическое продление SSL работает (`certbot renew --dry-run`)
 
 ---
 
-## 9. Публикация обновлений в GitHub
+## Решение проблем
 
-### Процесс разработки
+### Контейнер не запускается
 
 ```bash
-# 1. Внести изменения в код
-# 2. Проверить локально
-docker compose -f docker-compose.dev.yml up -d --build
-
-# 3. Закоммитить изменения
-git add -A
-git commit -m "Описание изменений"
-
-# 4. Отправить в GitHub
-git push origin main
+docker compose logs control-backend 2>&1 | head -50
+# Частая причина: не задана переменная → "Set POSTGRES_CONTROL_PASSWORD in .env"
 ```
 
-После пуша в `main` автоматически:
-- Запускается CI (проверка типов всех компонентов)
-- Собираются Docker-образы с тегом `latest` и пушатся в `ghcr.io`
-
-### Выпуск новой версии (релиз)
+### БД отказывает в подключении
 
 ```bash
-# 1. Убедиться что main актуален
-git checkout main
-git pull origin main
-
-# 2. Создать тег версии
-git tag v1.2.0
-
-# 3. Отправить тег в GitHub
-git push origin v1.2.0
+docker compose ps postgres-control
+# Дождаться healthcheck, затем перезапустить бэкенды
+docker compose restart control-backend worker-backend
 ```
 
-После пуша тега автоматически:
-- Собираются Docker-образы с тегом версии (`v1.2.0`) и `latest`
-- Создаётся GitHub Release с автоматическими release notes
-- Образы доступны для обновления воркеров
-
-**Собираются 3 образа:**
-
-| Образ | Описание |
-|-------|----------|
-| `ghcr.io/YOUR_ORG/dataforge/cp-backend:v1.2.0` | CP Backend |
-| `ghcr.io/YOUR_ORG/dataforge/cp-frontend:v1.2.0` | CP Frontend |
-| `ghcr.io/YOUR_ORG/dataforge/worker:v1.2.0` | Worker Node |
-
-### Обновление только Worker (без CP)
-
-Если изменения затрагивают только воркер:
+### Воркер не синхронизирует проекты
 
 ```bash
-# Те же шаги — тег выпускает все 3 образа
-# Но обновлять на серверах нужно только воркер:
-
-# На серверах воркеров (вручную):
-docker compose pull worker
-docker compose up -d worker
-
-# Или через панель — кнопка "Обновить"
+docker compose logs worker-backend 2>&1 | grep -i "sync\|internal\|403\|401"
+# Проверить, что WORKER_NODE_API_KEY совпадает в CP и Worker
+# Проверить, что INTERNAL_SECRET совпадает (если задан)
 ```
 
-### Обновление только Control Plane (без воркеров)
+### Ошибки миграций
 
 ```bash
-# На сервере CP:
-cd /path/to/dataforge
-git pull origin main
-docker compose up -d --build control-backend control-frontend
-
-# Миграции (если есть новые):
-docker compose --profile migrate up migrate-control-plane
+docker compose exec control-backend npx knex migrate:status --knexfile knexfile.ts
+docker compose exec control-backend npx knex migrate:rollback --knexfile knexfile.ts
 ```
 
-### Публикация Worker в публичный репозиторий
-
-Worker-нода живёт одновременно в двух репозиториях:
-- **Приватный** `dataforge` (полный проект) — папка `worker-node/`
-- **Публичный** `dataforge-worker` — только содержимое `worker-node/`
-
-Синхронизация через `git subtree`. Удалённые репозитории уже настроены:
+### Проблемы с SSL
 
 ```bash
-# Проверить remotes
-git remote -v
-# origin   — приватный репозиторий (dataforge)
-# worker   — публичный репозиторий (dataforge-worker)
-# site     — публичный репозиторий (dataforge-site)
+# Статус сертификатов
+sudo certbot certificates
+
+# Принудительное продление
+sudo certbot renew --force-renewal
+
+# Проверка конфига Nginx
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-**Публикация Worker после изменений:**
+### Заблокировал себя после настройки файрвола
 
 ```bash
-# 1. Закоммитить изменения в основной репозиторий
-git add -A
-git commit -m "Worker: описание изменений"
-git push origin main
-
-# 2. Запушить worker-node/ в публичный репозиторий
-git subtree push --prefix=worker-node worker main
+# Зайти через консоль облачного провайдера и выполнить:
+sudo ufw allow 22/tcp
+sudo ufw enable
 ```
 
-**Или одной командой (Windows):**
-```bash
-push-worker.bat
-```
-
-**На Linux/Mac:**
-```bash
-git subtree push --prefix=worker-node worker main
-```
-
-**Если subtree push упал с ошибкой** (бывает при больших историях):
-```bash
-# Форс-пуш через split
-git subtree split --prefix=worker-node -b worker-split
-git push worker worker-split:main --force
-git branch -D worker-split
-```
-
-**Важно:** всегда сначала пушить в `origin` (приватный), потом в `worker` (публичный). Порядок имеет значение — subtree берёт историю из текущего состояния.
-
-**Публикация сайта:**
-```bash
-git subtree push --prefix=dataforge-site site main
-```
-
-### Семантическое версионирование
-
-Рекомендуемый формат версий:
-- `v1.0.0` → `v1.0.1` — баг-фиксы, мелкие исправления
-- `v1.0.0` → `v1.1.0` — новые функции, обратно совместимые
-- `v1.0.0` → `v2.0.0` — ломающие изменения (новые миграции, изменение API)
-
-### Проверка перед релизом
+### Проверка, что порты не утекают
 
 ```bash
-# 1. Запустить dev-среду с нуля
-docker compose -f docker-compose.dev.yml down -v
-docker compose -f docker-compose.dev.yml up -d --build
-docker compose -f docker-compose.dev.yml --profile migrate up migrate-control-plane migrate-worker
+# С другой машины:
+nmap -p 1-65535 IP_СЕРВЕРА
 
-# 2. Проверить health
-curl http://localhost:4000/api/health
-curl http://localhost:4001/api/health
-
-# 3. Открыть панель и проверить функциональность
-# http://localhost:3000
-
-# 4. Если всё работает — создать тег
-git tag v1.2.0
-git push origin v1.2.0
-```
-
----
-
-## 10. Локальная разработка (dev-режим)
-
-### Запуск с нуля
-
-```bash
-# 1. Клонировать репозиторий
-git clone https://github.com/YOUR_ORG/dataforge.git
-cd dataforge
-
-# 2. Запустить все сервисы
-docker compose -f docker-compose.dev.yml up -d
-
-# 3. Выполнить миграции и создать superadmin + локальную ноду
-docker compose -f docker-compose.dev.yml --profile migrate up migrate-control-plane migrate-worker
-
-# 4. Перезапустить сервисы (чтобы подхватили БД)
-docker compose -f docker-compose.dev.yml restart control-plane worker
-
-# 5. Готово!
-# Панель:  http://localhost:3000
-# CP API:  http://localhost:4000
-# Worker:  http://localhost:4001
-# Логин:   admin@dataforge.local / Admin123!@#
-```
-
-### Hot-reload
-
-Все сервисы в dev-режиме работают с hot-reload:
-- Изменения в `control-plane/backend/` → CP перезапускается автоматически
-- Изменения в `worker-node/backend/` → Worker перезапускается автоматически
-- Изменения в `control-plane/frontend/` → Vite HMR обновляет браузер
-
-### Полезные команды
-
-```bash
-# Логи всех сервисов
-docker compose -f docker-compose.dev.yml logs -f
-
-# Логи конкретного сервиса
-docker compose -f docker-compose.dev.yml logs -f worker
-
-# Перезапуск одного сервиса
-docker compose -f docker-compose.dev.yml restart worker
-
-# Полная остановка с удалением данных
-docker compose -f docker-compose.dev.yml down -v
-
-# Остановка без удаления данных
-docker compose -f docker-compose.dev.yml down
+# Должны быть открыты только 22, 80, 443
+# Всё остальное — filtered/closed
 ```

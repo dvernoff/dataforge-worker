@@ -1,10 +1,55 @@
 import { AppError } from '../middleware/error-handler.js';
 
-const VALID_SCHEMA_RE = /^[a-z_][a-z0-9_]*$/;
+const VALID_IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/;
+
+const BLOCKED_PATTERNS = [
+  /\bpg_catalog\b/i,
+  /\binformation_schema\b/i,
+  /\bpg_roles\b/i,
+  /\bpg_user\b/i,
+  /\bpg_shadow\b/i,
+  /\bpg_authid\b/i,
+  /\bpg_stat\b/i,
+  /\bpg_tables\b/i,
+  /\bpg_class\b/i,
+  /\bpg_namespace\b/i,
+  /\bpg_index\b/i,
+  /\bpg_attribute\b/i,
+  /\bpg_proc\b/i,
+  /\bpg_type\b/i,
+  /\bpg_database\b/i,
+  /\bpg_tablespace\b/i,
+  /\bpg_settings\b/i,
+  /\bpg_hba\b/i,
+  /\brole_table_grants\b/i,
+  /\btable_privileges\b/i,
+];
+
+const BLOCKED_STATEMENTS = [
+  /\bSET\s+(LOCAL\s+)?search_path\b/i,
+  /\bSET\s+(LOCAL\s+)?ROLE\b/i,
+  /\bRESET\s+ROLE\b/i,
+  /\bRESET\s+search_path\b/i,
+  /\bCREATE\s+SCHEMA\b/i,
+  /\bDROP\s+SCHEMA\b/i,
+  /\bALTER\s+SCHEMA\b/i,
+  /\bCREATE\s+(OR\s+REPLACE\s+)?FUNCTION\b/i,
+  /\bCREATE\s+EXTENSION\b/i,
+  /\bCOPY\s+.*\bFROM\s+PROGRAM\b/i,
+  /\bLO_IMPORT\b/i,
+  /\bLO_EXPORT\b/i,
+  /\bDBLINK\b/i,
+];
 
 export function validateSchema(schema: string): void {
-  if (!VALID_SCHEMA_RE.test(schema)) {
+  if (!VALID_IDENTIFIER_RE.test(schema)) {
     throw new AppError(400, 'Invalid schema name');
+  }
+}
+
+export function validateIdentifier(value: string, label = 'identifier'): void {
+  if (!value || !VALID_IDENTIFIER_RE.test(value)) {
+    throw new AppError(400, `Invalid ${label}: "${value}"`);
   }
 }
 
@@ -15,12 +60,21 @@ export function validateSchemaAccess(sql: string, allowedSchema: string): void {
     .replace(/'[^']*'/g, "''")
     .replace(/"([^"]+)"/g, '$1');
 
+  for (const pattern of BLOCKED_PATTERNS) {
+    if (pattern.test(cleaned)) {
+      throw new AppError(403, 'Access to system catalogs is not allowed');
+    }
+  }
+
+  for (const pattern of BLOCKED_STATEMENTS) {
+    if (pattern.test(cleaned)) {
+      throw new AppError(403, 'This SQL statement is not allowed');
+    }
+  }
+
   const schemaRefPattern = /\b([a-z_][a-z0-9_]*)\s*\.\s*([a-z_][a-z0-9_]*)/gi;
   const allowedSchemas = new Set([
     allowedSchema.toLowerCase(),
-    'pg_catalog',
-    'information_schema',
-    'public',
   ]);
 
   let match;

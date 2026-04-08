@@ -149,7 +149,7 @@ export class GraphQLService {
       const typeName = sanitizeName(table.table_name);
       const fullTable = `${schema}.${table.table_name}`;
 
-      Query[fieldName] = async (_: unknown, args: { limit?: number; offset?: number; where?: Record<string, unknown> }) => {
+      Query[fieldName] = async (args: { limit?: number; offset?: number; where?: Record<string, unknown> }) => {
         let q = db(fullTable);
         if (args.where) {
           for (const [key, value] of Object.entries(args.where)) {
@@ -159,26 +159,28 @@ export class GraphQLService {
         if (args.limit) q = q.limit(Math.min(args.limit, 100));
         else q = q.limit(50);
         if (args.offset) q = q.offset(args.offset);
-        return q.orderBy('created_at', 'desc');
+        const hasCreatedAt = await db.raw(`SELECT 1 FROM information_schema.columns WHERE table_schema = ? AND table_name = ? AND column_name = 'created_at'`, [schema, table.table_name]);
+        if (hasCreatedAt.rows.length > 0) return q.orderBy('created_at', 'desc');
+        return q;
       };
 
-      Query[`${fieldName}ById`] = async (_: unknown, args: { id: string }) => {
+      Query[`${fieldName}ById`] = async (args: { id: string }) => {
         return db(fullTable).where({ id: args.id }).first();
       };
 
-      Mutation[`create${typeName}`] = async (_: unknown, args: { data: Record<string, unknown> }) => {
+      Mutation[`create${typeName}`] = async (args: { data: Record<string, unknown> }) => {
         const data = camelToSnake(args.data);
         const [row] = await db(fullTable).insert(data).returning('*');
         return row;
       };
 
-      Mutation[`update${typeName}`] = async (_: unknown, args: { id: string; data: Record<string, unknown> }) => {
+      Mutation[`update${typeName}`] = async (args: { id: string; data: Record<string, unknown> }) => {
         const data = camelToSnake(args.data);
         const [row] = await db(fullTable).where({ id: args.id }).update(data).returning('*');
         return row;
       };
 
-      Mutation[`delete${typeName}`] = async (_: unknown, args: { id: string }) => {
+      Mutation[`delete${typeName}`] = async (args: { id: string }) => {
         const deleted = await db(fullTable).where({ id: args.id }).delete();
         return deleted > 0;
       };

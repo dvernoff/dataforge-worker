@@ -23,16 +23,19 @@ import { explorerRoutes } from './modules/data/explorer.routes.js';
 import { registerRequestLogger } from './modules/analytics/request-logger.js';
 import { HeartbeatService } from './modules/heartbeat/heartbeat.service.js';
 import { cronRoutes } from './modules/cron/cron.routes.js';
-import { flowsRoutes } from './modules/flows/flows.routes.js';
 import { pluginRoutes } from './modules/plugins/plugin.routes.js';
 import { openapiRoutes } from './modules/api-executor/openapi.routes.js';
-import { sboxAuthRoutes } from './modules/plugins/built-in/sbox-auth/sbox-auth.routes.js';
+import { sboxAuthRoutes, sboxAuthManagementRoutes } from './modules/plugins/built-in/sbox-auth/sbox-auth.routes.js';
 import { dashboardsRoutes } from './modules/dashboards/dashboards.routes.js';
 import { dbMapRoutes } from './modules/db-map/db-map.routes.js';
-import { pipelinesRoutes } from './modules/pipelines/pipelines.routes.js';
+import { backupExportRoutes } from './modules/backups/backup-export.routes.js';
+import { discordWebhookRoutes } from './modules/plugins/built-in/discord-webhook/discord-webhook.routes.js';
+import { telegramBotRoutes } from './modules/plugins/built-in/telegram-bot/telegram-bot.routes.js';
+import { uptimeMonitorRoutes } from './modules/plugins/built-in/uptime-ping/uptime-ping.routes.js';
+import { UptimeScheduler } from './modules/plugins/built-in/uptime-ping/uptime-scheduler.js';
+
 import fastifyWebsocket from '@fastify/websocket';
 import { websocketRoutes } from './modules/realtime/websocket.service.js';
-import { HistoryService } from './modules/data/history.service.js';
 import { CronService } from './modules/cron/cron.service.js';
 import { quotaConcurrencyGuard } from './middleware/quota-enforcement.middleware.js';
 
@@ -82,17 +85,19 @@ await app.register(analyticsRoutes, { prefix: '/api/projects' });
 await app.register(explorerRoutes, { prefix: '/api/projects' });
 
 await app.register(cronRoutes, { prefix: '/api/projects' });
-await app.register(flowsRoutes, { prefix: '/api/projects' });
+await app.register(backupExportRoutes, { prefix: '/api/projects' });
 await app.register(pluginRoutes, { prefix: '/api/projects' });
 await app.register(dashboardsRoutes, { prefix: '/api/projects' });
 await app.register(dbMapRoutes, { prefix: '/api/projects' });
-await app.register(pipelinesRoutes, { prefix: '/api/projects' });
-
+await app.register(discordWebhookRoutes, { prefix: '/api/projects' });
+await app.register(telegramBotRoutes, { prefix: '/api/projects' });
+await app.register(uptimeMonitorRoutes, { prefix: '/api/projects' });
 await app.register(apiDynamicRoutes);
 
 await app.register(openapiRoutes);
 
 await app.register(sboxAuthRoutes, { prefix: '/api/v1' });
+await app.register(sboxAuthManagementRoutes, { prefix: '/api/projects' });
 
 
 registerRequestLogger(app);
@@ -112,60 +117,53 @@ app.get('/api/health', async () => {
     redisOk = true;
   } catch {}
 
-  const mem = process.memoryUsage();
-  const cpus = os.cpus();
-  let totalIdle = 0, totalTick = 0;
-  for (const cpu of cpus) {
-    for (const type in cpu.times) {
-      totalTick += (cpu.times as Record<string, number>)[type];
-    }
-    totalIdle += cpu.times.idle;
-  }
-  const cpuUsage = Math.round((1 - totalIdle / totalTick) * 10000) / 100;
-
-  const { getDiskInfo } = await import('./modules/heartbeat/heartbeat.service.js');
-  const disk = getDiskInfo();
-
   return {
     status: dbOk && redisOk ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
-    node_id: env.NODE_ID,
-    hostname: os.hostname(),
-    uptime: process.uptime(),
-    database: dbOk ? 'connected' : 'disconnected',
-    redis: redisOk ? 'connected' : 'disconnected',
-    memory: {
-      rss: Math.round(mem.rss / 1024 / 1024),
-      heap_used: Math.round(mem.heapUsed / 1024 / 1024),
-    },
-    cpu_usage: cpuUsage,
-    ram_usage: Math.round((1 - os.freemem() / os.totalmem()) * 10000) / 100,
-    disk_usage: disk.disk_usage,
-    disk_total_gb: disk.disk_total_gb,
-    disk_free_gb: disk.disk_free_gb,
   };
 });
 
 const heartbeat = new HeartbeatService();
 
 const cronService = new CronService(app.db);
+const uptimeScheduler = new UptimeScheduler(app.db);
+(app as unknown as Record<string, unknown>).uptimeScheduler = uptimeScheduler;
 
-const historyCleanupInterval = setInterval(async () => {
+const cleanupInterval = setInterval(async () => {
   try {
-    let days = 7;
+    let requestRetentionDays = 30;
+    let auditRetentionDays = 30;
     try {
       const res = await fetch(`${env.CONTROL_PLANE_URL}/api/system/settings/public`);
       if (res.ok) {
         const data = await res.json() as { settings: Record<string, string> };
-        days = Number(data.settings?.time_travel_days ?? '7');
+        requestRetentionDays = Math.max(1, Number(data.settings?.request_retention_days ?? '30'));
+        auditRetentionDays = Math.max(1, Number(data.settings?.audit_retention_days ?? '30'));
       }
     } catch {}
 
-    const historyService = new HistoryService(app.db);
-    const projects = await app.db('projects').select('db_schema');
-    for (const project of projects) {
-      await historyService.purgeAllOldHistory(project.db_schema, days);
-    }
+    const requestCutoff = new Date();
+    requestCutoff.setDate(requestCutoff.getDate() - requestRetentionDays);
+    const requestCutoffISO = requestCutoff.toISOString();
+
+    const auditCutoff = new Date();
+    auditCutoff.setDate(auditCutoff.getDate() - auditRetentionDays);
+    const auditCutoffISO = auditCutoff.toISOString();
+
+    try { await app.db('api_request_logs').where('created_at', '<', requestCutoffISO).del(); } catch {}
+    try { await app.db('webhook_logs').where('sent_at', '<', requestCutoffISO).del(); } catch {}
+    try { await app.db('cron_job_runs').where('started_at', '<', requestCutoffISO).del(); } catch {}
+    try { await app.db('flow_runs').where('started_at', '<', requestCutoffISO).del(); } catch {}
+
+    try {
+      const hasAudit = await app.db.schema.hasTable('audit_logs');
+      if (hasAudit) {
+        await app.db('audit_logs').where('created_at', '<', auditCutoffISO).del();
+      }
+    } catch {}
+
+    try { await app.db('data_history').where('created_at', '<', auditCutoffISO).del(); } catch {}
+    try { await app.db('comments').where('created_at', '<', auditCutoffISO).del(); } catch {}
   } catch {}
 }, 60 * 60 * 1000);
 
@@ -176,6 +174,39 @@ try {
   heartbeat.start(env.CONTROL_PLANE_URL, env.NODE_API_KEY);
 
   cronService.startAll().catch((err) => app.log.error(err, 'Failed to restore cron jobs'));
+  uptimeScheduler.startAll().catch((err) => app.log.error(err, 'Failed to start uptime scheduler'));
+
+  (async () => {
+    try {
+      const tokens = await app.db('api_tokens_cache').select('*');
+      let restored = 0;
+      for (const token of tokens) {
+        if (token.expires_at && new Date(token.expires_at) < new Date()) {
+          await app.db('api_tokens_cache').where({ token_hash: token.token_hash }).delete();
+          continue;
+        }
+        const cacheKey = `api_token:${token.token_hash}`;
+        const existing = await app.redis.get(cacheKey);
+        if (existing) continue;
+        const tokenData = {
+          project_id: token.project_id,
+          scopes: typeof token.scopes === 'string' ? JSON.parse(token.scopes) : token.scopes,
+          allowed_ips: typeof token.allowed_ips === 'string' ? JSON.parse(token.allowed_ips) : token.allowed_ips,
+          expires_at: token.expires_at,
+        };
+        if (token.expires_at) {
+          const ttl = Math.max(1, Math.floor((new Date(token.expires_at).getTime() - Date.now()) / 1000));
+          await app.redis.set(cacheKey, JSON.stringify(tokenData), 'EX', ttl);
+        } else {
+          await app.redis.set(cacheKey, JSON.stringify(tokenData));
+        }
+        restored++;
+      }
+      if (restored > 0) app.log.info(`Restored ${restored} API tokens from database to Redis`);
+    } catch (err) {
+      app.log.warn(err, 'Failed to restore API tokens from database');
+    }
+  })();
 } catch (err) {
   app.log.error(err);
   process.exit(1);
@@ -183,7 +214,8 @@ try {
 
 const shutdown = async () => {
   cronService.stopAll();
-  clearInterval(historyCleanupInterval);
+  uptimeScheduler.stopAll();
+  clearInterval(cleanupInterval);
   heartbeat.stop();
   await app.close();
   process.exit(0);

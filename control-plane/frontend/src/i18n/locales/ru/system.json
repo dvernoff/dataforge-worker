@@ -229,10 +229,10 @@
     },
     "dataRetention": {
       "title": "Хранение данных",
-      "auditRetention": "Дней хранения журнала аудита",
-      "requestRetention": "Дней хранения журнала запросов",
-      "timeTravelDays": "История Time Travel (дней)",
-      "timeTravelDaysDesc": "Сколько дней хранить историю изменений для снимков Time Travel"
+      "description": "Настройте, как долго хранятся различные типы данных до автоматической очистки. Изменения применяются в течение 1 часа.",
+      "auditRetention": "Хранение журнала аудита (дней)",
+      "requestRetention": "Хранение журнала API-запросов (дней)",
+      "backupRetention": "Хранение бэкапов (дней)"
     },
     "backup": {
       "title": "Бэкап системы",
@@ -321,6 +321,9 @@
       "max_storage_mb": "Макс. хранилище (МБ)",
       "max_endpoints": "Макс. эндпоинтов",
       "max_webhooks": "Макс. вебхуков",
+      "max_discord_webhooks": "Макс. Discord вебхуков",
+      "max_telegram_bots": "Макс. Telegram ботов",
+      "max_uptime_monitors": "Макс. мониторов доступности",
       "max_files": "Макс. файлов",
       "max_backups": "Макс. бэкапов",
       "max_cron": "Макс. крон задач",
@@ -371,6 +374,7 @@
     "quotaGroups": {
       "resources": "Ресурсы",
       "apiAutomation": "API и автоматизация",
+      "integrations": "Интеграции",
       "backups": "Бэкапы",
       "performance": "Производительность"
     },
@@ -382,6 +386,9 @@
       "max_api_requests": "Макс. API запросов / день",
       "max_endpoints": "Макс. эндпоинтов",
       "max_webhooks": "Макс. вебхуков",
+      "max_discord_webhooks": "Макс. Discord вебхуков",
+      "max_telegram_bots": "Макс. Telegram ботов",
+      "max_uptime_monitors": "Макс. мониторов доступности",
       "max_cron": "Макс. крон задач",
       "max_backups": "Макс. бэкапов",
       "max_query_timeout_ms": "Таймаут запроса (мс)",

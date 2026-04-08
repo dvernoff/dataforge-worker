@@ -233,13 +233,6 @@ export async function authRoutes(app: FastifyInstance) {
       throw new AppError(400, 'Token and temp_token are required');
     }
 
-    // Atomically mark temp token as used (prevents race condition replay)
-    const tempTokenHash = crypto.createHash('sha256').update(temp_token).digest('hex');
-    const claimed = await app.redis.set(`temp-used:${tempTokenHash}`, '1', 'EX', 300, 'NX');
-    if (!claimed) {
-      throw new AppError(401, 'Token already used');
-    }
-
     let payload: { id: string };
     try {
       payload = verifyTempToken(temp_token);
@@ -257,6 +250,12 @@ export async function authRoutes(app: FastifyInstance) {
     const valid = twoFAService.verifyToken(user.totp_secret, token);
     if (!valid) {
       throw new AppError(401, 'Invalid 2FA token');
+    }
+
+    const tempTokenHash = crypto.createHash('sha256').update(temp_token).digest('hex');
+    const claimed = await app.redis.set(`temp-used:${tempTokenHash}`, '1', 'EX', 300, 'NX');
+    if (!claimed) {
+      throw new AppError(401, 'Token already used');
     }
 
     await app.db('users').where({ id: user.id }).update({ last_login_at: new Date() });
@@ -330,13 +329,6 @@ export async function authRoutes(app: FastifyInstance) {
       throw new AppError(400, 'Code and temp_token are required');
     }
 
-    // Atomically mark temp token as used (prevents race condition replay)
-    const backupTokenHash = crypto.createHash('sha256').update(temp_token).digest('hex');
-    const backupClaimed = await app.redis.set(`temp-used:${backupTokenHash}`, '1', 'EX', 300, 'NX');
-    if (!backupClaimed) {
-      throw new AppError(401, 'Token already used');
-    }
-
     let payload: { id: string };
     try {
       payload = verifyTempToken(temp_token);
@@ -358,7 +350,12 @@ export async function authRoutes(app: FastifyInstance) {
       throw new AppError(401, 'Invalid backup code');
     }
 
-    // Remove used backup code
+    const backupTokenHash = crypto.createHash('sha256').update(temp_token).digest('hex');
+    const backupClaimed = await app.redis.set(`temp-used:${backupTokenHash}`, '1', 'EX', 300, 'NX');
+    if (!backupClaimed) {
+      throw new AppError(401, 'Token already used');
+    }
+
     const updatedCodes = [...user.backup_codes];
     updatedCodes.splice(codeIndex, 1);
 

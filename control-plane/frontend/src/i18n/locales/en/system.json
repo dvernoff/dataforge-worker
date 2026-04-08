@@ -229,10 +229,10 @@
     },
     "dataRetention": {
       "title": "Data Retention",
-      "auditRetention": "Audit log retention days",
-      "requestRetention": "Request log retention days",
-      "timeTravelDays": "Time Travel history (days)",
-      "timeTravelDaysDesc": "How many days of change history to keep for Time Travel snapshots"
+      "description": "Configure how long different types of data are kept before automatic cleanup. Changes apply within 1 hour.",
+      "auditRetention": "Audit log retention (days)",
+      "requestRetention": "API request log retention (days)",
+      "backupRetention": "Backup retention (days)"
     },
     "backup": {
       "title": "System Backup",
@@ -321,6 +321,9 @@
       "max_storage_mb": "Max Storage (MB)",
       "max_endpoints": "Max Endpoints",
       "max_webhooks": "Max Webhooks",
+      "max_discord_webhooks": "Max Discord Webhooks",
+      "max_telegram_bots": "Max Telegram Bots",
+      "max_uptime_monitors": "Max Uptime Monitors",
       "max_files": "Max Files",
       "max_backups": "Max Backups",
       "max_cron": "Max Cron Jobs",
@@ -371,6 +374,7 @@
     "quotaGroups": {
       "resources": "Resources",
       "apiAutomation": "API & Automation",
+      "integrations": "Integrations",
       "backups": "Backups",
       "performance": "Performance"
     },
@@ -382,6 +386,9 @@
       "max_api_requests": "Max API Requests / Day",
       "max_endpoints": "Max Endpoints",
       "max_webhooks": "Max Webhooks",
+      "max_discord_webhooks": "Max Discord Webhooks",
+      "max_telegram_bots": "Max Telegram Bots",
+      "max_uptime_monitors": "Max Uptime Monitors",
       "max_cron": "Max Cron Jobs",
       "max_backups": "Max Backups",
       "max_query_timeout_ms": "Query Timeout (ms)",

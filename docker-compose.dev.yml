@@ -141,6 +141,7 @@ services:
       ADMIN_PASSWORD: "Admin123!@#"
       ADMIN_NAME: Superadmin
       SECRETS_ENCRYPTION_KEY: dev_secrets_key_32chars_minimum!!
+      INTERNAL_SECRET: dev_internal_secret_change_in_production_64chars
       CORS_ORIGIN: http://localhost:3000
       RATE_LIMIT_MAX: "200"
       RATE_LIMIT_WINDOW: "60000"
@@ -181,7 +182,8 @@ services:
       NODE_API_KEY: dev_worker_api_key_change_in_production_64chars_ccccccccccccccccccc
       CONTROL_PLANE_URL: http://control-plane:4000
       NODE_ID: worker-dev-1
-      CORS_ORIGIN: "*"
+      INTERNAL_SECRET: dev_internal_secret_change_in_production_64chars
+      CORS_ORIGIN: http://localhost:3000
       RATE_LIMIT_MAX: "200"
       RATE_LIMIT_WINDOW: "60000"
     command: >

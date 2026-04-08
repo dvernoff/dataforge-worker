@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import { DataService } from './data.service.js';
-import { HistoryService } from './history.service.js';
 import { RLSService } from './rls.service.js';
 import { ValidationService } from './validation.service.js';
 import { CommentsService } from './comments.service.js';
@@ -10,6 +9,7 @@ import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
 import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { getQuotaHelpers } from '../../middleware/quota-enforcement.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
+import { validateIdentifier } from '../../utils/sql-guard.js';
 import { z } from 'zod';
 
 function resolveProjectSchema(request: any): string {
@@ -24,7 +24,6 @@ function resolveProjectId(request: any): string {
 
 export async function dataRoutes(app: FastifyInstance) {
   const dataService = new DataService(app.db);
-  const historyService = new HistoryService(app.db);
   const rlsService = new RLSService(app.db);
   const cacheService = new CacheService(app.redis);
   const cacheInvalidation = new CacheInvalidationService(app.db, cacheService);
@@ -33,6 +32,10 @@ export async function dataRoutes(app: FastifyInstance) {
 
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
+  app.addHook('preHandler', async (request) => {
+    const params = request.params as Record<string, string>;
+    if (params.tableName) validateIdentifier(params.tableName, 'table name');
+  });
 
   app.get('/:projectId/tables/:tableName/data', async (request) => {
     const { tableName } = request.params as { tableName: string };
@@ -85,7 +88,7 @@ export async function dataRoutes(app: FastifyInstance) {
       throw new AppError(422, validationErrors.map((e) => e.message).join('; '));
     }
 
-    const record = await dataService.create(dbSchema, tableName, body);
+    const record = await dataService.create(dbSchema, tableName, body, projectId);
     cacheInvalidation.onDataChange(projectId, tableName, 'insert').catch(() => {});
     return { record };
   });
@@ -101,7 +104,7 @@ export async function dataRoutes(app: FastifyInstance) {
       throw new AppError(422, validationErrors.map((e) => e.message).join('; '));
     }
 
-    const record = await dataService.update(dbSchema, tableName, id, body);
+    const record = await dataService.update(dbSchema, tableName, id, body, projectId);
     cacheInvalidation.onDataChange(projectId, tableName, 'update').catch(() => {});
     return { record };
   });
@@ -128,7 +131,7 @@ export async function dataRoutes(app: FastifyInstance) {
   app.delete('/:projectId/tables/:tableName/data/:id', async (request, reply) => {
     const { projectId, tableName, id } = request.params as { projectId: string; tableName: string; id: string };
     const dbSchema = resolveProjectSchema(request);
-    await dataService.delete(dbSchema, tableName, id);
+    await dataService.delete(dbSchema, tableName, id, projectId);
     cacheInvalidation.onDataChange(projectId, tableName, 'delete').catch(() => {});
     return reply.status(204).send();
   });
@@ -197,116 +200,6 @@ export async function dataRoutes(app: FastifyInstance) {
     }
 
     return { records, truncated: maxExport > 0 && records.length >= maxExport, limit: maxExport || null };
-  });
-
-  app.post('/:projectId/tables/:tableName/history/setup', async (request) => {
-    const { tableName } = request.params as { tableName: string };
-    const dbSchema = resolveProjectSchema(request);
-    await historyService.setupHistoryTracking(dbSchema, tableName);
-    return { success: true };
-  });
-
-  app.get('/:projectId/tables/:tableName/data/:id/history', async (request) => {
-    const { tableName, id } = request.params as { tableName: string; id: string };
-    const dbSchema = resolveProjectSchema(request);
-    const history = await historyService.getHistory(dbSchema, tableName, id);
-    return { history };
-  });
-
-  app.post('/:projectId/tables/:tableName/data/:id/rollback', async (request) => {
-    const { tableName, id } = request.params as { tableName: string; id: string };
-    const body = z.object({ historyId: z.string().uuid() }).parse(request.body);
-    const dbSchema = resolveProjectSchema(request);
-    const result = await historyService.rollback(dbSchema, tableName, id, body.historyId);
-    return { record: result };
-  });
-
-  app.get('/:projectId/tables/:tableName/time-travel', async (request) => {
-    const { tableName } = request.params as { tableName: string };
-    const query = request.query as Record<string, string>;
-    const dbSchema = resolveProjectSchema(request);
-
-    const timestamp = query.timestamp;
-    if (!timestamp) {
-      throw new AppError(400, 'Missing required query parameter: timestamp');
-    }
-
-    const targetDate = new Date(timestamp);
-    if (isNaN(targetDate.getTime())) {
-      throw new AppError(400, 'Invalid timestamp format');
-    }
-
-    const historyTable = `__history_${tableName}`;
-
-    const historyExists = await app.db.raw(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables
-        WHERE table_schema = ? AND table_name = ?
-      ) as exists
-    `, [dbSchema, historyTable]);
-
-    if (!historyExists.rows[0]?.exists) {
-      throw new AppError(404, 'History tracking is not enabled for this table. Enable it first.');
-    }
-
-    const retentionDays = Number(query.retention_days ?? '7');
-    historyService.purgeOldHistory(dbSchema, tableName, retentionDays).catch(() => {});
-
-    const currentRecords = await app.db(`${dbSchema}.${tableName}`).select('*');
-
-    const futureChanges = await app.db(`${dbSchema}.${historyTable}`)
-      .where('changed_at', '>', targetDate.toISOString())
-      .orderBy('changed_at', 'desc');
-
-    const recordMap = new Map<string, Record<string, unknown>>();
-    for (const record of currentRecords) {
-      recordMap.set(String(record.id), record);
-    }
-
-    const changedFields = new Map<string, Set<string>>();
-
-    for (const change of futureChanges) {
-      const recordId = change.record_id;
-
-      if (change.operation === 'INSERT') {
-        recordMap.delete(recordId);
-      } else if (change.operation === 'DELETE') {
-        if (change.old_values) {
-          recordMap.set(recordId, change.old_values);
-        }
-      } else if (change.operation === 'UPDATE') {
-        if (change.old_values) {
-          const current = recordMap.get(recordId);
-          if (current && change.new_values) {
-            const fields = new Set<string>();
-            for (const key of Object.keys(change.new_values)) {
-              if (JSON.stringify(change.old_values[key]) !== JSON.stringify(change.new_values[key])) {
-                fields.add(key);
-              }
-            }
-            if (fields.size > 0) {
-              const existing = changedFields.get(recordId) ?? new Set();
-              for (const f of fields) existing.add(f);
-              changedFields.set(recordId, existing);
-            }
-          }
-          recordMap.set(recordId, change.old_values);
-        }
-      }
-    }
-
-    const data = Array.from(recordMap.values());
-    const diff: Record<string, string[]> = {};
-    for (const [id, fields] of changedFields.entries()) {
-      diff[id] = Array.from(fields);
-    }
-
-    return {
-      data,
-      timestamp: targetDate.toISOString(),
-      total: data.length,
-      changedFields: diff,
-    };
   });
 
   app.get('/:projectId/rls', async (request) => {
@@ -432,13 +325,8 @@ export async function dataRoutes(app: FastifyInstance) {
       return { inserted: 0, total: 0, error: 'No columns mapped for seeding' };
     }
 
-    const batchSize = 500;
-    let inserted = 0;
-    for (let i = 0; i < validRecords.length; i += batchSize) {
-      const batch = validRecords.slice(i, i + batchSize);
-      await app.db(`${dbSchema}.${tableName}`).insert(batch);
-      inserted += batch.length;
-    }
+    const projectId = resolveProjectId(request);
+    const inserted = await dataService.bulkInsertWithWebhooks(dbSchema, tableName, validRecords, projectId);
 
     return { inserted, total: validRecords.length };
   });

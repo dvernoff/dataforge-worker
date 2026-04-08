@@ -1,5 +1,6 @@
 import type { Knex } from 'knex';
 import { AppError } from '../../middleware/error-handler.js';
+import { validateSchema } from '../../utils/sql-guard.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -93,8 +94,6 @@ export class PluginManager {
       const instance = instanceMap.get(manifest.id);
       return {
         ...manifest,
-        // settings = manifest setting definitions (array)
-        // saved_settings = instance saved values (object)
         settings: manifest.settings ?? [],
         saved_settings: instance?.settings ?? {},
         is_enabled: instance?.is_enabled ?? false,
@@ -105,12 +104,12 @@ export class PluginManager {
 
   async enablePlugin(projectId: string, pluginId: string, settings: Record<string, unknown>) {
     const manifest = this.manifests.get(pluginId);
-    if (!manifest) throw new AppError(404, 'Plugin not found');
 
-    // Validate required settings
-    for (const settingDef of manifest.settings) {
-      if (settingDef.required && (settings[settingDef.key] === undefined || settings[settingDef.key] === '')) {
-        throw new AppError(400, `Setting "${settingDef.key}" is required`);
+    if (manifest) {
+      for (const settingDef of manifest.settings) {
+        if (settingDef.required && (settings[settingDef.key] === undefined || settings[settingDef.key] === '')) {
+          throw new AppError(400, `Setting "${settingDef.key}" is required`);
+        }
       }
     }
 
@@ -123,6 +122,7 @@ export class PluginManager {
         .where({ id: existing.id })
         .update({ is_enabled: true, settings: JSON.stringify(settings) })
         .returning('*');
+      await this.onPluginEnabled(projectId, pluginId);
       return updated;
     }
 
@@ -134,16 +134,70 @@ export class PluginManager {
         is_enabled: true,
       })
       .returning('*');
+
+    await this.onPluginEnabled(projectId, pluginId);
     return instance;
   }
 
   async disablePlugin(projectId: string, pluginId: string) {
-    const [instance] = await this.db('plugin_instances')
+    const existing = await this.db('plugin_instances')
       .where({ project_id: projectId, plugin_id: pluginId })
-      .update({ is_enabled: false })
+      .first();
+
+    if (existing) {
+      const [updated] = await this.db('plugin_instances')
+        .where({ id: existing.id })
+        .update({ is_enabled: false })
+        .returning('*');
+      await this.onPluginDisabled(projectId, pluginId);
+      return updated;
+    }
+
+    const [instance] = await this.db('plugin_instances')
+      .insert({
+        project_id: projectId,
+        plugin_id: pluginId,
+        settings: JSON.stringify({}),
+        is_enabled: false,
+      })
       .returning('*');
-    if (!instance) throw new AppError(404, 'Plugin instance not found');
+    await this.onPluginDisabled(projectId, pluginId);
     return instance;
+  }
+
+  private async onPluginEnabled(projectId: string, pluginId: string) {
+    if (pluginId === 'uptime-ping') {
+      try {
+        const project = await this.db('projects').where({ id: projectId }).select('db_schema').first();
+        if (project?.db_schema) {
+          const schema = project.db_schema;
+          validateSchema(schema);
+          const exists = await this.db.raw(`SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = 'uptime_logs'`, [schema]);
+          if (exists.rows.length === 0) {
+            await this.db.raw(`CREATE TABLE "${schema}".uptime_logs (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              monitor_id UUID NOT NULL, monitor_name VARCHAR(255), category VARCHAR(100),
+              url TEXT, status_code INTEGER, response_time_ms INTEGER,
+              is_up BOOLEAN DEFAULT true, error TEXT, reason TEXT,
+              checked_at TIMESTAMPTZ DEFAULT NOW()
+            )`);
+            await this.db.raw(`CREATE INDEX idx_uptime_logs_monitor ON "${schema}".uptime_logs (monitor_id, checked_at)`);
+          }
+          await this.db.raw(`COMMENT ON TABLE "${schema}".uptime_logs IS 'system:uptime-ping'`).catch(() => {});
+        }
+      } catch {}
+    }
+  }
+
+  private async onPluginDisabled(projectId: string, pluginId: string) {
+    if (pluginId === 'uptime-ping') {
+      try {
+        const project = await this.db('projects').where({ id: projectId }).select('db_schema').first();
+        if (project?.db_schema) {
+          await this.db.raw(`DROP TABLE IF EXISTS "${project.db_schema}".uptime_logs CASCADE`);
+        }
+      } catch {}
+    }
   }
 
   async getPluginSettings(projectId: string, pluginId: string) {

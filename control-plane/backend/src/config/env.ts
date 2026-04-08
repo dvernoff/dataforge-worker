@@ -37,8 +37,7 @@ const envSchema = z.object({
   WORKER_NODE_API_KEY: z.string().default(''),
   SECRETS_ENCRYPTION_KEY: z.string().min(32).optional(),
 
-  // Shared secret for CP → Worker /internal/* routes
-  INTERNAL_SECRET: z.string().optional(),
+  INTERNAL_SECRET: z.string().min(16).optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Shield, CheckCircle2, XCircle, Globe, Network, Lock, Plus, Trash2 } from 'lucide-react';
+import { Network, Lock, Plus, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,9 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { PageWrapper } from '@/components/shared/PageWrapper';
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { useCurrentUser } from '@/hooks/useAuth';
 import { useCurrentProject } from '@/hooks/useProject';
-import { authApi } from '@/api/auth.api';
 import { securityApi } from '@/api/security.api';
 import { dataApi, type RLSRule } from '@/api/data.api';
 import { schemaApi } from '@/api/schema.api';
@@ -29,22 +27,12 @@ export function SecurityPage() {
   const { t } = useTranslation('settings');
   usePageTitle(t('security.title'));
   const queryClient = useQueryClient();
-  const { data: user } = useCurrentUser();
   const { data: project } = useCurrentProject();
-
-  const [setupStep, setSetupStep] = useState<'idle' | 'qr' | 'done'>('idle');
-  const [setupData, setSetupData] = useState<{ secret: string; uri: string; backup_codes: string[] } | null>(null);
-  const [verifyCode, setVerifyCode] = useState('');
-  const [disablePassword, setDisablePassword] = useState('');
-  const [showDisable, setShowDisable] = useState(false);
-  const is2FAEnabled = user?.totp_enabled ?? false;
 
   const [ipMode, setIpMode] = useState('disabled');
   const [ipList, setIpList] = useState('');
   const [applyToUi, setApplyToUi] = useState(false);
   const [applyToApi, setApplyToApi] = useState(true);
-  const [geoMode, setGeoMode] = useState('disabled');
-  const [geoCountries, setGeoCountries] = useState('');
 
   const [rlsTableFilter, setRlsTableFilter] = useState('');
   const [addRuleOpen, setAddRuleOpen] = useState(false);
@@ -77,8 +65,6 @@ export function SecurityPage() {
       setIpList((data.ip_mode === 'whitelist' ? whitelist : blacklist).join('\n'));
       setApplyToUi((data.apply_to_ui as boolean) ?? false);
       setApplyToApi((data.apply_to_api as boolean) ?? true);
-      setGeoMode((data.geo_mode as string) ?? 'disabled');
-      setGeoCountries(((data.geo_countries as string[]) ?? []).join('\n'));
     }
   }, [securityData]);
 
@@ -110,39 +96,6 @@ export function SecurityPage() {
       return res.table.columns;
     },
     enabled: !!projectId && !!newRule.table_name,
-  });
-
-  const setupMutation = useMutation({
-    mutationFn: () => authApi.twoFASetup(),
-    onSuccess: (data) => {
-      setSetupData(data);
-      setSetupStep('qr');
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const verifySetupMutation = useMutation({
-    mutationFn: () => authApi.twoFAVerifySetup(verifyCode),
-    onSuccess: () => {
-      setSetupStep('done');
-      setVerifyCode('');
-      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
-      toast.success(t('security.twofa.enabled'));
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const disableMutation = useMutation({
-    mutationFn: () => authApi.twoFADisable(disablePassword),
-    onSuccess: () => {
-      setShowDisable(false);
-      setDisablePassword('');
-      setSetupStep('idle');
-      setSetupData(null);
-      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
-      toast.success(t('security.twofa.disabled'));
-    },
-    onError: (err: Error) => toast.error(err.message),
   });
 
   const securityMutation = useMutation({
@@ -191,8 +144,6 @@ export function SecurityPage() {
       ip_blacklist: ipMode === 'blacklist' ? ipArray : [],
       apply_to_ui: applyToUi,
       apply_to_api: applyToApi,
-      geo_mode: geoMode,
-      geo_countries: geoCountries.split('\n').map((s) => s.trim()).filter(Boolean),
     });
   };
 
@@ -211,128 +162,6 @@ export function SecurityPage() {
   return (
     <PageWrapper>
       <h1 className="text-2xl font-bold mb-6">{t('security.title')}</h1>
-
-      {/* ─── 2FA Card ─────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            {t('security.twofa.title')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Status */}
-          <div className="flex items-center gap-2">
-            {is2FAEnabled ? (
-              <>
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                <span className="font-medium">{t('security.twofa.enabled')}</span>
-                <Badge variant="outline" className="border-green-500/50 text-green-500">
-                  {t('security.twofa.enabled')}
-                </Badge>
-              </>
-            ) : (
-              <>
-                <XCircle className="h-5 w-5 text-muted-foreground" />
-                <span className="text-muted-foreground">{t('security.twofa.disabled')}</span>
-              </>
-            )}
-          </div>
-
-          {/* Enable flow */}
-          {!is2FAEnabled && setupStep === 'idle' && (
-            <Button onClick={() => setupMutation.mutate()} disabled={setupMutation.isPending}>
-              {setupMutation.isPending ? '...' : t('security.twofa.enable')}
-            </Button>
-          )}
-
-          {!is2FAEnabled && setupStep === 'qr' && setupData && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">{t('security.twofa.scanQr')}</p>
-
-              {/* QR URI display */}
-              <div className="p-4 bg-muted rounded-lg break-all">
-                <p className="text-xs text-muted-foreground mb-1">otpauth:// URI</p>
-                <code className="text-xs">{setupData.uri}</code>
-              </div>
-
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Secret key (manual entry)</p>
-                <code className="text-sm font-mono">{setupData.secret}</code>
-              </div>
-
-              {/* Backup codes */}
-              <div className="space-y-2">
-                <p className="text-sm font-medium">{t('security.twofa.backupCodes')}</p>
-                <p className="text-xs text-muted-foreground">{t('security.twofa.backupDesc')}</p>
-                <div className="grid grid-cols-2 gap-2 p-3 bg-muted rounded-lg">
-                  {setupData.backup_codes.map((code, i) => (
-                    <code key={i} className="text-sm font-mono">
-                      {code}
-                    </code>
-                  ))}
-                </div>
-              </div>
-
-              {/* Verify */}
-              <div className="space-y-2">
-                <Label htmlFor="verify-code">{t('security.twofa.enterCode')}</Label>
-                <Input
-                  id="verify-code"
-                  value={verifyCode}
-                  onChange={(e) => setVerifyCode(e.target.value)}
-                  placeholder="000000"
-                  maxLength={6}
-                  className="max-w-xs"
-                />
-              </div>
-
-              <Button
-                onClick={() => verifySetupMutation.mutate()}
-                disabled={verifySetupMutation.isPending || !verifyCode}
-              >
-                {verifySetupMutation.isPending ? '...' : t('security.twofa.enable')}
-              </Button>
-            </div>
-          )}
-
-          {setupStep === 'done' && !is2FAEnabled && (
-            <p className="text-sm text-green-500">{t('security.twofa.enabled')}</p>
-          )}
-
-          {/* Disable flow */}
-          {is2FAEnabled && !showDisable && (
-            <Button variant="destructive" onClick={() => setShowDisable(true)}>
-              {t('security.twofa.disable')}
-            </Button>
-          )}
-
-          {is2FAEnabled && showDisable && (
-            <div className="space-y-3 p-4 border border-destructive/50 rounded-lg">
-              <Label htmlFor="disable-password">{t('security.twofa.confirmPassword', 'Confirm your password')}</Label>
-              <Input
-                id="disable-password"
-                type="password"
-                value={disablePassword}
-                onChange={(e) => setDisablePassword(e.target.value)}
-                placeholder="Password"
-              />
-              <div className="flex gap-2">
-                <Button
-                  variant="destructive"
-                  onClick={() => disableMutation.mutate()}
-                  disabled={disableMutation.isPending || !disablePassword}
-                >
-                  {disableMutation.isPending ? '...' : t('security.twofa.disable')}
-                </Button>
-                <Button variant="outline" onClick={() => { setShowDisable(false); setDisablePassword(''); }}>
-                  {t('security.cancel', 'Cancel')}
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* ─── IP Access Control Card ───────────────────────── */}
       {projectId && (
@@ -379,19 +208,7 @@ export function SecurityPage() {
               </div>
             )}
 
-            <div>
-              <Label className="mb-2 block">{t('security.ip.applyTo')}</Label>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={applyToUi} onCheckedChange={(v) => setApplyToUi(!!v)} id="apply-ui" />
-                  <Label htmlFor="apply-ui">{t('security.ip.ui')}</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={applyToApi} onCheckedChange={(v) => setApplyToApi(!!v)} id="apply-api" />
-                  <Label htmlFor="apply-api">{t('security.ip.api')}</Label>
-                </div>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">{t('security.ip.appliesTo')}</p>
 
             <Button onClick={handleSaveSecurity} disabled={securityMutation.isPending}>
               {securityMutation.isPending ? '...' : t('projectSettings.save')}
@@ -400,57 +217,6 @@ export function SecurityPage() {
         </Card>
       )}
 
-      {/* ─── Geo Blocking Card ────────────────────────────── */}
-      {projectId && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              {t('security.geo.title')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>{t('security.geo.mode')}</Label>
-              <RadioGroup
-                value={geoMode}
-                onValueChange={setGeoMode}
-                className="flex gap-4 mt-2"
-              >
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="disabled" id="geo-disabled" />
-                  <Label htmlFor="geo-disabled">{t('security.geo.disabled')}</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="allow" id="geo-allow" />
-                  <Label htmlFor="geo-allow">{t('security.geo.allow')}</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="block" id="geo-block" />
-                  <Label htmlFor="geo-block">{t('security.geo.block')}</Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {geoMode !== 'disabled' && (
-              <div>
-                <Label>{t('security.geo.countries')}</Label>
-                <p className="text-xs text-muted-foreground mb-1">{t('security.geo.countriesHint')}</p>
-                <Textarea
-                  value={geoCountries}
-                  onChange={(e) => setGeoCountries(e.target.value)}
-                  rows={4}
-                  placeholder="US&#10;DE&#10;RU"
-                />
-              </div>
-            )}
-
-            <Button onClick={handleSaveSecurity} disabled={securityMutation.isPending}>
-              {securityMutation.isPending ? '...' : t('projectSettings.save')}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
 
       {/* ─── Row-Level Security Card ─────────────────────── */}
       {projectId && (
@@ -596,6 +362,32 @@ export function SecurityPage() {
               </div>
             )}
 
+            <div className="space-y-3 mb-4">
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {t('security.rls.explanation')}
+                </p>
+                <p className="text-sm text-muted-foreground leading-relaxed mt-2">
+                  {t('security.rls.whenToUse')}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="text-xs gap-1">
+                  <span className="text-green-400">{'→'}</span> {t('security.rls.exampleUser')}
+                </Badge>
+                <Badge variant="outline" className="text-xs gap-1">
+                  <span className="text-blue-400">{'→'}</span> {t('security.rls.exampleRole')}
+                </Badge>
+                <Badge variant="outline" className="text-xs gap-1">
+                  <span className="text-amber-400">{'→'}</span> {t('security.rls.exampleStatic')}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground/70">
+                <Lock className="h-3 w-3" />
+                {t('security.rls.panelNote')}
+              </div>
+            </div>
+
             {filteredRules.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Lock className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -609,16 +401,17 @@ export function SecurityPage() {
                     key={rule.id}
                     className="flex items-center justify-between p-3 border rounded-lg"
                   >
-                    <div className="flex items-center gap-3 text-sm">
+                    <div className="flex items-center gap-2 text-sm flex-wrap">
+                      <span className="text-muted-foreground">{t('security.rls.rulePrefix')}</span>
                       <Badge variant="outline">{rule.table_name}</Badge>
-                      <span className="font-mono">{rule.column_name}</span>
-                      <Badge>{t(`security.rls.operators.${rule.operator}`)}</Badge>
-                      <span className="text-muted-foreground">
-                        {t(`security.rls.sources.${rule.value_source}`)}
-                      </span>
-                      {rule.value_static && (
-                        <code className="text-xs bg-muted px-1 py-0.5 rounded">{rule.value_static}</code>
-                      )}
+                      <span className="text-muted-foreground">{t('security.rls.ruleWhere')}</span>
+                      <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{rule.column_name}</code>
+                      <Badge variant="secondary">{t(`security.rls.operators.${rule.operator}`)}</Badge>
+                      <Badge variant="default" className="text-xs">
+                        {rule.value_source === 'static' || rule.value_source === 'header'
+                          ? rule.value_static
+                          : t(`security.rls.sources.${rule.value_source}`)}
+                      </Badge>
                     </div>
                     <Button
                       variant="ghost"

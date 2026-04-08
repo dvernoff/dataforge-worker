@@ -20,13 +20,17 @@ export async function sdkRoutes(app: FastifyInstance) {
 
     const worker = await proxyService.getWorkerForProject(projectId);
 
-    // Fetch endpoints from worker
     const result = await proxyService.forwardToWorker(
       worker.url,
       worker.apiKey,
       'GET',
       `/api/projects/${projectId}/endpoints`,
-      { 'content-type': 'application/json' },
+      {
+        'content-type': 'application/json',
+        'x-user-id': request.user.id,
+        'x-user-role': ((request as unknown as Record<string, unknown>).projectRole as string) ?? 'viewer',
+        'x-project-slug': worker.slug,
+      },
       null,
       projectId,
       worker.schema

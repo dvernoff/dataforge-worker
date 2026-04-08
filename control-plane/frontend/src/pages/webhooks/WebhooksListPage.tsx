@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Webhook, Trash2, Eye, MoreHorizontal } from 'lucide-react';
+import { Plus, Webhook, Trash2, Eye, MoreHorizontal, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -27,18 +26,26 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 
 const EVENTS = ['INSERT', 'UPDATE', 'DELETE'] as const;
 
+interface WebhookForm {
+  name: string;
+  table_names: string[];
+  events: string[];
+  url: string;
+  secret: string;
+}
+
+const emptyForm: WebhookForm = { name: '', table_names: [], events: [], url: '', secret: '' };
+
 export function WebhooksListPage() {
   const { t } = useTranslation(['webhooks', 'common']);
   usePageTitle(t('webhooks:pageTitle'));
   const { data: project } = useCurrentProject();
   const queryClient = useQueryClient();
-  const [createOpen, setCreateOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [logsWebhookId, setLogsWebhookId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-
-  const [newWh, setNewWh] = useState({
-    name: '', table_name: '', events: [] as string[], url: '', secret: '',
-  });
+  const [form, setForm] = useState<WebhookForm>({ ...emptyForm });
 
   const { data, isLoading } = useQuery({
     queryKey: ['webhooks', project?.id],
@@ -60,17 +67,32 @@ export function WebhooksListPage() {
 
   const createMutation = useMutation({
     mutationFn: () => webhooksApi.create(project!.id, {
-      name: newWh.name || undefined,
-      table_name: newWh.table_name,
-      events: newWh.events,
-      url: newWh.url,
-      secret: newWh.secret || undefined,
+      name: form.name || undefined,
+      table_names: form.table_names,
+      events: form.events,
+      url: form.url,
+      secret: form.secret || undefined,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['webhooks', project?.id] });
       toast.success(t('webhooks:webhookCreated'));
-      setCreateOpen(false);
-      setNewWh({ name: '', table_name: '', events: [], url: '', secret: '' });
+      closeDialog();
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: () => webhooksApi.update(project!.id, editingId!, {
+      name: form.name || undefined,
+      table_names: form.table_names,
+      events: form.events,
+      url: form.url,
+      secret: form.secret || undefined,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['webhooks', project?.id] });
+      toast.success(t('webhooks:webhookUpdated'));
+      closeDialog();
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -93,8 +115,32 @@ export function WebhooksListPage() {
   const webhooks = (data?.webhooks ?? []) as (Record<string, unknown> & { stats: { total: number; success_count: number; last_triggered: string | null } })[];
   const tables = tablesData?.tables ?? [];
 
+  function openCreate() {
+    setEditingId(null);
+    setForm({ ...emptyForm });
+    setDialogOpen(true);
+  }
+
+  function openEdit(wh: Record<string, unknown>) {
+    setEditingId(String(wh.id));
+    setForm({
+      name: String(wh.name ?? ''),
+      table_names: (wh.table_names as string[]) ?? (wh.table_name ? [String(wh.table_name)] : []),
+      events: (wh.events as string[]) ?? [],
+      url: String(wh.url ?? ''),
+      secret: String(wh.secret ?? ''),
+    });
+    setDialogOpen(true);
+  }
+
+  function closeDialog() {
+    setDialogOpen(false);
+    setEditingId(null);
+    setForm({ ...emptyForm });
+  }
+
   function toggleEvent(event: string) {
-    setNewWh((prev) => ({
+    setForm((prev) => ({
       ...prev,
       events: prev.events.includes(event)
         ? prev.events.filter((e) => e !== event)
@@ -102,11 +148,31 @@ export function WebhooksListPage() {
     }));
   }
 
+  function toggleTable(tableName: string) {
+    setForm((prev) => ({
+      ...prev,
+      table_names: prev.table_names.includes(tableName)
+        ? prev.table_names.filter((t) => t !== tableName)
+        : [...prev.table_names, tableName],
+    }));
+  }
+
+  function handleSave() {
+    if (editingId) {
+      updateMutation.mutate();
+    } else {
+      createMutation.mutate();
+    }
+  }
+
+  const isFormValid = form.table_names.length > 0 && form.events.length > 0 && form.url.length > 0;
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
   return (
     <PageWrapper>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">{t('webhooks:pageTitle')}</h1>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-2" />
           {t('webhooks:createWebhook')}
         </Button>
@@ -119,7 +185,7 @@ export function WebhooksListPage() {
           <Webhook className="h-12 w-12 text-muted-foreground mb-4" />
           <h2 className="text-lg font-medium mb-2">{t('webhooks:noWebhooks')}</h2>
           <p className="text-muted-foreground mb-4">{t('webhooks:noWebhooksDesc')}</p>
-          <Button onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 mr-2" />{t('webhooks:createWebhook')}</Button>
+          <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />{t('webhooks:createWebhook')}</Button>
         </div>
       ) : (
         <motion.div variants={staggerContainer} initial="initial" animate="animate" className="space-y-4">
@@ -134,7 +200,7 @@ export function WebhooksListPage() {
                           className={`h-2 w-2 rounded-full ${wh.is_active ? 'bg-green-500' : 'bg-muted-foreground'}`}
                           {...(wh.is_active ? pulse : {})}
                         />
-                        <span className="font-medium">{wh.name ? String(wh.name) : String(wh.table_name)}</span>
+                        <span className="font-medium">{wh.name ? String(wh.name) : ((wh.table_names as string[]) ?? []).join(', ') || String(wh.table_name ?? '')}</span>
                         <div className="flex gap-1">
                           {(wh.events as string[]).map((e) => (
                             <Badge key={e} variant="outline" className="text-[10px]">{e}</Badge>
@@ -142,6 +208,11 @@ export function WebhooksListPage() {
                         </div>
                       </div>
                       <p className="text-sm text-muted-foreground truncate max-w-md">{String(wh.url)}</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {((wh.table_names as string[]) ?? (wh.table_name ? [String(wh.table_name)] : [])).map((t) => (
+                          <Badge key={t} variant="secondary" className="text-[10px]">{t}</Badge>
+                        ))}
+                      </div>
                       <div className="flex gap-4 text-xs text-muted-foreground">
                         {wh.stats.total > 0 && (
                           <span>
@@ -167,6 +238,9 @@ export function WebhooksListPage() {
                           <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEdit(wh)}>
+                            <Pencil className="h-4 w-4 mr-2" />{t('webhooks:editWebhook')}
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setLogsWebhookId(String(wh.id))}>
                             <Eye className="h-4 w-4 mr-2" />{t('webhooks:viewLogs')}
                           </DropdownMenuItem>
@@ -184,29 +258,47 @@ export function WebhooksListPage() {
         </motion.div>
       )}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{t('webhooks:createWebhook')}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
+      <Dialog open={dialogOpen} onOpenChange={(o) => !o && closeDialog()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingId ? t('webhooks:editWebhook') : t('webhooks:createWebhook')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
             <div>
               <Label>{t('webhooks:form.name')}</Label>
-              <Input value={newWh.name} onChange={(e) => setNewWh({ ...newWh, name: e.target.value })} placeholder={t('webhooks:form.namePlaceholder')} className="mt-1" />
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('webhooks:form.namePlaceholder')} className="mt-1" />
             </div>
             <div>
-              <Label>{t('webhooks:form.table')}</Label>
-              <Select value={newWh.table_name} onValueChange={(v) => setNewWh({ ...newWh, table_name: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder={t('webhooks:form.selectTable')} /></SelectTrigger>
-                <SelectContent>
-                  {tables.map((tbl) => <SelectItem key={tbl.name} value={tbl.name}>{tbl.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>{t('webhooks:form.tables')}</Label>
+              <div className="mt-2 space-y-1 max-h-40 overflow-y-auto border rounded-md p-2">
+                {tables.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('webhooks:form.noTables')}</p>
+                ) : (
+                  tables.map((tbl) => (
+                    <div key={tbl.name} className="flex items-center gap-2">
+                      <Checkbox
+                        checked={form.table_names.includes(tbl.name)}
+                        onCheckedChange={() => toggleTable(tbl.name)}
+                      />
+                      <Label className="font-mono text-sm cursor-pointer" onClick={() => toggleTable(tbl.name)}>{tbl.name}</Label>
+                    </div>
+                  ))
+                )}
+              </div>
+              {form.table_names.length > 0 && (
+                <div className="flex gap-1 flex-wrap mt-2">
+                  {form.table_names.map((t) => (
+                    <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <Label>{t('webhooks:form.events')}</Label>
               <div className="flex gap-4 mt-2">
                 {EVENTS.map((e) => (
                   <div key={e} className="flex items-center gap-2">
-                    <Checkbox checked={newWh.events.includes(e)} onCheckedChange={() => toggleEvent(e)} />
+                    <Checkbox checked={form.events.includes(e)} onCheckedChange={() => toggleEvent(e)} />
                     <Label>{e}</Label>
                   </div>
                 ))}
@@ -214,17 +306,17 @@ export function WebhooksListPage() {
             </div>
             <div>
               <Label>{t('webhooks:form.url')}</Label>
-              <Input value={newWh.url} onChange={(e) => setNewWh({ ...newWh, url: e.target.value })} placeholder={t('webhooks:form.urlPlaceholder')} className="mt-1" />
+              <Input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder={t('webhooks:form.urlPlaceholder')} className="mt-1" />
             </div>
             <div>
               <Label>{t('webhooks:form.secret')}</Label>
-              <Input value={newWh.secret} onChange={(e) => setNewWh({ ...newWh, secret: e.target.value })} placeholder={t('webhooks:form.secretPlaceholder')} className="mt-1" />
+              <Input value={form.secret} onChange={(e) => setForm({ ...form, secret: e.target.value })} placeholder={t('webhooks:form.secretPlaceholder')} className="mt-1" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>{t('common:actions.cancel')}</Button>
-            <Button onClick={() => createMutation.mutate()} disabled={!newWh.table_name || !newWh.events.length || !newWh.url || createMutation.isPending}>
-              {createMutation.isPending ? t('webhooks:creating') : t('common:actions.create')}
+            <Button variant="outline" onClick={closeDialog}>{t('common:actions.cancel')}</Button>
+            <Button onClick={handleSave} disabled={!isFormValid || isSaving}>
+              {isSaving ? t('webhooks:creating') : editingId ? t('common:actions.save') : t('common:actions.create')}
             </Button>
           </DialogFooter>
         </DialogContent>

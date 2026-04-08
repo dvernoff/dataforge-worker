@@ -14,6 +14,25 @@ export class ProjectsService {
       throw new AppError(409, 'Project with this slug already exists');
     }
 
+    if (input.node_id) {
+      const node = await this.db('nodes').where({ id: input.node_id }).first();
+      if (!node) throw new AppError(404, 'Node not found');
+      if (node.owner_id && node.owner_id !== userId) {
+        throw new AppError(403, 'Cannot assign project to another user\'s personal node');
+      }
+    }
+
+    let defaultPlanId: string | null = null;
+    if (!input.node_id) {
+      try {
+        const basicPlan = await this.db('project_plans')
+          .where({ name: 'Basic' })
+          .select('id')
+          .first();
+        if (basicPlan) defaultPlanId = basicPlan.id;
+      } catch {}
+    }
+
     const result = await this.db.transaction(async (trx) => {
       const [project] = await trx('projects')
         .insert({
@@ -22,6 +41,7 @@ export class ProjectsService {
           description: input.description ?? null,
           db_schema: dbSchema,
           node_id: input.node_id,
+          plan_id: defaultPlanId,
           created_by: userId,
         })
         .returning('*');
@@ -99,11 +119,18 @@ export class ProjectsService {
         const backups = await trx('backups').where({ project_id: id }).select('file_path');
         const fs = await import('fs');
         for (const b of backups) {
-          try { if (b.file_path && fs.existsSync(b.file_path)) fs.unlinkSync(b.file_path); } catch { /* ignore */ }
+          try { if (b.file_path && fs.existsSync(b.file_path)) fs.unlinkSync(b.file_path); } catch {}
         }
-      } catch { /* backups table may not exist */ }
+      } catch {}
 
-      await trx.raw(`DROP SCHEMA IF EXISTS "${project.db_schema}" CASCADE`);
+      const cleanupTables = [
+        'backups', 'backup_schedules', 'api_tokens',
+        'project_members', 'audit_logs', 'invite_keys',
+      ];
+      for (const table of cleanupTables) {
+        try { await trx(table).where({ project_id: id }).delete(); } catch {}
+      }
+
       await trx('projects').where({ id }).delete();
     });
   }

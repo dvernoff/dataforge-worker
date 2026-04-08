@@ -36,6 +36,10 @@ const QUOTA_GROUPS = [
     fields: ['max_api_requests', 'max_endpoints', 'max_webhooks', 'max_cron'],
   },
   {
+    key: 'integrations',
+    fields: ['max_discord_webhooks', 'max_telegram_bots', 'max_uptime_monitors'],
+  },
+  {
     key: 'backups',
     fields: ['max_backups'],
   },
@@ -48,6 +52,7 @@ const QUOTA_GROUPS = [
 const QUOTA_DEFAULTS: Record<string, number> = {
   max_tables: 50, max_records: 10000, max_storage_mb: 500, max_files: 100,
   max_api_requests: 1000, max_endpoints: 20, max_webhooks: 10, max_cron: 5,
+  max_discord_webhooks: 3, max_telegram_bots: 2, max_uptime_monitors: 10,
   max_backups: 5,
   max_query_timeout_ms: 30000, max_concurrent_requests: 10, max_rows_per_query: 1000, max_export_rows: 10000,
 };

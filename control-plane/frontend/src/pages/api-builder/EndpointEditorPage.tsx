@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useFeaturesStore } from '@/stores/features.store';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, Play, AlertCircle, Check, Minus, Info, Copy, Route, Database, Shield, Zap, Globe, Key } from 'lucide-react';
+import { Save, Play, AlertCircle, Check, Minus, Info, Copy, Route, Database, Shield, Zap, Globe, Key, Gamepad2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -545,11 +546,14 @@ export function EndpointEditorPage() {
               <CardDescription>{t('api:basic.authDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`grid gap-3 ${useFeaturesStore.getState().isFeatureEnabled(slug ?? '', 'sbox-auth') ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 {([
-                  { value: 'public', icon: Globe, label: t('api:form.authPublic'), desc: t('api:basic.authPublicDesc') },
-                  { value: 'api_token', icon: Key, label: t('api:form.authApiToken'), desc: t('api:basic.authTokenDesc') },
-                ] as const).map(({ value, icon: Icon, label, desc }) => (
+                  { value: 'public' as const, icon: Globe, label: t('api:form.authPublic'), desc: t('api:basic.authPublicDesc') },
+                  { value: 'api_token' as const, icon: Key, label: t('api:form.authApiToken'), desc: t('api:basic.authTokenDesc') },
+                  ...(useFeaturesStore.getState().isFeatureEnabled(slug ?? '', 'sbox-auth')
+                    ? [{ value: 'sbox_session' as const, icon: Gamepad2, label: 'S&box Session', desc: 'Requires x-session-key header. {{player_steam_id}} available in SQL.' }]
+                    : []),
+                ]).map(({ value, icon: Icon, label, desc }) => (
                   <button
                     key={value}
                     type="button"
