@@ -6,6 +6,7 @@ WORKDIR /app/control-plane/backend
 RUN npm ci && npx tsc || true
 
 FROM node:20-alpine
+RUN apk add --no-cache wget
 WORKDIR /app
 COPY --from=builder /app/control-plane/backend/package*.json ./
 RUN npm ci --production && npm install tsx
