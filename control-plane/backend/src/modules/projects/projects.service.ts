@@ -23,13 +23,22 @@ export class ProjectsService {
     }
 
     let defaultPlanId: string | null = null;
-    if (!input.node_id) {
+    const isPersonalNode = input.node_id
+      ? !!(await this.db('nodes').where({ id: input.node_id }).whereNotNull('owner_id').first())
+      : false;
+
+    if (!isPersonalNode) {
       try {
-        const basicPlan = await this.db('project_plans')
-          .where({ name: 'Basic' })
+        let defaultPlanName = 'Basic';
+        try {
+          const setting = await this.db('system_settings').where({ key: 'default_project_plan' }).first();
+          if (setting?.value) defaultPlanName = setting.value;
+        } catch {}
+        const plan = await this.db('project_plans')
+          .where({ name: defaultPlanName })
           .select('id')
           .first();
-        if (basicPlan) defaultPlanId = basicPlan.id;
+        if (plan) defaultPlanId = plan.id;
       } catch {}
     }
 

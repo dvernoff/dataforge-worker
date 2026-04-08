@@ -189,6 +189,11 @@
     "authDefaults": "Auth Defaults",
     "sessionTtl": "Session TTL (minutes)",
     "minPasswordLength": "Minimum Password Length",
+    "defaults": {
+      "title": "Defaults for New Projects",
+      "description": "Configure default plan assigned to newly created projects on shared nodes.",
+      "defaultProjectPlan": "Default Project Plan"
+    },
     "rateLimiting": "Rate Limiting Defaults",
     "defaultRateLimit": "Default Rate Limit",
     "window": "Window",

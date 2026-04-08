@@ -19,6 +19,7 @@ import { PageWrapper } from '@/components/shared/PageWrapper';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { toast } from 'sonner';
 import { rolesApi } from '@/api/roles.api';
+import { projectPlansApi } from '@/api/project-quotas.api';
 import { api } from '@/api/client';
 
 export function GlobalSettingsPage() {
@@ -58,6 +59,9 @@ export function GlobalSettingsPage() {
   // Maintenance Mode
   const [maintenanceMode, setMaintenanceMode] = useState(false);
 
+  // Defaults
+  const [defaultProjectPlan, setDefaultProjectPlan] = useState('Basic');
+
   // Registration Settings
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
   const [requireInvite, setRequireInvite] = useState(true);
@@ -76,6 +80,12 @@ export function GlobalSettingsPage() {
     queryFn: () => rolesApi.getAll(),
   });
 
+  // Fetch project plans
+  const { data: plansData } = useQuery({
+    queryKey: ['project-plans'],
+    queryFn: () => projectPlansApi.getAll(),
+  });
+
   useEffect(() => {
     if (systemSettings?.settings) {
       const s = systemSettings.settings;
@@ -86,6 +96,7 @@ export function GlobalSettingsPage() {
       if (s.audit_retention_days) setAuditRetentionDays(Number(s.audit_retention_days));
       if (s.request_retention_days) setRequestRetentionDays(Number(s.request_retention_days));
       if (s.backup_retention_days) setBackupRetentionDays(Number(s.backup_retention_days));
+      if (s.default_project_plan) setDefaultProjectPlan(s.default_project_plan);
     }
   }, [systemSettings]);
 
@@ -245,6 +256,37 @@ export function GlobalSettingsPage() {
               <p className="text-xs text-muted-foreground">{t('globalSettings.registration.maxUsersHint')}</p>
             </div>
             <Button type="button" onClick={handleSaveRegistration} disabled={saveSettingsMutation.isPending}>
+              {t('globalSettings.save')}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Defaults for new projects */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('globalSettings.defaults.title')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t('globalSettings.defaults.description')}</p>
+            <div className="space-y-2">
+              <Label>{t('globalSettings.defaults.defaultProjectPlan')}</Label>
+              <Select value={defaultProjectPlan} onValueChange={setDefaultProjectPlan}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(plansData?.plans ?? []).map((plan) => (
+                    <SelectItem key={plan.id} value={plan.name}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: plan.color }} />
+                        {plan.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={() => saveSettingsMutation.mutate({ default_project_plan: defaultProjectPlan })} disabled={saveSettingsMutation.isPending}>
               {t('globalSettings.save')}
             </Button>
           </CardContent>
