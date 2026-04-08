@@ -488,9 +488,82 @@ docker compose up -d
 
 ---
 
-## Обновление
+## Публикация и обновление
+
+### Структура репозиториев
+
+Проект использует три Git-репозитория:
+
+| Remote | Репозиторий | Что содержит |
+|--------|------------|-------------|
+| `origin` | `dvernoff/dataforge` | Основной приватный репо (весь проект) |
+| `worker` | `dvernoff/dataforge-worker` | Публичный Worker Node (subtree из `worker-node/`) |
+| `site` | `dvernoff/dataforge-site` | Сайт документации (subtree из `dataforge-site/`) |
+
+### 1. Обычный push (основной репо)
 
 ```bash
+# Закоммитить изменения
+git add -A
+git commit -m "Описание изменений"
+
+# Запушить в основной приватный репо
+git push origin main
+```
+
+### 2. Обновить публичный Worker (subtree push)
+
+После того как изменения в `worker-node/` закоммичены и запушены в `origin`:
+
+```bash
+# Пушим subtree worker-node/ в публичный репозиторий
+git subtree push --prefix=worker-node worker main
+```
+
+Если subtree push зависает или падает с ошибкой (бывает при большой истории):
+
+```bash
+# Альтернативный способ — через split + force push
+git subtree split --prefix=worker-node -b worker-split
+git push worker worker-split:main --force
+git branch -D worker-split
+```
+
+### 3. Обновить сайт (subtree push)
+
+```bash
+git subtree push --prefix=dataforge-site site main
+```
+
+Или через split:
+```bash
+git subtree split --prefix=dataforge-site -b site-split
+git push site site-split:main --force
+git branch -D site-split
+```
+
+### 4. Полный цикл публикации
+
+```bash
+# 1. Коммит
+git add -A
+git commit -m "v1.2.0 — описание"
+
+# 2. Push основного репо
+git push origin main
+
+# 3. Обновить публичный Worker
+git subtree push --prefix=worker-node worker main
+
+# 4. Обновить сайт (если менялся)
+git subtree push --prefix=dataforge-site site main
+```
+
+### 5. Обновление на сервере (продакшен)
+
+```bash
+ssh user@server
+cd /opt/dataforge
 git pull origin main
 docker compose build
 docker compose up -d
