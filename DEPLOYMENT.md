@@ -18,6 +18,7 @@
 # Обновляем пакеты
 sudo apt update && sudo apt upgrade -y
 
+
 # Устанавливаем зависимости
 sudo apt install -y ca-certificates curl gnupg
 
@@ -53,32 +54,100 @@ docker compose version
 
 ## Быстрый старт
 
+Панель разворачивается из готовых Docker-образов — ничего собирать не нужно.
+
+### 1. Скачиваем конфигурацию
+
 ```bash
-# 1. Клонируем репозиторий
-git clone https://github.com/dvernoff/dataforge.git
-cd dataforge
+# Клонируем репо (нужен GitHub токен для приватного репо)
+git clone --depth 1 https://github.com/dvernoff/dataforge.git /tmp/df-setup
 
-# 2. Создаём файл окружения
-cp .env.example .env
+# Создаём директорию и копируем только конфиги
+mkdir -p /home/dataforge/config /home/dataforge/control-plane
+cp /tmp/df-setup/docker-compose.yml /home/dataforge/
+cp /tmp/df-setup/.env.example /home/dataforge/.env
+cp /tmp/df-setup/config/postgres-control.conf /home/dataforge/config/
+cp /tmp/df-setup/config/redis.conf /home/dataforge/config/
+cp /tmp/df-setup/control-plane/nginx.conf /home/dataforge/control-plane/
 
-# 3. Генерируем все секреты автоматически
-bash scripts/generate-secrets.sh
-
-# 4. Редактируем .env — указываем домен, email админа, пароль
-nano .env
-
-# 5. Настраиваем файрвол
-sudo bash scripts/setup-firewall.sh
-
-# 6. Запускаем
-docker compose up -d
-
-# 7. Настраиваем SSL (см. раздел ниже)
-
-# 8. Проверяем статус
-docker compose ps
-docker compose logs -f
+# Удаляем исходники — они не нужны
+rm -rf /tmp/df-setup
+cd /home/dataforge
 ```
+
+### 2. Генерируем секреты и настраиваем .env
+
+Все секреты генерируются автоматически одной командой:
+
+```bash
+cd /home/dataforge
+
+# Генерируем все секреты разом
+sed -i "s|^POSTGRES_CONTROL_PASSWORD=.*|POSTGRES_CONTROL_PASSWORD=$(openssl rand -hex 16)|" .env
+sed -i "s|^POSTGRES_WORKER_PASSWORD=.*|POSTGRES_WORKER_PASSWORD=$(openssl rand -hex 16)|" .env
+sed -i "s|^JWT_ACCESS_SECRET=.*|JWT_ACCESS_SECRET=$(openssl rand -hex 32)|" .env
+sed -i "s|^JWT_REFRESH_SECRET=.*|JWT_REFRESH_SECRET=$(openssl rand -hex 32)|" .env
+sed -i "s|^SECRETS_ENCRYPTION_KEY=.*|SECRETS_ENCRYPTION_KEY=$(openssl rand -hex 16)|" .env
+sed -i "s|^ENCRYPTION_KEY=.*|ENCRYPTION_KEY=$(openssl rand -hex 16)|" .env
+sed -i "s|^WORKER_NODE_API_KEY=.*|WORKER_NODE_API_KEY=$(openssl rand -hex 32)|" .env
+sed -i "s|^INTERNAL_SECRET=.*|INTERNAL_SECRET=$(openssl rand -hex 32)|" .env
+sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$(openssl rand -hex 16)|" .env
+```
+
+Затем вручную задаём email, пароль и домен:
+
+```bash
+nano .env
+# Изменить:
+#   ADMIN_EMAIL=admin@yourdomain.com
+#   ADMIN_PASSWORD=НадёжныйПароль123!
+#   CORS_ORIGIN=https://app.yourdomain.com
+#   WORKER_CORS_ORIGIN=https://app.yourdomain.com
+```
+
+### 3. Логинимся в GitHub Container Registry
+
+Образы CP хранятся в приватном реестре. Нужен GitHub Personal Access Token с правами `read:packages`, `write:packages`.
+
+Создать токен: https://github.com/settings/tokens/new
+
+```bash
+docker login ghcr.io -u dvernoff
+# Ввести Personal Access Token
+```
+
+### 4. Настраиваем файрвол
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+### 5. Запускаем
+
+```bash
+docker compose up -d
+```
+
+Docker сам скачает готовые образы из ghcr.io и запустит все сервисы.
+
+### 6. Проверяем
+
+```bash
+docker compose ps
+# Все контейнеры должны быть healthy
+
+docker compose logs -f control-backend
+# Должно быть: "PostgreSQL connected successfully", "Redis connected successfully"
+```
+
+### 7. Настраиваем SSL (см. раздел ниже)
+
+Панель доступна на `http://IP_СЕРВЕРА`. Для HTTPS — см. раздел "SSL/TLS".
 
 ---
 
@@ -90,37 +159,26 @@ docker compose logs -f
           [Файрвол: UFW]
          порты 22, 80, 443
                  |
-       +---------+---------+
-       |                   |
-    Host Nginx (443/SSL)   |
-       |                   |
-       +---+-------+-------+
-           |       |
-     :80 (CP)   :8080 (Worker)
-           |       |
-    ┌──────┴───────┴──────┐
+     Host Nginx (80/443)
+         |             |
+    /api/* → :4000   /* → :3000
+         |             |
+    ┌────┴─────────────┴──┐
     │   Docker-сеть        │
     │   (backend)          │
     │                      │
-    │  nginx-control:80    │
-    │       |              │
-    │  control-backend     │
-    │  control-frontend    │
+    │  control-backend     │  :4000 ← ghcr.io/dvernoff/dataforge/cp-backend
+    │  control-frontend    │  :3000 ← ghcr.io/dvernoff/dataforge/cp-frontend
     │       |              │
     │  postgres-control    │
-    │       |              │
-    │     redis            │
-    │       |              │
-    │  nginx-worker:80     │
-    │       |              │
-    │  worker-backend      │
-    │       |              │
-    │  postgres-worker     │
+    │  redis               │
     └──────────────────────┘
+
+    Worker-ноды подключаются отдельно через панель (System > Nodes)
 ```
 
-Все сервисы общаются через внутреннюю Docker-сеть `backend`.
-Наружу выходят только порты nginx. Хостовый nginx обеспечивает SSL.
+Nginx устанавливается на хосте (не в Docker) — вы управляете SSL, доменами и конфигурацией напрямую.
+Образы скачиваются из GitHub Container Registry — сборка на сервере не требуется.
 
 ---
 
@@ -231,93 +289,71 @@ WORKER_CORS_ORIGIN=https://app.yourdomain.com
 
 ---
 
-## Шаг 3: SSL-сертификат
+## Шаг 3: Nginx на хосте
 
-DataForge не обрабатывает SSL внутри. Есть три варианта:
+Nginx устанавливается на хосте (не в Docker) — так вы управляете SSL, доменами и конфигурацией напрямую.
 
-### Вариант А: Nginx + Certbot (рекомендуется для VPS)
-
-#### 1. Установить Nginx и Certbot
+### 1. Установить Nginx
 
 ```bash
 sudo apt update
-sudo apt install -y nginx certbot python3-certbot-nginx
+sudo apt install -y nginx
 ```
 
-#### 2. Создать конфигурацию Nginx
+### 2. Создать конфигурацию
 
 ```bash
 sudo nano /etc/nginx/sites-available/dataforge
 ```
 
-Вставить:
+Вставить (замените `app.yourdomain.com` на ваш домен):
 
 ```nginx
-# Редирект HTTP → HTTPS
 server {
     listen 80;
-    server_name app.yourdomain.com api.yourdomain.com;
-    return 301 https://$host$request_uri;
-}
-
-# Панель управления
-server {
-    listen 443 ssl http2;
     server_name app.yourdomain.com;
-
-    ssl_certificate /etc/letsencrypt/live/app.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/app.yourdomain.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
 
     client_max_body_size 100M;
 
-    location / {
-        proxy_pass http://127.0.0.1:80;
+    # API → backend (:4000)
+    location /api/ {
+        proxy_pass http://127.0.0.1:4000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Поддержка WebSocket
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 86400;
     }
-}
 
-# Публичный API (Worker)
-server {
-    listen 443 ssl http2;
-    server_name api.yourdomain.com;
+    # Скрипты установки
+    location /scripts/ {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
 
-    ssl_certificate /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
+    # Internal API (heartbeat, node registration)
+    location /internal/ {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
 
-    client_max_body_size 50M;
-
+    # Frontend → frontend (:3000)
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Поддержка WebSocket
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 86400;
     }
 }
 ```
 
-#### 3. Активировать сайт
+### 3. Активировать сайт
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/dataforge /etc/nginx/sites-enabled/
@@ -326,79 +362,79 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-#### 4. Получить SSL-сертификаты
+Панель доступна на `http://app.yourdomain.com`.
+
+---
+
+## Шаг 4: SSL-сертификат
+
+### Вариант А: Certbot (Let's Encrypt)
 
 ```bash
-# Получить сертификаты для обоих доменов
-sudo certbot --nginx -d app.yourdomain.com -d api.yourdomain.com \
+sudo apt install -y certbot python3-certbot-nginx
+
+sudo certbot --nginx -d app.yourdomain.com \
   --non-interactive --agree-tos --email admin@yourdomain.com
 ```
 
-Если не сработает одной командой:
+Certbot автоматически:
+- Выпустит сертификат
+- Обновит nginx-конфиг (добавит `listen 443 ssl`, редирект 80→443)
+- Настроит авто-продление
+
+Проверить:
 ```bash
-sudo certbot certonly --nginx -d app.yourdomain.com
-sudo certbot certonly --nginx -d api.yourdomain.com
-```
-
-#### 5. Автоматическое продление
-
-Certbot сам настраивает таймер. Проверить:
-
-```bash
-# Статус таймера
-sudo systemctl status certbot.timer
-
-# Тестовое продление
 sudo certbot renew --dry-run
 ```
 
-Сертификаты продлеваются автоматически каждые 60-90 дней.
+### Вариант Б: CDN (Bunny / Cloudflare)
 
----
+Если домен проксируется через CDN — SSL уже обеспечен на стороне CDN.
+Nginx на хосте остаётся на порту 80, CDN терминирует HTTPS.
 
-### Вариант Б: Cloudflare (самый простой)
+Настройки CDN:
+- Origin URL: `http://IP_СЕРВЕРА:80`
+- SSL: Enabled / Force SSL
 
-Если домен подключён к Cloudflare:
+### Вариант В: Caddy (вместо Nginx)
 
-1. В DNS Cloudflare добавить A-записи на IP сервера (оранжевое облако = проксирование)
-2. SSL/TLS > Overview: режим **Full (Strict)**
-3. SSL/TLS > Edge Certificates: включить **Always Use HTTPS**
-4. Готово — Cloudflare сам выдаёт и продлевает сертификат
-
-**Примечание:** При использовании Cloudflare хостовый Nginx для SSL не нужен. Cloudflare проксирует HTTPS:443 → ваш HTTP:80.
-
----
-
-### Вариант В: Caddy (автоматический SSL без настройки)
+Если предпочитаете автоматический SSL без настройки:
 
 ```bash
-# Установить Caddy
 sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update && sudo apt install caddy
 ```
 
-Настроить:
 ```bash
 sudo nano /etc/caddy/Caddyfile
 ```
 
 ```
 app.yourdomain.com {
-    reverse_proxy localhost:80
-}
-
-api.yourdomain.com {
-    reverse_proxy localhost:8080
+    handle /api/* {
+        reverse_proxy localhost:4000
+    }
+    handle /scripts/* {
+        reverse_proxy localhost:4000
+    }
+    handle /internal/* {
+        reverse_proxy localhost:4000
+    }
+    handle {
+        reverse_proxy localhost:3000
+    }
 }
 ```
 
 ```bash
+sudo systemctl stop nginx
+sudo systemctl disable nginx
 sudo systemctl restart caddy
 ```
 
-Caddy автоматически получает и продлевает SSL-сертификаты. Никакой дополнительной настройки не нужно.
+Caddy автоматически получает и продлевает SSL.
 
 ---
 
@@ -588,7 +624,7 @@ git push site site-split:main --force
 git branch -D site-split
 ```
 
-### 4. Полный цикл публикации
+### 4. Полный цикл публикации (новая версия)
 
 ```bash
 # 1. Коммит
@@ -598,23 +634,46 @@ git commit -m "v1.2.0 — описание"
 # 2. Push основного репо
 git push origin main
 
-# 3. Обновить публичный Worker
-git subtree push --prefix=worker-node worker main
+# 3. Создать тег — Actions автоматически соберёт Docker-образы CP
+git tag v1.2.0
+git push origin v1.2.0
+# Ждём ~3-5 мин пока Actions соберёт образы в ghcr.io
 
-# 4. Обновить сайт (если менялся)
+# 4. Обновить публичный Worker (subtree)
+git subtree split --prefix=worker-node -b worker-tmp
+git checkout worker-tmp && git checkout --orphan worker-push
+git commit -m "DataForge Worker Node v1.2.0"
+git push worker worker-push:main --force
+git tag v1.2.0 && git push worker v1.2.0
+git checkout main && git branch -D worker-tmp worker-push
+
+# 5. Обновить сайт (если менялся)
 git subtree push --prefix=dataforge-site site main
 ```
 
 ### 5. Обновление на сервере (продакшен)
 
+Сборка на сервере не нужна — образы скачиваются готовые:
+
 ```bash
 ssh user@server
-cd /opt/dataforge
-git pull origin main
-docker compose build
+cd /home/dataforge
+
+# Скачать новые образы
+docker compose pull
+
+# Перезапустить — миграции выполнятся автоматически
 docker compose up -d
-# Миграции запустятся автоматически
-docker compose logs -f control-backend worker-backend
+
+# Проверить логи
+docker compose logs -f control-backend
+```
+
+Если нужно обновить конфигурацию (nginx.conf и т.д.):
+```bash
+# Скачать обновлённые конфиги
+curl -fsSL https://raw.githubusercontent.com/dvernoff/dataforge/main/control-plane/nginx.conf -o control-plane/nginx.conf
+docker compose restart nginx-control
 ```
 
 ---

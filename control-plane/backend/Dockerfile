@@ -15,6 +15,7 @@ COPY --from=builder /app/control-plane/backend/migrations ./migrations
 COPY --from=builder /app/control-plane/backend/seeds ./seeds
 COPY --from=builder /app/control-plane/backend/knexfile.ts ./knexfile.ts
 COPY --from=builder /app/shared ../shared
+COPY scripts/ ../scripts/
 COPY control-plane/backend/entrypoint.sh ./entrypoint.sh
 RUN chmod +x entrypoint.sh
 EXPOSE 4000

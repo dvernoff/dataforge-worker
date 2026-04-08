@@ -83,6 +83,39 @@ await app.register(rolesRoutes, { prefix: '/api/system/roles' });
 await app.register(projectPlansRoutes, { prefix: '/api/system/project-plans' });
 await app.register(projectQuotasRoutes, { prefix: '/api/projects' });
 
+// Public scripts (install-worker.sh, docker-compose.worker.yml, etc.)
+app.get('/api/scripts/:filename', async (request, reply) => {
+  const { filename } = request.params as { filename: string };
+  const allowedFiles: Record<string, { path: string; contentType: string }> = {
+    'install-worker.sh': { path: '../../../scripts/install-worker.sh', contentType: 'text/x-shellscript' },
+    'install-worker.ps1': { path: '../../../scripts/install-worker.ps1', contentType: 'text/plain' },
+    'docker-compose.worker.yml': { path: '../../../scripts/docker-compose.worker.yml', contentType: 'text/yaml' },
+    'setup-firewall.sh': { path: '../../../scripts/setup-firewall.sh', contentType: 'text/x-shellscript' },
+  };
+
+  const file = allowedFiles[filename];
+  if (!file) {
+    return reply.status(404).send({ error: 'Script not found' });
+  }
+
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const filePath = path.resolve(path.dirname(new URL(import.meta.url).pathname), file.path);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return reply.type(file.contentType).send(content);
+  } catch {
+    return reply.status(404).send({ error: 'Script file not found on server' });
+  }
+});
+
+// Also serve scripts at /scripts/* for direct URL access
+app.get('/scripts/:filename', async (request, reply) => {
+  const { filename } = request.params as { filename: string };
+  // Redirect to API route
+  return reply.redirect(`/api/scripts/${filename}`);
+});
+
 // Public registration settings (no auth required)
 app.get('/api/system/settings/public', async () => {
   // Ensure system_settings table exists

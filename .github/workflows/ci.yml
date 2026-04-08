@@ -1,9 +1,7 @@
-name: CI
+name: Build & Deploy CP
 
 on:
   push:
-    branches: [main]
-  pull_request:
     branches: [main]
 
 env:
@@ -44,26 +42,10 @@ jobs:
       - run: npx vite build
         working-directory: control-plane/frontend
 
-  build-worker:
-    name: Worker Node
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm ci
-        working-directory: worker-node/backend
-      - name: Type check
-        run: npx tsc --noEmit
-        working-directory: worker-node/backend
-        continue-on-error: true
-
   docker:
-    name: Docker Images
-    needs: [build-cp-backend, build-cp-frontend, build-worker]
+    name: Push Docker Images
+    needs: [build-cp-backend, build-cp-frontend]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -90,15 +72,5 @@ jobs:
           file: control-plane/frontend/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}/cp-frontend:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Worker
-        uses: docker/build-push-action@v6
-        with:
-          context: worker-node
-          file: worker-node/backend/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository }}/worker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

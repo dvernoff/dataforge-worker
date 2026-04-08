@@ -35,9 +35,9 @@ services:
     volumes:
       - redis_data:/data
       - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
-    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:-}
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -52,15 +52,15 @@ services:
     image: ghcr.io/dvernoff/dataforge/cp-backend:${DF_VERSION:-latest}
     container_name: df-control-backend
     restart: unless-stopped
-    expose:
-      - "4000"
+    ports:
+      - "${CP_BACKEND_PORT:-4000}:4000"
     environment:
       NODE_ENV: production
       PORT: 4000
       DATABASE_URL: postgresql://${POSTGRES_CONTROL_USER:-dataforge}:${POSTGRES_CONTROL_PASSWORD}@postgres-control:5432/${POSTGRES_CONTROL_DB:-dataforge_control}
       DATABASE_POOL_MIN: 5
       DATABASE_POOL_MAX: 30
-      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .env}
       JWT_ACCESS_EXPIRES: ${JWT_ACCESS_EXPIRES:-15m}
@@ -99,35 +99,14 @@ services:
     image: ghcr.io/dvernoff/dataforge/cp-frontend:${DF_VERSION:-latest}
     container_name: df-control-frontend
     restart: unless-stopped
-    expose:
-      - "3000"
+    ports:
+      - "${CP_FRONTEND_PORT:-3000}:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
       interval: 15s
       timeout: 5s
       start_period: 10s
       retries: 3
-    networks:
-      - backend
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-
-  nginx-control:
-    image: nginx:alpine
-    container_name: df-nginx-control
-    restart: unless-stopped
-    ports:
-      - "${CP_PORT:-80}:80"
-    volumes:
-      - ./control-plane/nginx.conf:/etc/nginx/nginx.conf:ro
-      - nginx_cache_cp:/var/cache/nginx/cp
-    depends_on:
-      control-backend:
-        condition: service_healthy
-      control-frontend:
-        condition: service_healthy
     networks:
       - backend
     deploy:
@@ -143,4 +122,3 @@ volumes:
   pg_control:
   redis_data:
   backups_data:
-  nginx_cache_cp:
