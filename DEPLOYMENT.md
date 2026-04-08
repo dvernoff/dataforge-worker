@@ -593,9 +593,14 @@ git push origin main
 Одна команда — автоматически инкрементирует версию и пушит:
 
 ```bash
+# Linux / macOS / Git Bash
 bash scripts/publish-worker.sh
-# v1.0.0 → v1.0.1 → v1.0.2 ...
+
+# Windows (PowerShell) — через Git Bash
+& "C:\Program Files\Git\bin\bash.exe" -c "sed -i 's/\r$//' scripts/publish-worker.sh && bash scripts/publish-worker.sh"
 ```
+
+Автоматически: `v1.0.0` → `v1.0.1` → `v1.0.2` ...
 
 Скрипт сам:
 - Находит последний тег (v1.0.X)
