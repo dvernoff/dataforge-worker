@@ -590,26 +590,19 @@ git push origin main
 
 ### 2. Обновить публичный Worker (subtree push)
 
-После того как изменения в `worker-node/` закоммичены и запушены в `origin`:
+Одна команда — автоматически инкрементирует версию и пушит:
 
 ```bash
-# Пушим subtree worker-node/ в публичный репозиторий
-git subtree push --prefix=worker-node worker main
-git subtree split --prefix=worker-node -b tmp
-git tag v1.0.1 tmp
-git push worker v1.0.1
-git branch -D tmp
-
+bash scripts/publish-worker.sh
+# v1.0.0 → v1.0.1 → v1.0.2 ...
 ```
 
-Если subtree push зависает или падает с ошибкой (бывает при большой истории):
-
-```bash
-# Альтернативный способ — через split + force push
-git subtree split --prefix=worker-node -b worker-split
-git push worker worker-split:main --force
-git branch -D worker-split
-```
+Скрипт сам:
+- Находит последний тег (v1.0.X)
+- Инкрементирует patch-версию
+- Делает subtree split + orphan commit
+- Force push в публичный репо
+- Создаёт и пушит тег → Actions соберёт Docker-образ + GitHub Release
 
 ### 3. Обновить сайт (subtree push)
 
