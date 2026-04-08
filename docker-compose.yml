@@ -147,8 +147,8 @@ services:
 
   worker-backend:
     build:
-      context: .
-      dockerfile: worker-node/backend/Dockerfile
+      context: ./worker-node
+      dockerfile: backend/Dockerfile
     container_name: df-worker-backend
     restart: unless-stopped
     expose:

@@ -167,7 +167,7 @@ services:
       retries: 5
 
   worker:
-    image: ghcr.io/dataforge-platform/dataforge/worker:latest
+    image: ghcr.io/dvernoff/dataforge-worker:latest
     restart: unless-stopped
     ports:
       - "${PORT}:${PORT}"

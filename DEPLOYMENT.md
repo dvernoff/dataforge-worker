@@ -10,11 +10,52 @@
 
 ---
 
+## Шаг 0: Установка Docker (Debian 12)
+
+Если Docker ещё не установлен на сервере:
+
+```bash
+# Обновляем пакеты
+sudo apt update && sudo apt upgrade -y
+
+# Устанавливаем зависимости
+sudo apt install -y ca-certificates curl gnupg
+
+# Добавляем GPG-ключ Docker
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Добавляем репозиторий Docker
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Устанавливаем Docker Engine + Compose
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Добавляем текущего пользователя в группу docker (чтобы не писать sudo)
+sudo usermod -aG docker $USER
+
+# Применяем изменение группы (или перелогиньтесь)
+newgrp docker
+
+# Проверяем
+docker --version
+docker compose version
+```
+
+Для **Ubuntu** — замените `debian` на `ubuntu` в строке репозитория.
+
+---
+
 ## Быстрый старт
 
 ```bash
 # 1. Клонируем репозиторий
-git clone https://github.com/your-org/dataforge.git
+git clone https://github.com/dvernoff/dataforge.git
 cd dataforge
 
 # 2. Создаём файл окружения
