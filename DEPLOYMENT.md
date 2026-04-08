@@ -518,6 +518,11 @@ git push origin main
 ```bash
 # Пушим subtree worker-node/ в публичный репозиторий
 git subtree push --prefix=worker-node worker main
+git subtree split --prefix=worker-node -b tmp
+git tag v1.0.1 tmp
+git push worker v1.0.1
+git branch -D tmp
+
 ```
 
 Если subtree push зависает или падает с ошибкой (бывает при большой истории):
