@@ -26,33 +26,6 @@ services:
         limits:
           memory: 1G
 
-  postgres-worker:
-    image: postgres:16-alpine
-    container_name: df-postgres-worker
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_WORKER_USER:-dataforge}
-      POSTGRES_PASSWORD: ${POSTGRES_WORKER_PASSWORD:?Set POSTGRES_WORKER_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_WORKER_DB:-dataforge_worker}
-    expose:
-      - "5432"
-    volumes:
-      - pg_worker:/var/lib/postgresql/data
-      - ./config/postgres-worker.conf:/etc/postgresql/postgresql.conf:ro
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dataforge"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    shm_size: 512mb
-    networks:
-      - backend
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-
   redis:
     image: redis:7-alpine
     container_name: df-redis
@@ -145,41 +118,6 @@ services:
         limits:
           memory: 128M
 
-  worker-backend:
-    build:
-      context: ./worker-node
-      dockerfile: backend/Dockerfile
-    container_name: df-worker-backend
-    restart: unless-stopped
-    expose:
-      - "4001"
-    environment:
-      NODE_ENV: production
-      PORT: 4001
-      DATABASE_URL: postgresql://${POSTGRES_WORKER_USER:-dataforge}:${POSTGRES_WORKER_PASSWORD}@postgres-worker:5432/${POSTGRES_WORKER_DB:-dataforge_worker}
-      DATABASE_POOL_MIN: 10
-      DATABASE_POOL_MAX: 50
-      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
-      CONTROL_PLANE_URL: http://control-backend:4000
-      NODE_API_KEY: ${WORKER_NODE_API_KEY:?Set WORKER_NODE_API_KEY in .env}
-      INTERNAL_SECRET: ${INTERNAL_SECRET:-}
-      NODE_ID: ${WORKER_NODE_ID:-worker-1}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
-      CORS_ORIGIN: ${WORKER_CORS_ORIGIN:-http://localhost}
-      RATE_LIMIT_MAX: 500
-      RATE_LIMIT_WINDOW: 60000
-    depends_on:
-      postgres-worker:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - backend
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-
   nginx-control:
     image: nginx:alpine
     container_name: df-nginx-control
@@ -201,33 +139,12 @@ services:
         limits:
           memory: 128M
 
-  nginx-worker:
-    image: nginx:alpine
-    container_name: df-nginx-worker
-    restart: unless-stopped
-    ports:
-      - "${WORKER_PORT:-8080}:80"
-    volumes:
-      - ./worker-node/nginx.conf:/etc/nginx/nginx.conf:ro
-      - nginx_cache_worker:/var/cache/nginx/worker
-    depends_on:
-      worker-backend:
-        condition: service_healthy
-    networks:
-      - backend
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-
 networks:
   backend:
     driver: bridge
 
 volumes:
   pg_control:
-  pg_worker:
   redis_data:
   backups_data:
   nginx_cache_cp:
-  nginx_cache_worker:

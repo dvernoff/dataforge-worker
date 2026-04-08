@@ -2,7 +2,7 @@
 set -e
 
 echo "[DataForge] Running database migrations..."
-npx knex migrate:latest --knexfile knexfile.ts 2>&1 || {
+node --import tsx/esm node_modules/knex/bin/cli.js migrate:latest --knexfile knexfile.ts 2>&1 || {
   echo "[DataForge] Migration failed, exiting..."
   exit 1
 }
