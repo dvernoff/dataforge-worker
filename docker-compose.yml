@@ -49,9 +49,7 @@ services:
           memory: 512M
 
   control-backend:
-    build:
-      context: .
-      dockerfile: control-plane/backend/Dockerfile
+    image: ghcr.io/dvernoff/dataforge/cp-backend:${DF_VERSION:-latest}
     container_name: df-control-backend
     restart: unless-stopped
     expose:
@@ -98,9 +96,7 @@ services:
           memory: 512M
 
   control-frontend:
-    build:
-      context: .
-      dockerfile: control-plane/frontend/Dockerfile
+    image: ghcr.io/dvernoff/dataforge/cp-frontend:${DF_VERSION:-latest}
     container_name: df-control-frontend
     restart: unless-stopped
     expose:
