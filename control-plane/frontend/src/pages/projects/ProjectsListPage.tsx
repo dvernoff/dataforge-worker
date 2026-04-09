@@ -93,7 +93,20 @@ export function ProjectsListPage() {
   const hasNodes = !!(nodesData?.nodes?.length);
   const canCreate = hasNodes && !!selectedNodeId;
 
-  // Measure ping to each node when dialog opens
+  function pickRecommended(nodes: NodeStatus[]): string | null {
+    if (!nodes.length) return null;
+    const sorted = [...nodes].sort((a, b) => {
+      if (a.is_own && !b.is_own) return -1;
+      if (!a.is_own && b.is_own) return 1;
+      const loadA = a.cpu_usage * 0.4 + a.ram_usage * 0.4 + (a.projects_count / (a.max_projects || 50)) * 100 * 0.2;
+      const loadB = b.cpu_usage * 0.4 + b.ram_usage * 0.4 + (b.projects_count / (b.max_projects || 50)) * 100 * 0.2;
+      return loadA - loadB;
+    });
+    return sorted[0].id;
+  }
+
+  const recommendedNodeId = nodesData?.nodes ? pickRecommended(nodesData.nodes) : null;
+
   const measurePings = useCallback(async (nodes: NodeStatus[]) => {
     const pings: Record<string, number> = {};
     for (const node of nodes) {
@@ -106,19 +119,14 @@ export function ProjectsListPage() {
       }
     }
     setNodePings(pings);
-    // Auto-select: prefer own nodes, then lowest ping
-    const ownNodes = nodes.filter((n) => n.is_own);
-    const pool = ownNodes.length > 0 ? ownNodes : nodes;
-    const bestNode = pool.reduce((best, n) =>
-      (pings[n.id] ?? 9999) < (pings[best.id] ?? 9999) ? n : best, pool[0]);
-    if (bestNode && !selectedNodeId) setSelectedNodeId(bestNode.id);
-  }, [selectedNodeId]);
+  }, []);
 
   useEffect(() => {
     if (nodesData?.nodes?.length) {
       measurePings(nodesData.nodes);
+      if (!selectedNodeId && recommendedNodeId) setSelectedNodeId(recommendedNodeId);
     }
-  }, [nodesData, measurePings]);
+  }, [nodesData, measurePings, recommendedNodeId]);
 
   useEffect(() => {
     if (!disclaimerOpen) return;
@@ -243,14 +251,14 @@ export function ProjectsListPage() {
                   ) : (
                     <div className="grid grid-cols-1 gap-2 max-h-[280px] overflow-y-auto pr-1">
                       {[...nodesData!.nodes].sort((a, b) => {
+                        if (a.id === recommendedNodeId) return -1;
+                        if (b.id === recommendedNodeId) return 1;
                         if (a.is_own && !b.is_own) return -1;
                         if (!a.is_own && b.is_own) return 1;
-                        return (nodePings[a.id] ?? 9999) - (nodePings[b.id] ?? 9999);
+                        return 0;
                       }).map((node) => {
                         const ping = nodePings[node.id];
-                        const isRecommended = ping !== undefined &&
-                          Object.values(nodePings).length === nodesData!.nodes.length &&
-                          ping === Math.min(...Object.values(nodePings));
+                        const isRecommended = node.id === recommendedNodeId;
                         const isSelected = selectedNodeId === node.id;
                         return (
                           <div

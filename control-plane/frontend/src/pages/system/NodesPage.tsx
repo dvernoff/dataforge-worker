@@ -162,6 +162,10 @@ export function NodesPage() {
     return () => { if (progressTimer.current) clearInterval(progressTimer.current); };
   }, [updateStep]);
 
+  const allNodes: WorkerNode[] = data?.nodes ?? [];
+  const systemNodes = allNodes.filter((n) => !n.owner_id);
+  const userNodes = allNodes.filter((n) => !!n.owner_id);
+
   useEffect(() => {
     if (updateStep !== 'progress' || !updateNode) return;
     const node = allNodes.find((n) => n.id === updateNode.id);
@@ -237,10 +241,6 @@ export function NodesPage() {
     setSetupCopied(true);
     setTimeout(() => setSetupCopied(false), 2000);
   }
-
-  const allNodes: WorkerNode[] = data?.nodes ?? [];
-  const systemNodes = allNodes.filter((n) => !n.owner_id);
-  const userNodes = allNodes.filter((n) => !!n.owner_id);
 
   function renderNodeRow(node: WorkerNode) {
     const isNotConnected = node.status === 'offline' && !node.url;
