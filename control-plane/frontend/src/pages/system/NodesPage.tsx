@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Server, Trash2, Pencil, Terminal, Copy, Check, Download, Loader2, CheckCircle2, XCircle, ArrowUpCircle } from 'lucide-react';
+import { Plus, Server, Trash2, Pencil, Terminal, Copy, Check, Download, Loader2, CheckCircle, CheckCircle2, XCircle, ArrowUpCircle, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -65,6 +65,8 @@ export function NodesPage() {
   const [form, setForm] = useState(emptyForm);
   const [slugTouched, setSlugTouched] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [cleanupNode, setCleanupNode] = useState<{ name: string } | null>(null);
+  const [cleanupCopied, setCleanupCopied] = useState(false);
 
   // Setup command dialog
   const [setupToken, setSetupToken] = useState('');
@@ -128,8 +130,12 @@ export function NodesPage() {
     mutationFn: (id: string) => nodesApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nodes'] });
-      toast.success(t('deleted'));
+      const node = deleteTarget;
       setDeleteTarget(null);
+      if (node) {
+        setCleanupNode({ name: node.name });
+        setCleanupCopied(false);
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -144,9 +150,6 @@ export function NodesPage() {
     mutationFn: (id: string) => nodesApi.triggerUpdate(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nodes'] });
-      setUpdateStep('progress');
-      setUpdateProgress(15);
-      setIsUpdating(true);
     },
     onError: (err: Error) => {
       setUpdateError(err.message);
@@ -562,6 +565,47 @@ export function NodesPage() {
         loading={deleteMutation.isPending}
       />
 
+      {/* Cleanup Command Dialog */}
+      <Dialog open={!!cleanupNode} onOpenChange={(o) => { if (!o) setCleanupNode(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              {t('cleanupDialog.title')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('cleanupDialog.desc', { name: cleanupNode?.name })}
+            </p>
+            <div className="relative">
+              <div className="rounded-md border bg-muted p-3 font-mono text-xs break-all pr-10 whitespace-pre-line">
+                {`cd ~/dataforge-worker && docker compose down --remove-orphans --volumes && cd ~ && rm -rf ~/dataforge-worker`}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-2 h-7 w-7"
+                onClick={() => {
+                  navigator.clipboard.writeText('cd ~/dataforge-worker && docker compose down --remove-orphans --volumes && cd ~ && rm -rf ~/dataforge-worker');
+                  setCleanupCopied(true);
+                  setTimeout(() => setCleanupCopied(false), 2000);
+                }}
+              >
+                {cleanupCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-muted-foreground">{t('cleanupDialog.warning')}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setCleanupNode(null)}>{t('apiKeyDialog.done')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Update Dialog */}
       <Dialog open={!!updateNode} onOpenChange={(o) => { if (!o) closeUpdateDialog(); }}>
         <DialogContent className="max-w-md">
@@ -594,14 +638,14 @@ export function NodesPage() {
               <DialogFooter>
                 <Button variant="outline" onClick={closeUpdateDialog}>{t('createDialog.cancel')}</Button>
                 <Button
-                  onClick={() => triggerUpdateMutation.mutate(updateNode.id)}
-                  disabled={triggerUpdateMutation.isPending}
+                  onClick={() => {
+                    setUpdateStep('progress');
+                    setUpdateProgress(5);
+                    setIsUpdating(true);
+                    triggerUpdateMutation.mutate(updateNode.id);
+                  }}
                 >
-                  {triggerUpdateMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-2" />
-                  )}
+                  <Download className="h-4 w-4 mr-2" />
                   {t('updateDialog.update')}
                 </Button>
               </DialogFooter>
@@ -644,34 +688,34 @@ export function NodesPage() {
           )}
 
           {updateStep === 'done' && (
-            <div className="space-y-4 text-center py-6">
-              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
-              <div>
+            <>
+              <div className="text-center pt-4 pb-2">
+                <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold">{t('updateDialog.success')}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
                   {t('updateDialog.successDesc', { version: latestWorkerVersion })}
                 </p>
               </div>
-              <DialogFooter className="sm:justify-center">
-                <Button onClick={closeUpdateDialog}>{t('updateDialog.close')}</Button>
+              <DialogFooter>
+                <Button onClick={closeUpdateDialog} className="w-full">{t('updateDialog.close')}</Button>
               </DialogFooter>
-            </div>
+            </>
           )}
 
           {updateStep === 'error' && (
-            <div className="space-y-4 text-center py-6">
-              <XCircle className="h-12 w-12 text-destructive mx-auto" />
-              <div>
+            <>
+              <div className="text-center pt-4 pb-2">
+                <XCircle className="h-12 w-12 text-destructive mx-auto mb-3" />
                 <h3 className="text-lg font-semibold">{t('updateDialog.failed')}</h3>
                 <p className="text-sm text-muted-foreground mt-1">{updateError}</p>
               </div>
-              <DialogFooter className="sm:justify-center">
+              <DialogFooter>
                 <Button variant="outline" onClick={closeUpdateDialog}>{t('updateDialog.close')}</Button>
                 <Button onClick={() => { setUpdateStep('confirm'); setUpdateProgress(0); }}>
                   {t('updateDialog.retry')}
                 </Button>
               </DialogFooter>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

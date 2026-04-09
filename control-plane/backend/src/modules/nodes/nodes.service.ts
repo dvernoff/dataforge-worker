@@ -127,7 +127,6 @@ export class NodesService {
       );
     }
 
-    await this.shutdownWorker(node);
     await this.db('nodes').where({ id: nodeId }).del();
     return node;
   }
@@ -278,7 +277,6 @@ export class NodesService {
       );
     }
 
-    await this.shutdownWorker(node);
     await this.db('nodes').where({ id }).del();
     return node;
   }
@@ -320,22 +318,6 @@ export class NodesService {
       throw Object.assign(new Error('Node not found'), { statusCode: 404 });
     }
     return node;
-  }
-
-  private async shutdownWorker(node: { id: string; url?: string; status?: string }) {
-    if (!node.url || node.status !== 'online') return;
-    const apiKey = await this.getDecryptedApiKey(node.id);
-    if (!apiKey) return;
-    try {
-      await fetch(`${node.url}/internal/shutdown`, {
-        method: 'POST',
-        headers: {
-          'x-node-api-key': apiKey,
-          ...(env.INTERNAL_SECRET ? { 'x-internal-secret': env.INTERNAL_SECRET } : {}),
-        },
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch {}
   }
 
   async getDecryptedApiKey(nodeId: string): Promise<string | null> {

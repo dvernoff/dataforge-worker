@@ -72,6 +72,8 @@ export function MyNodesPage() {
   const [setupToken, setSetupToken] = useState('');
   const [copied, setCopied] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<PersonalNode | null>(null);
+  const [cleanupNode, setCleanupNode] = useState<{ name: string; url: string } | null>(null);
+  const [cleanupCopied, setCleanupCopied] = useState(false);
   const [waitingNodeId, setWaitingNodeId] = useState<string | null>(null);
   const [setupOs, setSetupOs] = useState<'linux' | 'windows'>('linux');
 
@@ -142,8 +144,12 @@ export function MyNodesPage() {
     mutationFn: (id: string) => api.delete(`/nodes/personal/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['personal-nodes'] });
-      toast.success(t('myNodes.deleted'));
+      const node = deleteTarget;
       setDeleteTarget(null);
+      if (node) {
+        setCleanupNode({ name: node.name, url: node.url });
+        setCleanupCopied(false);
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -172,9 +178,6 @@ export function MyNodesPage() {
       api.post<{ status: string }>(`/nodes/personal/${id}/update`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['personal-nodes'] });
-      setUpdateStep('progress');
-      setUpdateProgress(15);
-      setIsUpdating(true);
     },
     onError: (err: Error) => {
       setUpdateError(err.message);
@@ -651,6 +654,46 @@ export function MyNodesPage() {
         loading={deleteMutation.isPending}
       />
 
+      {/* Cleanup Command Dialog */}
+      <Dialog open={!!cleanupNode} onOpenChange={(o) => { if (!o) setCleanupNode(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              {t('myNodes.cleanupDialog.title')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('myNodes.cleanupDialog.desc', { name: cleanupNode?.name })}
+            </p>
+            <div className="relative">
+              <div className="rounded-md border bg-muted p-3 font-mono text-xs break-all pr-10 whitespace-pre-line">
+                {`cd ~/dataforge-worker && docker compose down --remove-orphans --volumes && cd ~ && rm -rf ~/dataforge-worker`}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-2 h-7 w-7"
+                onClick={() => handleCopy(
+                  'cd ~/dataforge-worker && docker compose down --remove-orphans --volumes && cd ~ && rm -rf ~/dataforge-worker',
+                  setCleanupCopied,
+                )}
+              >
+                {cleanupCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-muted-foreground">{t('myNodes.cleanupDialog.warning')}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setCleanupNode(null)}>{t('myNodes.wizard.done')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Update Dialog */}
       <Dialog open={!!updateNode} onOpenChange={(o) => { if (!o) closeUpdateDialog(); }}>
         <DialogContent className="max-w-md">
@@ -683,14 +726,14 @@ export function MyNodesPage() {
               <DialogFooter>
                 <Button variant="outline" onClick={closeUpdateDialog}>{t('myNodes.updateDialog.cancel')}</Button>
                 <Button
-                  onClick={() => triggerUpdateMutation.mutate(updateNode.id)}
-                  disabled={triggerUpdateMutation.isPending}
+                  onClick={() => {
+                    setUpdateStep('progress');
+                    setUpdateProgress(5);
+                    setIsUpdating(true);
+                    triggerUpdateMutation.mutate(updateNode.id);
+                  }}
                 >
-                  {triggerUpdateMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-2" />
-                  )}
+                  <Download className="h-4 w-4 mr-2" />
                   {t('myNodes.updateDialog.update')}
                 </Button>
               </DialogFooter>
@@ -733,34 +776,34 @@ export function MyNodesPage() {
           )}
 
           {updateStep === 'done' && (
-            <div className="space-y-4 text-center py-6">
-              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
-              <div>
+            <>
+              <div className="text-center pt-4 pb-2">
+                <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold">{t('myNodes.updateDialog.success')}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
                   {t('myNodes.updateDialog.successDesc', { version: latestWorkerVersion })}
                 </p>
               </div>
-              <DialogFooter className="sm:justify-center">
-                <Button onClick={closeUpdateDialog}>{t('myNodes.updateDialog.close')}</Button>
+              <DialogFooter>
+                <Button onClick={closeUpdateDialog} className="w-full">{t('myNodes.updateDialog.close')}</Button>
               </DialogFooter>
-            </div>
+            </>
           )}
 
           {updateStep === 'error' && (
-            <div className="space-y-4 text-center py-6">
-              <XCircle className="h-12 w-12 text-destructive mx-auto" />
-              <div>
+            <>
+              <div className="text-center pt-4 pb-2">
+                <XCircle className="h-12 w-12 text-destructive mx-auto mb-3" />
                 <h3 className="text-lg font-semibold">{t('myNodes.updateDialog.failed')}</h3>
                 <p className="text-sm text-muted-foreground mt-1">{updateError}</p>
               </div>
-              <DialogFooter className="sm:justify-center">
+              <DialogFooter>
                 <Button variant="outline" onClick={closeUpdateDialog}>{t('myNodes.updateDialog.close')}</Button>
                 <Button onClick={() => { setUpdateStep('confirm'); setUpdateProgress(0); }}>
                   {t('myNodes.updateDialog.retry')}
                 </Button>
               </DialogFooter>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

@@ -335,24 +335,6 @@ export async function internalRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/shutdown', async (_request, reply) => {
-    reply.send({ status: 'shutting_down' });
-
-    setTimeout(async () => {
-      try {
-        const { execFile } = await import('child_process');
-        const { promisify } = await import('util');
-        const execFileAsync = promisify(execFile);
-        await execFileAsync('docker', [
-          'compose', '-f', '/app/host-compose/docker-compose.yml',
-          'down', '--remove-orphans', '--volumes',
-        ]);
-      } catch {
-        process.exit(0);
-      }
-    }, 500);
-  });
-
   app.post('/security/sync', async (request) => {
     const body = z.object({
       project_id: z.string().uuid(),

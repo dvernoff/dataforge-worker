@@ -172,9 +172,6 @@ services:
     ports:
       - "${PORT}:${PORT}"
     env_file: .env
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .:/app/host-compose:ro
     depends_on:
       postgres:
         condition: service_healthy

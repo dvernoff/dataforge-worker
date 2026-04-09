@@ -57,8 +57,13 @@
   },
   "deleteConfirm": {
     "title": "Delete Node",
-    "desc": "This will remove the node and stop all Docker containers on the remote machine. Existing projects will need to be migrated. This action cannot be undone.",
+    "desc": "Node \"{{name}}\" will be removed from the control panel. Files and containers on the server will remain — after deletion you will be shown a command for manual cleanup.",
     "confirm": "Delete"
+  },
+  "cleanupDialog": {
+    "title": "Node Deleted",
+    "desc": "Node \"{{name}}\" has been removed from the panel. Docker containers and files remain on the server. To fully clean up, run this command on the server:",
+    "warning": "This command will stop all DataForge containers and delete all PostgreSQL and Redis data on this node. Only run it if you are sure."
   },
   "heartbeat": {
     "justNow": "Just now",

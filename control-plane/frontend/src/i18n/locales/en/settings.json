@@ -284,8 +284,13 @@
     "disk": "Disk",
     "updateMode": "Update Mode",
     "deleteTitle": "Delete Node",
-    "deleteDesc": "Are you sure you want to delete \"{{name}}\"? All Docker containers on the remote machine will be stopped. All projects on this node will need to be migrated. This action cannot be undone.",
+    "deleteDesc": "Node \"{{name}}\" will be removed from the control panel. Files and containers on the server will remain — after deletion you will be shown a command for manual cleanup.",
     "deleteConfirm": "Delete",
+    "cleanupDialog": {
+      "title": "Node Deleted",
+      "desc": "Node \"{{name}}\" has been removed from the panel. Docker containers and files remain on the server. To fully clean up, run this command on the server:",
+      "warning": "This command will stop all DataForge containers and delete all PostgreSQL and Redis data on this node. Only run it if you are sure."
+    },
     "wizard": {
       "title": "Add My Node",
       "step1": "Configure",
