@@ -24,12 +24,12 @@ sudo apt install -y ca-certificates curl gnupg
 
 # Добавляем GPG-ключ Docker
 sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 # Добавляем репозиторий Docker
 echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
@@ -63,16 +63,16 @@ docker compose version
 git clone --depth 1 https://github.com/dvernoff/dataforge.git /tmp/df-setup
 
 # Создаём директорию и копируем только конфиги
-mkdir -p /home/dataforge/config /home/dataforge/control-plane
-cp /tmp/df-setup/docker-compose.yml /home/dataforge/
-cp /tmp/df-setup/.env.example /home/dataforge/.env
-cp /tmp/df-setup/config/postgres-control.conf /home/dataforge/config/
-cp /tmp/df-setup/config/redis.conf /home/dataforge/config/
-cp /tmp/df-setup/control-plane/nginx.conf /home/dataforge/control-plane/
+mkdir -p /var/www/dataforge/config /var/www/dataforge/control-plane
+cp /tmp/df-setup/docker-compose.yml /var/www/dataforge/
+cp /tmp/df-setup/.env.example /var/www/dataforge/.env
+cp /tmp/df-setup/config/postgres-control.conf /var/www/dataforge/config/
+cp /tmp/df-setup/config/redis.conf /var/www/dataforge/config/
+cp /tmp/df-setup/control-plane/nginx.conf /var/www/dataforge/control-plane/
 
 # Удаляем исходники — они не нужны
 rm -rf /tmp/df-setup
-cd /home/dataforge
+cd /var/www/dataforge
 ```
 
 ### 2. Генерируем секреты и настраиваем .env
@@ -80,7 +80,7 @@ cd /home/dataforge
 Все секреты генерируются автоматически одной командой:
 
 ```bash
-cd /home/dataforge
+cd /var/www/dataforge
 
 # Генерируем все секреты разом
 sed -i "s|^POSTGRES_CONTROL_PASSWORD=.*|POSTGRES_CONTROL_PASSWORD=$(openssl rand -hex 16)|" .env
@@ -134,6 +134,9 @@ docker compose up -d
 ```
 
 Docker сам скачает готовые образы из ghcr.io и запустит все сервисы.
+
+echo "CP_FRONTEND_PORT=3000" >> .env
+echo "CP_BACKEND_PORT=4000" >> .env
 
 ### 6. Проверяем
 
@@ -373,8 +376,8 @@ sudo systemctl reload nginx
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
 
-sudo certbot --nginx -d app.yourdomain.com \
-  --non-interactive --agree-tos --email admin@yourdomain.com
+sudo certbot --nginx -d app.dataforge.me \
+  --non-interactive --agree-tos --email authtern@gmail.com
 ```
 
 Certbot автоматически:
@@ -655,7 +658,7 @@ git subtree push --prefix=dataforge-site site main
 
 ```bash
 ssh user@server
-cd /home/dataforge
+cd /var/www/dataforge
 
 # Скачать новые образы
 docker compose pull

@@ -86,11 +86,11 @@ await app.register(projectQuotasRoutes, { prefix: '/api/projects' });
 // Public scripts (install-worker.sh, docker-compose.worker.yml, etc.)
 app.get('/api/scripts/:filename', async (request, reply) => {
   const { filename } = request.params as { filename: string };
-  const allowedFiles: Record<string, { path: string; contentType: string }> = {
-    'install-worker.sh': { path: '../../../scripts/install-worker.sh', contentType: 'text/x-shellscript' },
-    'install-worker.ps1': { path: '../../../scripts/install-worker.ps1', contentType: 'text/plain' },
-    'docker-compose.worker.yml': { path: '../../../scripts/docker-compose.worker.yml', contentType: 'text/yaml' },
-    'setup-firewall.sh': { path: '../../../scripts/setup-firewall.sh', contentType: 'text/x-shellscript' },
+  const allowedFiles: Record<string, { contentType: string }> = {
+    'install-worker.sh': { contentType: 'text/x-shellscript' },
+    'install-worker.ps1': { contentType: 'text/plain' },
+    'docker-compose.worker.yml': { contentType: 'text/yaml' },
+    'setup-firewall.sh': { contentType: 'text/x-shellscript' },
   };
 
   const file = allowedFiles[filename];
@@ -101,7 +101,12 @@ app.get('/api/scripts/:filename', async (request, reply) => {
   try {
     const fs = await import('fs');
     const path = await import('path');
-    const filePath = path.resolve(path.dirname(new URL(import.meta.url).pathname), file.path);
+    const filePath = path.resolve('/scripts', filename);
+    if (!fs.existsSync(filePath)) {
+      const fallback = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../scripts', filename);
+      const content = fs.readFileSync(fallback, 'utf-8');
+      return reply.type(file.contentType).send(content);
+    }
     const content = fs.readFileSync(filePath, 'utf-8');
     return reply.type(file.contentType).send(content);
   } catch {
