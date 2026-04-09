@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   Plus, Server, Trash2, Copy, Check, Loader2, CheckCircle,
-  Terminal, Globe, Clock, AlertCircle, Download, RefreshCw,
+  Terminal, Globe, Clock, AlertCircle, Download, RefreshCw, Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -166,6 +166,20 @@ export function MyNodesPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const [editUrlNode, setEditUrlNode] = useState<PersonalNode | null>(null);
+  const [editUrl, setEditUrl] = useState('');
+
+  const editUrlMutation = useMutation({
+    mutationFn: () =>
+      api.put(`/nodes/personal/${editUrlNode!.id}`, { url: editUrl }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['personal-nodes'] });
+      toast.success(t('myNodes.urlUpdated'));
+      setEditUrlNode(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   function resetWizard() {
     setWizardOpen(false);
     setWizardStep(1);
@@ -282,7 +296,19 @@ export function MyNodesPage() {
                               {node.status}
                             </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground font-mono">{node.url}</p>
+                          <div className="flex items-center gap-1">
+                            <p className="text-sm text-muted-foreground font-mono">{node.url}</p>
+                            {node.url && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5"
+                                onClick={() => { setEditUrlNode(node); setEditUrl(node.url); }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -525,6 +551,33 @@ export function MyNodesPage() {
           <DialogFooter>
             <Button onClick={() => { setSetupDialogNode(null); setSetupDialogToken(''); }}>
               {t('myNodes.wizard.done')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit URL Dialog */}
+      <Dialog open={!!editUrlNode} onOpenChange={(o) => { if (!o) setEditUrlNode(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('myNodes.editUrl')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>URL</Label>
+            <Input
+              value={editUrl}
+              onChange={(e) => setEditUrl(e.target.value)}
+              placeholder="https://fl.dataforge.me"
+            />
+            <p className="text-xs text-muted-foreground">{t('myNodes.editUrlHint')}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditUrlNode(null)}>{t('myNodes.wizard.cancel')}</Button>
+            <Button
+              onClick={() => editUrlMutation.mutate()}
+              disabled={!editUrl || editUrlMutation.isPending}
+            >
+              {editUrlMutation.isPending ? t('myNodes.saving') : t('myNodes.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

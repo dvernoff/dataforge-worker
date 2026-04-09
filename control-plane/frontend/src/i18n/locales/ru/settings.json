@@ -315,7 +315,12 @@
     "update": "Обновить",
     "updating": "Обновление...",
     "updateFailed": "Ошибка обновления",
-    "updateTriggered": "Обновление запущено"
+    "updateTriggered": "Обновление запущено",
+    "editUrl": "Изменить URL ноды",
+    "editUrlHint": "Адрес воркера, например https://fl.dataforge.me или http://IP:PORT",
+    "urlUpdated": "URL ноды обновлён",
+    "saving": "Сохранение...",
+    "save": "Сохранить"
   },
   "projectQuotas": {
     "title": "Квоты проекта",

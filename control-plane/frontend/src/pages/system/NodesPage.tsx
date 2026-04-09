@@ -53,7 +53,7 @@ function statusVariant(status: WorkerNode['status']): 'default' | 'destructive' 
   }
 }
 
-const emptyForm = { name: '', slug: '', region: '', maxProjects: 50 };
+const emptyForm = { name: '', slug: '', region: '', url: '', maxProjects: 50 };
 
 export function NodesPage() {
   const { t } = useTranslation('nodes');
@@ -75,7 +75,10 @@ export function NodesPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['nodes'],
     queryFn: () => nodesApi.list(),
+    refetchInterval: 30_000,
   });
+
+  const latestWorkerVersion = data?.latestWorkerVersion;
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -98,6 +101,7 @@ export function NodesPage() {
     mutationFn: () =>
       nodesApi.update(editId!, {
         name: form.name,
+        url: form.url || undefined,
         region: form.region,
         max_projects: form.maxProjects,
       }),
@@ -165,6 +169,7 @@ export function NodesPage() {
       name: node.name,
       slug: node.slug,
       region: node.region,
+      url: node.url || '',
       maxProjects: node.max_projects ?? 50,
     });
     setSlugTouched(true);
@@ -220,7 +225,14 @@ export function NodesPage() {
           </div>
         </TableCell>
         <TableCell className="text-sm font-mono">
-          {node.current_version || '-'}
+          <div className="flex items-center gap-1.5">
+            <span>{node.current_version || '-'}</span>
+            {latestWorkerVersion && node.current_version && node.current_version !== latestWorkerVersion && (
+              <Badge variant="outline" className="text-xs text-orange-500 border-orange-500/30">
+                {latestWorkerVersion}
+              </Badge>
+            )}
+          </div>
         </TableCell>
         <TableCell className="text-sm text-muted-foreground">
           {formatHeartbeat(node.last_heartbeat, t)}
@@ -398,6 +410,18 @@ export function NodesPage() {
                 {form.slug.length > 0 && form.slug.length < 2 && (
                   <p className="text-xs text-destructive mt-1">{t('createDialog.slugMin')}</p>
                 )}
+              </div>
+            )}
+            {editId && (
+              <div>
+                <Label>URL</Label>
+                <Input
+                  value={form.url}
+                  onChange={(e) => setForm({ ...form, url: e.target.value })}
+                  className="mt-1"
+                  placeholder="https://fl.dataforge.me"
+                />
+                <p className="text-xs text-muted-foreground mt-1">{t('editDialog.urlHint')}</p>
               </div>
             )}
             <div>

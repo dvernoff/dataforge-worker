@@ -44,7 +44,8 @@
   "editDialog": {
     "title": "Редактировать ноду",
     "save": "Сохранить",
-    "saving": "Сохранение..."
+    "saving": "Сохранение...",
+    "urlHint": "Адрес воркера, например https://fl.dataforge.me или http://IP:PORT"
   },
   "updated": "Нода обновлена",
   "apiKeyDialog": {

@@ -3,7 +3,7 @@ import type { WorkerNode, CreateNodeInput, UpdateNodeInput } from '@shared/types
 
 export const nodesApi = {
   list: () =>
-    api.get<{ nodes: WorkerNode[] }>('/nodes'),
+    api.get<{ nodes: WorkerNode[]; latestWorkerVersion?: string | null }>('/nodes'),
 
   getById: (nodeId: string) =>
     api.get<{ node: WorkerNode }>(`/nodes/${nodeId}`),

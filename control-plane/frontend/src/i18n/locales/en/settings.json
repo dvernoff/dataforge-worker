@@ -315,7 +315,12 @@
     "update": "Update",
     "updating": "Updating...",
     "updateFailed": "Update Failed",
-    "updateTriggered": "Update triggered successfully"
+    "updateTriggered": "Update triggered successfully",
+    "editUrl": "Edit Node URL",
+    "editUrlHint": "Worker address, e.g. https://fl.dataforge.me or http://IP:PORT",
+    "urlUpdated": "Node URL updated",
+    "saving": "Saving...",
+    "save": "Save"
   },
   "projectQuotas": {
     "title": "Project Quotas",

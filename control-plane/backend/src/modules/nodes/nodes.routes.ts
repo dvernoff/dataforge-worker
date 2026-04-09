@@ -29,6 +29,25 @@ const heartbeatSchema = z.object({
   active_projects: z.number().int().min(0).optional(),
 });
 
+let latestWorkerVersionCache: { version: string | null; expiry: number } = { version: null, expiry: 0 };
+
+async function getLatestWorkerVersion(): Promise<string | null> {
+  if (latestWorkerVersionCache.expiry > Date.now()) return latestWorkerVersionCache.version;
+  try {
+    const res = await fetch('https://api.github.com/repos/dvernoff/dataforge-worker/releases/latest', {
+      headers: { 'Accept': 'application/vnd.github.v3+json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const data = await res.json() as { tag_name: string };
+      latestWorkerVersionCache = { version: data.tag_name, expiry: Date.now() + 600_000 };
+      return data.tag_name;
+    }
+  } catch {}
+  latestWorkerVersionCache = { version: null, expiry: Date.now() + 60_000 };
+  return null;
+}
+
 export async function nodesRoutes(app: FastifyInstance) {
   const nodesService = new NodesService(app.db);
 
@@ -39,7 +58,8 @@ export async function nodesRoutes(app: FastifyInstance) {
     preHandler: [authMiddleware, requireSuperadmin()],
   }, async () => {
     const nodes = await nodesService.findAll();
-    return { nodes };
+    const latestWorkerVersion = await getLatestWorkerVersion();
+    return { nodes, latestWorkerVersion };
   });
 
   // POST /api/nodes
@@ -140,6 +160,24 @@ export async function nodesRoutes(app: FastifyInstance) {
     const { setupToken, tokenExpires } = await nodesService.regenerateSetupToken(id, request.user.id);
     logAudit(request, 'node.personal.regenerate-token', 'node', id);
     return { setup_token: setupToken, token_expires: tokenExpires.toISOString() };
+  });
+
+  // PUT /api/nodes/personal/:id — update personal node settings
+  app.put('/personal/:id', {
+    preHandler: [authMiddleware],
+  }, async (request) => {
+    const { id } = request.params as { id: string };
+    const node = await nodesService.findById(id);
+    if (node.owner_id !== request.user.id) {
+      throw Object.assign(new Error('Not your node'), { statusCode: 403 });
+    }
+    const body = z.object({
+      name: z.string().min(1).max(255).optional(),
+      url: z.string().url().max(2000).optional(),
+      region: z.string().max(100).optional(),
+    }).parse(request.body);
+    const updated = await nodesService.update(id, body);
+    return { node: updated };
   });
 
   // POST /api/nodes/personal/:id/update — trigger update on personal node
