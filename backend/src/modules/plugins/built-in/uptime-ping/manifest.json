@@ -1,0 +1,9 @@
+{
+  "id": "uptime-ping",
+  "name": "Uptime Monitor",
+  "description": "HTTP health checks with uptime tracking, response validation, and automatic log cleanup.",
+  "version": "2.0.0",
+  "runtime": "worker",
+  "icon": "activity",
+  "settings": []
+}
