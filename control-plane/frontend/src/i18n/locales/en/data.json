@@ -34,8 +34,9 @@
     "errors": "{{count}} errors",
     "viewData": "View Data",
     "noRecords": "No records found in file",
-    "tooMany": "Maximum 10,000 records per import",
-    "parseFailed": "Failed to parse file: {{error}}"
+    "tooMany": "Maximum 50,000 records per import",
+    "parseFailed": "Failed to parse file: {{error}}",
+    "moreErrors": "...and {{count}} more errors"
   },
   "bulkEdit": {
     "button": "Edit",

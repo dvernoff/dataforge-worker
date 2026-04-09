@@ -198,7 +198,7 @@ export function SchemaImportDialog({ open, onOpenChange, projectId }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{t('tables:yamlImport.title')}</DialogTitle>
         </DialogHeader>
@@ -258,8 +258,8 @@ export function SchemaImportDialog({ open, onOpenChange, projectId }: Props) {
 
         {/* ── PREVIEW STAGE ── */}
         {stage === 'preview' && payloads && parsedSchema && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
+          <div className="flex flex-col min-h-0 flex-1 gap-4">
+            <p className="text-sm text-muted-foreground shrink-0">
               {t('tables:yamlImport.previewDesc', {
                 tables: payloads.tables.length,
                 fks: payloads.foreignKeys.length,
@@ -267,7 +267,7 @@ export function SchemaImportDialog({ open, onOpenChange, projectId }: Props) {
               })}
             </p>
 
-            <ScrollArea className="max-h-[400px]">
+            <ScrollArea className="flex-1 min-h-0">
               <div className="space-y-3">
                 {payloads.tables.map((table, i) => {
                   const def = parsedSchema.tables[table._name];
@@ -329,7 +329,7 @@ export function SchemaImportDialog({ open, onOpenChange, projectId }: Props) {
               </div>
             )}
 
-            <DialogFooter>
+            <DialogFooter className="shrink-0">
               <Button variant="outline" onClick={() => setStage('edit')}>
                 <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                 {t('common:actions.back')}

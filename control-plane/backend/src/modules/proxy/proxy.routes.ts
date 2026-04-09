@@ -258,9 +258,9 @@ export async function proxyRoutes(app: FastifyInstance) {
   ];
   for (const pattern of viewerPatterns) {
     app.get(pattern, { preHandler: [requireRole('viewer')] }, handleProxy);
-    app.post(pattern, { preHandler: [requireRole('editor')] }, handleProxy);
-    app.put(pattern, { preHandler: [requireRole('editor')] }, handleProxy);
-    app.patch(pattern, { preHandler: [requireRole('editor')] }, handleProxy);
+    app.post(pattern, { preHandler: [requireRole('editor')], bodyLimit: 100 * 1024 * 1024 }, handleProxy);
+    app.put(pattern, { preHandler: [requireRole('editor')], bodyLimit: 100 * 1024 * 1024 }, handleProxy);
+    app.patch(pattern, { preHandler: [requireRole('editor')], bodyLimit: 100 * 1024 * 1024 }, handleProxy);
     app.delete(pattern, { preHandler: [requireRole('editor')] }, handleProxy);
   }
 }

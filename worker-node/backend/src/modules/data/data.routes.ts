@@ -172,10 +172,10 @@ export async function dataRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  app.post('/:projectId/tables/:tableName/import', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
+  app.post('/:projectId/tables/:tableName/import', { preHandler: [requireWorkerRole('editor')], bodyLimit: 100 * 1024 * 1024 }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     const body = z.object({
-      records: z.array(z.record(z.unknown())).min(1).max(10000),
+      records: z.array(z.record(z.unknown())).min(1).max(50000),
     }).parse(request.body);
     const dbSchema = resolveProjectSchema(request);
     const result = await dataService.importRecords(dbSchema, tableName, body.records);

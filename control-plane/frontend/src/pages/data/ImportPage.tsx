@@ -71,7 +71,7 @@ export function ImportPage() {
           toast.error(t('import.noRecords'));
           return;
         }
-        if (parsed.length > 10000) {
+        if (parsed.length > 50000) {
           toast.error(t('import.tooMany'));
           return;
         }
@@ -209,6 +209,20 @@ export function ImportPage() {
                 </Badge>
               )}
             </div>
+            {result.errors.length > 0 && (
+              <div className="max-h-[200px] overflow-y-auto rounded-lg border border-destructive/30 bg-destructive/5 p-3 mb-4 text-left">
+                {result.errors.slice(0, 50).map((err, i) => (
+                  <p key={i} className="text-xs text-destructive font-mono py-0.5">
+                    #{err.index + 1}: {err.error}
+                  </p>
+                ))}
+                {result.errors.length > 50 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ...{t('import.moreErrors', { count: result.errors.length - 50 })}
+                  </p>
+                )}
+              </div>
+            )}
             <Button onClick={() => navigate(`/projects/${slug}/tables/${tableName}/data`)}>
               {t('import.viewData')}
             </Button>
