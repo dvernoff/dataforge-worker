@@ -70,7 +70,10 @@ export class ProjectsService {
   async findAll(userId: string, isSuperadmin: boolean) {
     if (isSuperadmin) {
       return this.db('projects')
+        .leftJoin('nodes', 'projects.node_id', 'nodes.id')
         .select('projects.*')
+        .select('nodes.name as node_name')
+        .select('nodes.region as node_region')
         .select(this.db.raw('(SELECT name FROM users WHERE users.id = projects.created_by) as owner_name'))
         .select(
           this.db.raw('(SELECT COUNT(*) FROM project_members WHERE project_members.project_id = projects.id)::int as members_count')
@@ -83,8 +86,11 @@ export class ProjectsService {
 
     return this.db('projects')
       .join('project_members', 'projects.id', 'project_members.project_id')
+      .leftJoin('nodes', 'projects.node_id', 'nodes.id')
       .where('project_members.user_id', userId)
       .select('projects.*', 'project_members.role as user_role')
+      .select('nodes.name as node_name')
+      .select('nodes.region as node_region')
       .orderBy('projects.created_at', 'desc');
   }
 

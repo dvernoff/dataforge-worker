@@ -201,6 +201,9 @@ export async function nodesRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const node = await nodesService.findById(id);
+    if (node.owner_id !== request.user.id) {
+      return reply.status(403).send({ error: 'Forbidden: you do not own this node' });
+    }
     await nodesService.deletePersonalNode(id, request.user.id);
     logAudit(request, 'node.personal.delete', 'node', id, { name: node.name });
     return reply.status(204).send();

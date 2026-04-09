@@ -15,7 +15,7 @@ FROM node:20-alpine
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 
-RUN apk add --no-cache wget
+RUN apk add --no-cache wget docker-cli docker-cli-compose
 WORKDIR /app
 COPY --from=builder /app/backend/package*.json ./
 RUN npm ci --production && npm install tsx

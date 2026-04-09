@@ -266,6 +266,9 @@ export class NodesService {
     if (!node) {
       throw Object.assign(new Error('Node not found'), { statusCode: 404 });
     }
+    if (node.owner_id) {
+      throw Object.assign(new Error('Cannot delete personal node via this endpoint'), { statusCode: 403 });
+    }
 
     const projectsCount = await this.db('projects').where({ node_id: id }).count('* as count').first();
     if (projectsCount && Number(projectsCount.count) > 0) {

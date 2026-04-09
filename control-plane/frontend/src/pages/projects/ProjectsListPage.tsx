@@ -366,6 +366,15 @@ export function ProjectsListPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {(project as any).node_name && (
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Server className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">
+                        {(project as any).node_name}
+                        {(project as any).node_region && ` (${(project as any).node_region})`}
+                      </span>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {t('projects.createdDate', { date: new Date(project.created_at).toLocaleDateString() })}
                   </p>

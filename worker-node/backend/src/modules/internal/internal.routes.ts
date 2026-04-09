@@ -343,13 +343,10 @@ export async function internalRoutes(app: FastifyInstance) {
         const { execFile } = await import('child_process');
         const { promisify } = await import('util');
         const execFileAsync = promisify(execFile);
-        await execFileAsync('docker', ['compose', 'down', '--remove-orphans', '--volumes']);
-        try {
-          const installDir = path.resolve(process.cwd(), '..');
-          if (fs.existsSync(path.join(installDir, 'docker-compose.yml'))) {
-            fs.rmSync(installDir, { recursive: true, force: true });
-          }
-        } catch {}
+        await execFileAsync('docker', [
+          'compose', '-f', '/app/host-compose/docker-compose.yml',
+          'down', '--remove-orphans', '--volumes',
+        ]);
       } catch {
         process.exit(0);
       }
