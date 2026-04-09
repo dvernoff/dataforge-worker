@@ -149,7 +149,8 @@ export async function nodesRoutes(app: FastifyInstance) {
     preHandler: [authMiddleware],
   }, async (request) => {
     const nodes = await nodesService.findPersonalNodes(request.user.id);
-    return { nodes };
+    const latestWorkerVersion = await getLatestWorkerVersion();
+    return { nodes, latestWorkerVersion };
   });
 
   // POST /api/nodes/personal/:id/regenerate-token — regenerate setup token for offline node

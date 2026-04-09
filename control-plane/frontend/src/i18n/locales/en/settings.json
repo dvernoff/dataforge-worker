@@ -315,12 +315,31 @@
     "update": "Update",
     "updating": "Updating...",
     "updateFailed": "Update Failed",
+    "updateFailedDesc": "Failed to update node. Check logs.",
     "updateTriggered": "Update triggered successfully",
     "editUrl": "Edit Node URL",
     "editUrlHint": "Worker address, e.g. https://fl.dataforge.me or http://IP:PORT",
     "urlUpdated": "Node URL updated",
     "saving": "Saving...",
-    "save": "Save"
+    "save": "Save",
+    "updateDialog": {
+      "title": "Update Node",
+      "node": "Node",
+      "currentVersion": "Current version",
+      "newVersion": "New version",
+      "confirmDesc": "Watchtower will pull the new image and restart the container. This takes 1-2 minutes.",
+      "update": "Update",
+      "cancel": "Cancel",
+      "step1": "Update request sent",
+      "step2": "Pulling new image",
+      "step3": "Restarting container",
+      "wait": "Don't close this window. The page will update automatically.",
+      "success": "Update complete",
+      "successDesc": "Node updated to version {{version}}",
+      "failed": "Update failed",
+      "close": "Close",
+      "retry": "Try again"
+    }
   },
   "projectQuotas": {
     "title": "Project Quotas",

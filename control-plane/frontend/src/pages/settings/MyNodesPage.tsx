@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
-  Plus, Server, Trash2, Copy, Check, Loader2, CheckCircle,
-  Terminal, Globe, Clock, AlertCircle, Download, RefreshCw, Pencil,
+  Plus, Server, Trash2, Copy, Check, Loader2, CheckCircle, CheckCircle2, XCircle,
+  Terminal, Globe, Clock, AlertCircle, Download, RefreshCw, Pencil, ArrowUpCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -96,10 +96,15 @@ export function MyNodesPage() {
     return `curl -fsSL ${cpUrl}/scripts/install-worker.sh | bash -s -- --token=${token} --cp=${cpUrl}`;
   }
 
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['personal-nodes'],
-    queryFn: () => api.get<{ nodes: PersonalNode[] }>('/nodes/personal'),
+    queryFn: () => api.get<{ nodes: PersonalNode[]; latestWorkerVersion?: string | null }>('/nodes/personal'),
+    refetchInterval: isUpdating ? 5_000 : 30_000,
   });
+
+  const latestWorkerVersion = data?.latestWorkerVersion;
 
   // Poll for node connection when waiting
   const { data: pollData } = useQuery({
@@ -156,15 +161,68 @@ export function MyNodesPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const updateMutation = useMutation({
+  const [updateNode, setUpdateNode] = useState<PersonalNode | null>(null);
+  const [updateStep, setUpdateStep] = useState<'confirm' | 'progress' | 'done' | 'error'>('confirm');
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateError, setUpdateError] = useState('');
+  const progressTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerUpdateMutation = useMutation({
     mutationFn: (id: string) =>
       api.post<{ status: string }>(`/nodes/personal/${id}/update`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['personal-nodes'] });
-      toast.success(t('myNodes.updateTriggered'));
+      setUpdateStep('progress');
+      setUpdateProgress(15);
+      setIsUpdating(true);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      setUpdateError(err.message);
+      setUpdateStep('error');
+    },
   });
+
+  useEffect(() => {
+    if (updateStep !== 'progress') return;
+    progressTimer.current = setInterval(() => {
+      setUpdateProgress((p) => {
+        if (p >= 90) return 90;
+        return p + Math.random() * 8 + 2;
+      });
+    }, 1500);
+    return () => { if (progressTimer.current) clearInterval(progressTimer.current); };
+  }, [updateStep]);
+
+  const nodes = data?.nodes ?? [];
+
+  useEffect(() => {
+    if (updateStep !== 'progress' || !updateNode) return;
+    const node = nodes.find((n) => n.id === updateNode.id);
+    if (!node) return;
+    if (node.current_version && latestWorkerVersion && node.current_version === latestWorkerVersion) {
+      if (progressTimer.current) clearInterval(progressTimer.current);
+      setUpdateProgress(100);
+      setUpdateStep('done');
+    }
+    if (node.update_status === 'failed') {
+      if (progressTimer.current) clearInterval(progressTimer.current);
+      setUpdateError(t('myNodes.updateFailedDesc'));
+      setUpdateStep('error');
+    }
+  }, [nodes, updateStep, updateNode, latestWorkerVersion]);
+
+  function openUpdateDialog(node: PersonalNode) {
+    setUpdateNode(node);
+    setUpdateStep('confirm');
+    setUpdateProgress(0);
+    setUpdateError('');
+  }
+
+  function closeUpdateDialog() {
+    setUpdateNode(null);
+    setIsUpdating(false);
+    if (progressTimer.current) clearInterval(progressTimer.current);
+  }
 
   const [editUrlNode, setEditUrlNode] = useState<PersonalNode | null>(null);
   const [editUrl, setEditUrl] = useState('');
@@ -198,7 +256,6 @@ export function MyNodesPage() {
     setTimeout(() => setter(false), 2000);
   }
 
-  const nodes = data?.nodes ?? [];
   const isNodePending = (node: PersonalNode) => node.status === 'offline' && !node.url;
 
   return (
@@ -318,26 +375,20 @@ export function MyNodesPage() {
                             {t('myNodes.updating')}
                           </Badge>
                         )}
-                        {node.status === 'online' && node.update_status === 'failed' && (
-                          <Badge variant="destructive" className="gap-1">
-                            {t('myNodes.updateFailed')}
-                          </Badge>
-                        )}
-                        {node.status === 'online' && (!node.update_status || node.update_status === 'idle' || node.update_status === 'failed') && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateMutation.mutate(node.id)}
-                            disabled={updateMutation.isPending}
-                          >
-                            {updateMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Download className="h-4 w-4 mr-2" />
-                            )}
-                            {t('myNodes.update')}
-                          </Button>
-                        )}
+                        {node.status === 'online' && (!node.update_status || node.update_status === 'idle' || node.update_status === 'failed') && (() => {
+                          const hasUpdate = !!(latestWorkerVersion && node.current_version && node.current_version !== latestWorkerVersion);
+                          return (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openUpdateDialog(node)}
+                              disabled={!hasUpdate}
+                            >
+                              <Download className={`h-4 w-4 mr-2 ${hasUpdate ? 'text-orange-500' : ''}`} />
+                              {t('myNodes.update')}
+                            </Button>
+                          );
+                        })()}
                         {node.status === 'offline' && node.url && (
                           <Button
                             variant="outline"
@@ -375,6 +426,11 @@ export function MyNodesPage() {
                         <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-muted-foreground">{t('myNodes.version')}:</span>
                         <span className="font-medium font-mono">{node.current_version || '-'}</span>
+                        {latestWorkerVersion && node.current_version && node.current_version !== latestWorkerVersion && (
+                          <Badge variant="outline" className="text-[10px] text-orange-500 border-orange-500/30">
+                            {latestWorkerVersion}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock className="h-3.5 w-3.5 text-muted-foreground" />
@@ -594,6 +650,120 @@ export function MyNodesPage() {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
         loading={deleteMutation.isPending}
       />
+
+      {/* Update Dialog */}
+      <Dialog open={!!updateNode} onOpenChange={(o) => { if (!o) closeUpdateDialog(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpCircle className="h-5 w-5" />
+              {t('myNodes.updateDialog.title')}
+            </DialogTitle>
+          </DialogHeader>
+
+          {updateStep === 'confirm' && updateNode && (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('myNodes.updateDialog.node')}</span>
+                  <span className="font-medium">{updateNode.name}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('myNodes.updateDialog.currentVersion')}</span>
+                  <span className="font-mono">{updateNode.current_version || '-'}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{t('myNodes.updateDialog.newVersion')}</span>
+                  <Badge variant="outline" className="text-orange-500 border-orange-500/30 font-mono">
+                    {latestWorkerVersion}
+                  </Badge>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">{t('myNodes.updateDialog.confirmDesc')}</p>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeUpdateDialog}>{t('myNodes.updateDialog.cancel')}</Button>
+                <Button
+                  onClick={() => triggerUpdateMutation.mutate(updateNode.id)}
+                  disabled={triggerUpdateMutation.isPending}
+                >
+                  {triggerUpdateMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {t('myNodes.updateDialog.update')}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {updateStep === 'progress' && (
+            <div className="space-y-6 py-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                  <span className="text-sm font-medium">{t('myNodes.updating')}</span>
+                </div>
+                <Progress value={updateProgress} className="h-2" />
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground flex items-center gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                    {t('myNodes.updateDialog.step1')}
+                  </p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-2">
+                    {updateProgress > 30 ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                    )}
+                    {t('myNodes.updateDialog.step2')}
+                  </p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-2">
+                    {updateProgress > 60 ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                    ) : (
+                      <span className="h-3.5 w-3.5 rounded-full border border-muted-foreground/30" />
+                    )}
+                    {t('myNodes.updateDialog.step3')}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-center text-muted-foreground">{t('myNodes.updateDialog.wait')}</p>
+            </div>
+          )}
+
+          {updateStep === 'done' && (
+            <div className="space-y-4 text-center py-6">
+              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
+              <div>
+                <h3 className="text-lg font-semibold">{t('myNodes.updateDialog.success')}</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t('myNodes.updateDialog.successDesc', { version: latestWorkerVersion })}
+                </p>
+              </div>
+              <DialogFooter className="sm:justify-center">
+                <Button onClick={closeUpdateDialog}>{t('myNodes.updateDialog.close')}</Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {updateStep === 'error' && (
+            <div className="space-y-4 text-center py-6">
+              <XCircle className="h-12 w-12 text-destructive mx-auto" />
+              <div>
+                <h3 className="text-lg font-semibold">{t('myNodes.updateDialog.failed')}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{updateError}</p>
+              </div>
+              <DialogFooter className="sm:justify-center">
+                <Button variant="outline" onClick={closeUpdateDialog}>{t('myNodes.updateDialog.close')}</Button>
+                <Button onClick={() => { setUpdateStep('confirm'); setUpdateProgress(0); }}>
+                  {t('myNodes.updateDialog.retry')}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

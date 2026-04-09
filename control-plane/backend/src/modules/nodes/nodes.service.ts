@@ -293,12 +293,18 @@ export class NodesService {
     if (payload.disk_total_gb !== undefined) updateData.disk_total_gb = payload.disk_total_gb;
     if (payload.disk_free_gb !== undefined) updateData.disk_free_gb = payload.disk_free_gb;
 
-    // Store version and reset update_status when version changes
     if (payload.current_version) {
-      const currentNode = await this.db('nodes').where({ id: nodeId }).select('current_version', 'update_status').first();
+      const currentNode = await this.db('nodes').where({ id: nodeId }).select('current_version', 'update_status', 'updated_at').first();
       updateData.current_version = payload.current_version;
-      if (currentNode && currentNode.current_version !== payload.current_version && currentNode.update_status === 'updating') {
-        updateData.update_status = 'idle';
+      if (currentNode?.update_status === 'updating') {
+        if (currentNode.current_version !== payload.current_version) {
+          updateData.update_status = 'idle';
+        } else {
+          const stuckMs = Date.now() - new Date(currentNode.updated_at).getTime();
+          if (stuckMs > 5 * 60 * 1000) {
+            updateData.update_status = 'failed';
+          }
+        }
       }
     }
 
@@ -361,6 +367,7 @@ export class NodesService {
           'x-node-api-key': apiKey,
           ...(env.INTERNAL_SECRET ? { 'x-internal-secret': env.INTERNAL_SECRET } : {}),
         },
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) {
@@ -375,11 +382,8 @@ export class NodesService {
       return { status: 'update_triggered' };
     } catch (err) {
       if ((err as { statusCode?: number }).statusCode) throw err;
-      await this.db('nodes').where({ id: nodeId }).update({
-        update_status: 'failed',
-        updated_at: new Date(),
-      });
-      throw Object.assign(new Error('Failed to reach worker'), { statusCode: 502 });
+      // Network error likely means Watchtower already restarted the container — treat as in-progress
+      return { status: 'update_triggered' };
     }
   }
 

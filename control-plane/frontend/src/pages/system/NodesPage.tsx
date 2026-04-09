@@ -72,10 +72,12 @@ export function NodesPage() {
   const [setupCopied, setSetupCopied] = useState(false);
   const [setupOs, setSetupOs] = useState<'linux' | 'windows'>('linux');
 
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['nodes'],
     queryFn: () => nodesApi.list(),
-    refetchInterval: 30_000,
+    refetchInterval: isUpdating ? 5_000 : 30_000,
   });
 
   const latestWorkerVersion = data?.latestWorkerVersion;
@@ -144,6 +146,7 @@ export function NodesPage() {
       queryClient.invalidateQueries({ queryKey: ['nodes'] });
       setUpdateStep('progress');
       setUpdateProgress(15);
+      setIsUpdating(true);
     },
     onError: (err: Error) => {
       setUpdateError(err.message);
@@ -191,6 +194,7 @@ export function NodesPage() {
 
   function closeUpdateDialog() {
     setUpdateNode(null);
+    setIsUpdating(false);
     if (progressTimer.current) clearInterval(progressTimer.current);
   }
 
