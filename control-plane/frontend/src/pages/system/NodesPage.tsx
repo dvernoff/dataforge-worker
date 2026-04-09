@@ -37,11 +37,11 @@ function transliterate(text: string): string {
     .replace(/^-|-$/g, '');
 }
 
-function formatHeartbeat(ts: string | null, t: (key: string) => string): string {
+function formatHeartbeat(ts: string | null, t: (key: string, opts?: Record<string, unknown>) => string): string {
   if (!ts) return t('heartbeat.offline');
   const diff = Date.now() - new Date(ts).getTime();
   if (diff < 60_000) return t('heartbeat.justNow');
-  if (diff < 3_600_000) return t('heartbeat.minutesAgo', { n: Math.floor(diff / 60_000) });
+  if (diff < 3_600_000) return t('heartbeat.minutesAgo', { count: Math.floor(diff / 60_000) });
   return t('heartbeat.offline');
 }
 

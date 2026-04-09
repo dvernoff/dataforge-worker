@@ -57,8 +57,11 @@ export class HeartbeatService {
   private intervalId: NodeJS.Timeout | null = null;
 
   start(cpUrl: string, nodeApiKey: string) {
-    this.sendHeartbeat(cpUrl, nodeApiKey);
-    this.intervalId = setInterval(() => this.sendHeartbeat(cpUrl, nodeApiKey), 30_000);
+    console.log(`[Heartbeat] Starting heartbeat to ${cpUrl} every 30s`);
+    this.sendHeartbeat(cpUrl, nodeApiKey).catch(() => {});
+    this.intervalId = setInterval(() => {
+      this.sendHeartbeat(cpUrl, nodeApiKey).catch(() => {});
+    }, 30_000);
   }
 
   private async sendHeartbeat(cpUrl: string, nodeApiKey: string) {
@@ -75,16 +78,20 @@ export class HeartbeatService {
     };
 
     try {
-      await fetch(`${cpUrl}/internal/heartbeat`, {
+      const res = await fetch(`${cpUrl}/internal/heartbeat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-node-api-key': nodeApiKey,
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
       });
+      if (!res.ok) {
+        console.error(`[Heartbeat] HTTP ${res.status}: ${await res.text()}`);
+      }
     } catch (err) {
-      console.error('Heartbeat failed:', (err as Error).message);
+      console.error('[Heartbeat] Failed:', (err as Error).message);
     }
   }
 
