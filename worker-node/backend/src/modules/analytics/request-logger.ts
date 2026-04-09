@@ -40,6 +40,8 @@ export function registerRequestLogger(app: FastifyInstance) {
           });
         } catch {}
       })
-      .catch(() => {});
+      .catch((err) => {
+        app.log.error({ err, projectId }, 'Failed to log API request');
+      });
   });
 }

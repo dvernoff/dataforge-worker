@@ -53,9 +53,23 @@ export async function rolesRoutes(app: FastifyInstance) {
         t.integer('max_files').defaultTo(100);
         t.integer('max_backups').defaultTo(5);
         t.integer('max_cron').defaultTo(5);
+        t.integer('max_query_timeout_ms').defaultTo(30000);
+        t.integer('max_concurrent_requests').defaultTo(10);
+        t.integer('max_rows_per_query').defaultTo(1000);
+        t.integer('max_export_rows').defaultTo(10000);
         t.timestamp('created_at').defaultTo(app.db.fn.now());
         t.timestamp('updated_at').defaultTo(app.db.fn.now());
       });
+    } else {
+      const hasCol = await app.db.schema.hasColumn('custom_roles', 'max_concurrent_requests');
+      if (!hasCol) {
+        await app.db.schema.alterTable('custom_roles', (t) => {
+          t.integer('max_query_timeout_ms').defaultTo(30000);
+          t.integer('max_concurrent_requests').defaultTo(10);
+          t.integer('max_rows_per_query').defaultTo(1000);
+          t.integer('max_export_rows').defaultTo(10000);
+        });
+      }
     }
   }
 

@@ -352,7 +352,7 @@ export function ProjectsListPage() {
                 onClick={() => navigate(`/projects/${project.slug}/dashboard`)}
               >
                 <CardHeader>
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-center gap-3">
                     <div
                       className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold text-lg shrink-0"
                       style={{ backgroundColor: getProjectColor(project.name) }}

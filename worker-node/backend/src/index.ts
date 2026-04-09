@@ -106,20 +106,76 @@ await app.register(internalRoutes, { prefix: '/internal' });
 
 app.get('/api/health', async () => {
   let dbOk = false;
+  let dbLatencyMs = 0;
   try {
+    const s = Date.now();
     await app.db.raw('SELECT 1');
+    dbLatencyMs = Date.now() - s;
     dbOk = true;
   } catch {}
 
   let redisOk = false;
+  let redisLatencyMs = 0;
   try {
+    const s = Date.now();
     await app.redis.ping();
+    redisLatencyMs = Date.now() - s;
     redisOk = true;
   } catch {}
+
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const ramUsage = Math.round((1 - freeMem / totalMem) * 10000) / 100;
+
+  const cpus = os.cpus();
+  let cpuUsage = 0;
+  if (cpus.length > 0) {
+    const avg = cpus.reduce((acc, c) => {
+      const total = Object.values(c.times).reduce((a, b) => a + b, 0);
+      return acc + (1 - c.times.idle / total);
+    }, 0) / cpus.length;
+    cpuUsage = Math.round(avg * 10000) / 100;
+  }
+
+  let diskUsage = 0;
+  let diskFreeGb = 0;
+  let diskTotalGb = 0;
+  try {
+    const { execSync } = await import('child_process');
+    const dfOut = execSync("df -B1 / | tail -1", { encoding: 'utf-8' });
+    const parts = dfOut.trim().split(/\s+/);
+    const total = Number(parts[1]);
+    const used = Number(parts[2]);
+    if (total > 0) {
+      diskUsage = Math.round((used / total) * 10000) / 100;
+      diskTotalGb = Math.round(total / 1073741824 * 10) / 10;
+      diskFreeGb = Math.round((total - used) / 1073741824 * 10) / 10;
+    }
+  } catch {}
+
+  const mem = process.memoryUsage();
 
   return {
     status: dbOk && redisOk ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    cpu_usage: cpuUsage,
+    ram_usage: ramUsage,
+    disk_usage: diskUsage,
+    disk_free_gb: diskFreeGb,
+    disk_total_gb: diskTotalGb,
+    database: dbOk ? 'connected' : 'disconnected',
+    database_latency_ms: dbLatencyMs,
+    redis: redisOk ? 'connected' : 'disconnected',
+    redis_latency_ms: redisLatencyMs,
+    memory: {
+      rss: Math.round(mem.rss / 1024 / 1024),
+      heap_used: Math.round(mem.heapUsed / 1024 / 1024),
+      heap_total: Math.round(mem.heapTotal / 1024 / 1024),
+    },
+    hostname: os.hostname(),
+    platform: os.platform(),
+    node_version: process.version,
   };
 });
 

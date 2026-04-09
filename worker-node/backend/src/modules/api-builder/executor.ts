@@ -365,7 +365,7 @@ export class Executor {
     const clamped = Math.max(1000, Math.min(timeoutMs, 120_000));
     const result = await this.db.transaction(async (trx) => {
       await trx.raw(`SET LOCAL statement_timeout = ${clamped}`);
-      await trx.raw(`SET LOCAL search_path TO ?`, [schema]);
+      await trx.raw(`SET LOCAL search_path TO "${schema}"`);
       return trx.raw(parameterizedSql, paramValues as any[]) as any;
     });
 
