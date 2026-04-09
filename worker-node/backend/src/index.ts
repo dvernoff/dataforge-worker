@@ -169,7 +169,7 @@ const cleanupInterval = setInterval(async () => {
 
 try {
   await app.listen({ port: env.PORT, host: env.HOST });
-  app.log.info(`DataForge Worker Node running on http://${env.HOST}:${env.PORT}`);
+  app.log.info(`DataForge Worker Node ${process.env.APP_VERSION || 'dev'} running on http://${env.HOST}:${env.PORT}`);
 
   heartbeat.start(env.CONTROL_PLANE_URL, env.NODE_API_KEY);
 
