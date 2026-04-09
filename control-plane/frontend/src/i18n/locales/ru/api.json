@@ -224,7 +224,7 @@
     "templateById": "По ID",
     "templateMutation": "Создать",
     "urlCopied": "URL GraphQL скопирован в буфер",
-    "authBanner": "Аутентификация: требуется API ключ. Передайте через заголовок Authorization: Bearer <api_key>.",
+    "authBanner": "Аутентификация: требуется API ключ. Передайте через заголовок X-API-Key.",
     "manageTokens": "Управление API токенами"
   },
   "websocket": {

@@ -24,6 +24,15 @@ cat > /etc/nginx/sites-available/dataforge-worker <<'EOF'
 server {
     listen 80;
     server_name fl.dataforge.me;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name fl.dataforge.me;
+
+    ssl_certificate /etc/letsencrypt/live/fl.dataforge.me/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/fl.dataforge.me/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:4001;
@@ -32,13 +41,15 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # WebSocket support (if needed)
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
 
-        # Large request bodies (imports, etc.)
         client_max_body_size 50m;
+
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
     }
 }
 EOF

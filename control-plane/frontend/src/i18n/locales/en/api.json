@@ -224,7 +224,7 @@
     "templateById": "ById",
     "templateMutation": "Create",
     "urlCopied": "GraphQL URL copied to clipboard",
-    "authBanner": "Authentication: API Key required. Pass via Authorization: Bearer <api_key> header.",
+    "authBanner": "Authentication: API Key required. Pass via X-API-Key header.",
     "manageTokens": "Manage API Tokens"
   },
   "websocket": {
