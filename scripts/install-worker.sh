@@ -198,6 +198,7 @@ services:
       - WATCHTOWER_HTTP_API_TOKEN=${WATCHTOWER_TOKEN}
       - WATCHTOWER_ROLLING_RESTART=true
       - WATCHTOWER_CLEANUP=true
+      - DOCKER_API_VERSION=1.45
 
 volumes:
   pgdata:

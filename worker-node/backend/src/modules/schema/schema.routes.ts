@@ -91,7 +91,7 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { table };
   });
 
-  app.post('/:projectId/tables', async (request, reply) => {
+  app.post('/:projectId/tables', { preHandler: [requireWorkerRole('admin')] }, async (request, reply) => {
     if (request.isSharedNode && request.quotas) {
       const dbSchema = resolveProjectSchema(request);
       const blocked = await checkResourceQuota(app.db, request.projectId, 'tables', request.quotas, dbSchema);
@@ -103,14 +103,14 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sql };
   });
 
-  app.post('/:projectId/tables/preview', async (request) => {
+  app.post('/:projectId/tables/preview', { preHandler: [requireWorkerRole('admin')] }, async (request) => {
     const body = createTableSchema.parse(request.body);
     const dbSchema = resolveProjectSchema(request);
     const sql = schemaService.previewCreateTable(dbSchema, body);
     return { sql };
   });
 
-  app.put('/:projectId/tables/:tableName/columns', async (request) => {
+  app.put('/:projectId/tables/:tableName/columns', { preHandler: [requireWorkerRole('admin')] }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     validateIdentifier(tableName, 'table name');
     const body = alterColumnsSchema.parse(request.body);
@@ -119,7 +119,7 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sqls };
   });
 
-  app.delete('/:projectId/tables/:tableName', async (request) => {
+  app.delete('/:projectId/tables/:tableName', { preHandler: [requireWorkerRole('admin')] }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     validateIdentifier(tableName, 'table name');
     const dbSchema = resolveProjectSchema(request);
@@ -128,7 +128,7 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, cleaned: deleted };
   });
 
-  app.post('/:projectId/tables/:tableName/foreign-keys', async (request) => {
+  app.post('/:projectId/tables/:tableName/foreign-keys', { preHandler: [requireWorkerRole('admin')] }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     validateIdentifier(tableName, 'table name');
     const body = foreignKeySchema.parse(request.body);
@@ -137,7 +137,7 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sql };
   });
 
-  app.delete('/:projectId/tables/:tableName/foreign-keys/:constraintName', async (request, reply) => {
+  app.delete('/:projectId/tables/:tableName/foreign-keys/:constraintName', { preHandler: [requireWorkerRole('admin')] }, async (request, reply) => {
     const { tableName, constraintName } = request.params as {
       tableName: string; constraintName: string;
     };
@@ -148,7 +148,7 @@ export async function schemaRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  app.post('/:projectId/tables/:tableName/indexes', async (request) => {
+  app.post('/:projectId/tables/:tableName/indexes', { preHandler: [requireWorkerRole('admin')] }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     validateIdentifier(tableName, 'table name');
     const body = indexDefSchema.parse(request.body);
@@ -157,7 +157,7 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sql };
   });
 
-  app.delete('/:projectId/tables/:tableName/indexes/:indexName', async (request, reply) => {
+  app.delete('/:projectId/tables/:tableName/indexes/:indexName', { preHandler: [requireWorkerRole('admin')] }, async (request, reply) => {
     const { tableName, indexName } = request.params as { tableName: string; indexName: string };
     validateIdentifier(tableName, 'table name');
     validateIdentifier(indexName, 'index name');
@@ -166,7 +166,7 @@ export async function schemaRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  app.post('/:projectId/tables/:tableName/computed', async (request) => {
+  app.post('/:projectId/tables/:tableName/computed', { preHandler: [requireWorkerRole('admin')] }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     validateIdentifier(tableName, 'table name');
     const body = computedColumnSchema.parse(request.body);
@@ -177,7 +177,7 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { success: true, sql };
   });
 
-  app.delete('/:projectId/tables/:tableName/computed/:columnName', async (request, reply) => {
+  app.delete('/:projectId/tables/:tableName/computed/:columnName', { preHandler: [requireWorkerRole('admin')] }, async (request, reply) => {
     const { tableName, columnName } = request.params as { tableName: string; columnName: string };
     validateIdentifier(tableName, 'table name');
     validateIdentifier(columnName, 'column name');
@@ -198,7 +198,7 @@ export async function schemaRoutes(app: FastifyInstance) {
     return { version };
   });
 
-  app.post('/:projectId/schema-versions', async (request) => {
+  app.post('/:projectId/schema-versions', { preHandler: [requireWorkerRole('admin')] }, async (request) => {
     const { projectId } = request.params as { projectId: string };
     const body = createVersionSchema.parse(request.body);
     const dbSchema = resolveProjectSchema(request);
@@ -210,6 +210,7 @@ export async function schemaRoutes(app: FastifyInstance) {
   });
 
   app.post('/:projectId/schema-versions/:versionId/rollback', {
+    preHandler: [requireWorkerRole('admin')],
     config: { rawBody: false },
     schema: { body: { type: 'object', additionalProperties: true } },
   }, async (request) => {

@@ -205,14 +205,17 @@ export async function nodesRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  // GET /api/nodes/status — public (auth required, not superadmin) for node selection
+  // GET /api/nodes/status — for node selection during project creation
   app.get('/status', {
     preHandler: [authMiddleware],
-  }, async () => {
+  }, async (request) => {
     const nodes = await nodesService.findAll();
-    // Return only active/online nodes with metrics for project creation
+    const userId = request.user.id;
     const activeNodes = nodes
-      .filter((n: Record<string, unknown>) => n.status === 'online' || n.status === 'draining')
+      .filter((n: Record<string, unknown>) =>
+        (n.status === 'online' || n.status === 'draining') &&
+        (!n.owner_id || n.owner_id === userId)
+      )
       .map((n: Record<string, unknown>) => ({
         id: n.id,
         name: n.name,
@@ -226,6 +229,7 @@ export async function nodesRoutes(app: FastifyInstance) {
         max_projects: n.max_projects,
         projects_count: n.projects_count ?? 0,
         last_heartbeat: n.last_heartbeat,
+        is_own: n.owner_id === userId,
       }));
     return { nodes: activeNodes };
   });

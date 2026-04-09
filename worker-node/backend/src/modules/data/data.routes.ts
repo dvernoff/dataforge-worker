@@ -77,7 +77,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return { record };
   });
 
-  app.post('/:projectId/tables/:tableName/data', async (request) => {
+  app.post('/:projectId/tables/:tableName/data', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     const projectId = resolveProjectId(request);
     const dbSchema = resolveProjectSchema(request);
@@ -93,7 +93,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return { record };
   });
 
-  app.put('/:projectId/tables/:tableName/data/:id', async (request) => {
+  app.put('/:projectId/tables/:tableName/data/:id', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
     const { tableName, id } = request.params as { tableName: string; id: string };
     const projectId = resolveProjectId(request);
     const dbSchema = resolveProjectSchema(request);
@@ -109,7 +109,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return { record };
   });
 
-  app.patch('/:projectId/tables/:tableName/data/:id/field', async (request) => {
+  app.patch('/:projectId/tables/:tableName/data/:id/field', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
     const { tableName, id } = request.params as { tableName: string; id: string };
     const projectId = resolveProjectId(request);
     const body = z.object({ field: z.string(), value: z.unknown() }).parse(request.body);
@@ -128,7 +128,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return { record };
   });
 
-  app.delete('/:projectId/tables/:tableName/data/:id', async (request, reply) => {
+  app.delete('/:projectId/tables/:tableName/data/:id', { preHandler: [requireWorkerRole('editor')] }, async (request, reply) => {
     const { projectId, tableName, id } = request.params as { projectId: string; tableName: string; id: string };
     const dbSchema = resolveProjectSchema(request);
     await dataService.delete(dbSchema, tableName, id, projectId);
@@ -136,7 +136,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  app.post('/:projectId/tables/:tableName/data/bulk-update', async (request) => {
+  app.post('/:projectId/tables/:tableName/data/bulk-update', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
     const { projectId, tableName } = request.params as { projectId: string; tableName: string };
     const body = z.object({
       ids: z.array(z.string()).min(1),
@@ -149,7 +149,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return result;
   });
 
-  app.post('/:projectId/tables/:tableName/data/bulk-delete', async (request) => {
+  app.post('/:projectId/tables/:tableName/data/bulk-delete', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
     const { projectId, tableName } = request.params as { projectId: string; tableName: string };
     const body = z.object({ ids: z.array(z.string()).min(1) }).parse(request.body);
     const dbSchema = resolveProjectSchema(request);
@@ -158,21 +158,21 @@ export async function dataRoutes(app: FastifyInstance) {
     return result;
   });
 
-  app.post('/:projectId/tables/:tableName/data/:id/restore', async (request) => {
+  app.post('/:projectId/tables/:tableName/data/:id/restore', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
     const { tableName, id } = request.params as { tableName: string; id: string };
     const dbSchema = resolveProjectSchema(request);
     const record = await dataService.restore(dbSchema, tableName, id);
     return { record };
   });
 
-  app.delete('/:projectId/tables/:tableName/data/:id/permanent', async (request, reply) => {
+  app.delete('/:projectId/tables/:tableName/data/:id/permanent', { preHandler: [requireWorkerRole('editor')] }, async (request, reply) => {
     const { tableName, id } = request.params as { tableName: string; id: string };
     const dbSchema = resolveProjectSchema(request);
     await dataService.permanentDelete(dbSchema, tableName, id);
     return reply.status(204).send();
   });
 
-  app.post('/:projectId/tables/:tableName/import', async (request) => {
+  app.post('/:projectId/tables/:tableName/import', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     const body = z.object({
       records: z.array(z.record(z.unknown())).min(1).max(10000),
@@ -208,7 +208,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return { rules };
   });
 
-  app.post('/:projectId/rls', async (request) => {
+  app.post('/:projectId/rls', { preHandler: [requireWorkerRole('admin')] }, async (request) => {
     const { projectId } = request.params as { projectId: string };
     const body = z.object({
       table_name: z.string().min(1),
@@ -221,7 +221,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return { rule };
   });
 
-  app.delete('/:projectId/rls/:ruleId', async (request, reply) => {
+  app.delete('/:projectId/rls/:ruleId', { preHandler: [requireWorkerRole('admin')] }, async (request, reply) => {
     const { ruleId } = request.params as { ruleId: string };
     const projectId = resolveProjectId(request);
     await rlsService.deleteRule(ruleId, projectId);
@@ -235,7 +235,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return { rules };
   });
 
-  app.post('/:projectId/tables/:tableName/validations', async (request) => {
+  app.post('/:projectId/tables/:tableName/validations', { preHandler: [requireWorkerRole('admin')] }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     const projectId = resolveProjectId(request);
     const body = z.object({
@@ -253,7 +253,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return { rule };
   });
 
-  app.delete('/:projectId/tables/:tableName/validations/:ruleId', async (request, reply) => {
+  app.delete('/:projectId/tables/:tableName/validations/:ruleId', { preHandler: [requireWorkerRole('admin')] }, async (request, reply) => {
     const { ruleId } = request.params as { ruleId: string };
     const projectId = resolveProjectId(request);
     await validationService.deleteRule(ruleId, projectId);
@@ -272,7 +272,7 @@ export async function dataRoutes(app: FastifyInstance) {
     return { comments };
   });
 
-  app.post('/:projectId/tables/:tableName/data/:recordId/comments', async (request) => {
+  app.post('/:projectId/tables/:tableName/data/:recordId/comments', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
     const { projectId, tableName, recordId } = request.params as { projectId: string; tableName: string; recordId: string };
     const userId = request.userId ?? 'unknown';
     const body = z.object({
@@ -291,14 +291,14 @@ export async function dataRoutes(app: FastifyInstance) {
     return { comment };
   });
 
-  app.delete('/:projectId/tables/:tableName/data/:recordId/comments/:commentId', async (request, reply) => {
+  app.delete('/:projectId/tables/:tableName/data/:recordId/comments/:commentId', { preHandler: [requireWorkerRole('editor')] }, async (request, reply) => {
     const { commentId } = request.params as { commentId: string };
     const projectId = resolveProjectId(request);
     await commentsService.delete(commentId, projectId);
     return reply.status(204).send();
   });
 
-  app.post('/:projectId/tables/:tableName/seed', async (request) => {
+  app.post('/:projectId/tables/:tableName/seed', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
     const { tableName } = request.params as { tableName: string };
     const dbSchema = resolveProjectSchema(request);
     const body = z.object({

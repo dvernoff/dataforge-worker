@@ -112,7 +112,7 @@ export function MyNodesPage() {
   useEffect(() => {
     if (waitingNodeId && pollData?.nodes) {
       const node = pollData.nodes.find((n) => n.id === waitingNodeId);
-      if (node && node.status === 'online') {
+      if (node && node.status === 'online' && node.url && node.last_heartbeat) {
         setWizardStep(3);
         setWaitingNodeId(null);
         queryClient.invalidateQueries({ queryKey: ['personal-nodes'] });

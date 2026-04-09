@@ -57,7 +57,7 @@
   },
   "deleteConfirm": {
     "title": "Delete Node",
-    "desc": "This will remove the node. Existing projects will need to be migrated.",
+    "desc": "This will remove the node and stop all Docker containers on the remote machine. Existing projects will need to be migrated. This action cannot be undone.",
     "confirm": "Delete"
   },
   "heartbeat": {
@@ -78,6 +78,26 @@
   "deleted": "Node deleted",
   "triggerUpdate": "Trigger Update",
   "updateTriggered": "Update triggered successfully",
+  "updateDialog": {
+    "title": "Update Node",
+    "node": "Node",
+    "currentVersion": "Current version",
+    "newVersion": "New version",
+    "confirmDesc": "Watchtower will pull the new image and restart the container. This takes 1-2 minutes.",
+    "update": "Update",
+    "updating": "Updating...",
+    "step1": "Update request sent",
+    "step2": "Pulling new image",
+    "step3": "Restarting container",
+    "wait": "Don't close this window. The page will update automatically.",
+    "success": "Update complete",
+    "successDesc": "Node updated to version {{version}}",
+    "failed": "Update failed",
+    "failedDesc": "Failed to update node. Check logs.",
+    "close": "Close",
+    "retry": "Try again",
+    "upToDate": "Up to date"
+  },
   "metrics": {
     "cpu": "CPU Usage",
     "ram": "RAM Usage",

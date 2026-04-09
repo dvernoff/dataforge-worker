@@ -189,6 +189,7 @@
     "nodeSelect": {
       "title": "Select Node",
       "recommended": "Recommended",
+      "yourNode": "Your node",
       "cpu": "CPU",
       "ram": "RAM",
       "disk": "Disk",

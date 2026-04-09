@@ -241,7 +241,7 @@ export async function proxyRoutes(app: FastifyInstance) {
     }
   });
 
-  // ── Viewer routes (read-only: tables, data, endpoints, webhooks, sql, etc.) ──
+  // ── Viewer routes (read-only) ──
   const viewerPatterns = [
     '/:projectId/tables/*', '/:projectId/tables',
     '/:projectId/endpoints/*', '/:projectId/endpoints',
@@ -257,6 +257,10 @@ export async function proxyRoutes(app: FastifyInstance) {
     '/:projectId/ws-stats',
   ];
   for (const pattern of viewerPatterns) {
-    app.all(pattern, { preHandler: [requireRole('viewer')] }, handleProxy);
+    app.get(pattern, { preHandler: [requireRole('viewer')] }, handleProxy);
+    app.post(pattern, { preHandler: [requireRole('editor')] }, handleProxy);
+    app.put(pattern, { preHandler: [requireRole('editor')] }, handleProxy);
+    app.patch(pattern, { preHandler: [requireRole('editor')] }, handleProxy);
+    app.delete(pattern, { preHandler: [requireRole('editor')] }, handleProxy);
   }
 }

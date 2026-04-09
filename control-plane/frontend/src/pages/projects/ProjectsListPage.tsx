@@ -37,6 +37,7 @@ interface NodeStatus {
   max_projects: number;
   projects_count: number;
   last_heartbeat: string;
+  is_own?: boolean;
   ping?: number;
 }
 
@@ -105,9 +106,11 @@ export function ProjectsListPage() {
       }
     }
     setNodePings(pings);
-    // Auto-select the node with lowest ping
-    const bestNode = nodes.reduce((best, n) =>
-      (pings[n.id] ?? 9999) < (pings[best.id] ?? 9999) ? n : best, nodes[0]);
+    // Auto-select: prefer own nodes, then lowest ping
+    const ownNodes = nodes.filter((n) => n.is_own);
+    const pool = ownNodes.length > 0 ? ownNodes : nodes;
+    const bestNode = pool.reduce((best, n) =>
+      (pings[n.id] ?? 9999) < (pings[best.id] ?? 9999) ? n : best, pool[0]);
     if (bestNode && !selectedNodeId) setSelectedNodeId(bestNode.id);
   }, [selectedNodeId]);
 
@@ -162,7 +165,16 @@ export function ProjectsListPage() {
               <DialogTitle>{t('projects.createProject')}</DialogTitle>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit((d) => { setPendingFormData(d); setDialogOpen(false); setDisclaimerOpen(true); })} className="space-y-4">
+              <form onSubmit={form.handleSubmit((d) => {
+                const selectedNode = nodesData?.nodes?.find((n) => n.id === selectedNodeId);
+                if (selectedNode?.is_own) {
+                  createMutation.mutate(d);
+                } else {
+                  setPendingFormData(d);
+                  setDialogOpen(false);
+                  setDisclaimerOpen(true);
+                }
+              })} className="space-y-4">
                 <FormField
                   control={form.control}
                   name="name"
@@ -229,8 +241,12 @@ export function ProjectsListPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-2">
-                      {nodesData!.nodes.map((node) => {
+                    <div className="grid grid-cols-1 gap-2 max-h-[280px] overflow-y-auto pr-1">
+                      {[...nodesData!.nodes].sort((a, b) => {
+                        if (a.is_own && !b.is_own) return -1;
+                        if (!a.is_own && b.is_own) return 1;
+                        return (nodePings[a.id] ?? 9999) - (nodePings[b.id] ?? 9999);
+                      }).map((node) => {
                         const ping = nodePings[node.id];
                         const isRecommended = ping !== undefined &&
                           Object.values(nodePings).length === nodesData!.nodes.length &&
@@ -246,18 +262,25 @@ export function ProjectsListPage() {
                             }`}
                             onClick={() => setSelectedNodeId(node.id)}
                           >
-                            {isRecommended && (
-                              <Badge className="absolute top-2 right-2 text-[10px]" variant="default">
-                                <Star className="h-3 w-3 mr-0.5" />
-                                {t('projects.nodeSelect.recommended')}
-                              </Badge>
-                            )}
+                            <div className="absolute top-2 right-2 flex items-center gap-1">
+                              {node.is_own && (
+                                <Badge className="text-[10px]" variant="outline">
+                                  {t('projects.nodeSelect.yourNode')}
+                                </Badge>
+                              )}
+                              {isRecommended && (
+                                <Badge className="text-[10px]" variant="default">
+                                  <Star className="h-3 w-3 mr-0.5" />
+                                  {t('projects.nodeSelect.recommended')}
+                                </Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-2 mb-2">
                               <Server className="h-4 w-4 text-muted-foreground" />
                               <span className="font-medium text-sm">{node.name}</span>
                               <span className="text-xs text-muted-foreground">{node.region}</span>
                               {ping !== undefined && ping < 9999 && (
-                                <span className="text-xs text-muted-foreground ml-auto">{ping}ms</span>
+                                <span className="text-xs text-muted-foreground ml-auto mr-24">{ping}ms</span>
                               )}
                             </div>
                             <div className="grid grid-cols-3 gap-2 text-xs">

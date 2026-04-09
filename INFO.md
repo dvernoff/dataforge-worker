@@ -1,3 +1,6 @@
+Установить Docker
+curl -fsSL https://get.docker.com | sh
+
 Обнова уже развернутых
 
 cd /var/www/dataforge

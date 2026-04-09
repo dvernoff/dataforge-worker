@@ -189,6 +189,7 @@
     "nodeSelect": {
       "title": "Выберите ноду",
       "recommended": "Рекомендуемая",
+      "yourNode": "Ваша нода",
       "cpu": "ЦПУ",
       "ram": "RAM",
       "disk": "Диск",

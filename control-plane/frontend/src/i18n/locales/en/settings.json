@@ -284,7 +284,7 @@
     "disk": "Disk",
     "updateMode": "Update Mode",
     "deleteTitle": "Delete Node",
-    "deleteDesc": "Are you sure you want to delete \"{{name}}\"? All projects on this node will need to be migrated.",
+    "deleteDesc": "Are you sure you want to delete \"{{name}}\"? All Docker containers on the remote machine will be stopped. All projects on this node will need to be migrated. This action cannot be undone.",
     "deleteConfirm": "Delete",
     "wizard": {
       "title": "Add My Node",

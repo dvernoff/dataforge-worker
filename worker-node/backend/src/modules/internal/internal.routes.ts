@@ -335,6 +335,27 @@ export async function internalRoutes(app: FastifyInstance) {
     }
   });
 
+  app.post('/shutdown', async (_request, reply) => {
+    reply.send({ status: 'shutting_down' });
+
+    setTimeout(async () => {
+      try {
+        const { execFile } = await import('child_process');
+        const { promisify } = await import('util');
+        const execFileAsync = promisify(execFile);
+        await execFileAsync('docker', ['compose', 'down', '--remove-orphans', '--volumes']);
+        try {
+          const installDir = path.resolve(process.cwd(), '..');
+          if (fs.existsSync(path.join(installDir, 'docker-compose.yml'))) {
+            fs.rmSync(installDir, { recursive: true, force: true });
+          }
+        } catch {}
+      } catch {
+        process.exit(0);
+      }
+    }, 500);
+  });
+
   app.post('/security/sync', async (request) => {
     const body = z.object({
       project_id: z.string().uuid(),
