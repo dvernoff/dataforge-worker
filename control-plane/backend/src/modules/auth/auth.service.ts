@@ -15,7 +15,8 @@ interface RegisterParams {
 export class AuthService {
   constructor(private db: Knex) {}
 
-  async register({ email, password, name, inviteKey }: RegisterParams) {
+  async register({ email: rawEmail, password, name, inviteKey }: RegisterParams) {
+    const email = rawEmail.toLowerCase().trim();
     let requireInvite = true;
     try {
       const hasSettings = await this.db.schema.hasTable('system_settings');
@@ -60,6 +61,7 @@ export class AuthService {
           email,
           password_hash: passwordHash,
           name,
+          last_login_at: new Date(),
         })
         .returning('*');
 
@@ -109,7 +111,8 @@ export class AuthService {
     return { user: this.sanitizeUser(result), ...tokens };
   }
 
-  async login(email: string, password: string) {
+  async login(rawEmail: string, password: string) {
+    const email = rawEmail.toLowerCase().trim();
     const user = await this.db('users').where({ email }).first();
     if (!user) {
       throw new AppError(401, 'Invalid email or password');

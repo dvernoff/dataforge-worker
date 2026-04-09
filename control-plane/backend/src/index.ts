@@ -31,6 +31,7 @@ import { rolesRoutes } from './modules/roles/roles.routes.js';
 import { projectPlansRoutes, projectQuotasRoutes } from './modules/project-quotas/project-quotas.routes.js';
 
 const app = Fastify({
+  trustProxy: true,
   logger: {
     level: env.NODE_ENV === 'development' ? 'info' : 'warn',
     transport: env.NODE_ENV === 'development'

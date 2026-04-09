@@ -40,6 +40,7 @@ import { CronService } from './modules/cron/cron.service.js';
 import { quotaConcurrencyGuard } from './middleware/quota-enforcement.middleware.js';
 
 const app = Fastify({
+  trustProxy: true,
   logger: {
     level: env.NODE_ENV === 'development' ? 'info' : 'warn',
     transport: env.NODE_ENV === 'development'

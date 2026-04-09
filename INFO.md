@@ -23,16 +23,7 @@ apt update && apt install -y nginx certbot python3-certbot-nginx
 cat > /etc/nginx/sites-available/dataforge-worker <<'EOF'
 server {
     listen 80;
-    server_name fl.dataforge.me;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name fl.dataforge.me;
-
-    ssl_certificate /etc/letsencrypt/live/fl.dataforge.me/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/fl.dataforge.me/privkey.pem;
+    server_name ru.dataforge.me;
 
     location / {
         proxy_pass http://127.0.0.1:4001;
@@ -58,6 +49,6 @@ ln -sf /etc/nginx/sites-available/dataforge-worker /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
-certbot --nginx -d fl.dataforge.me
+certbot --nginx -d ru.dataforge.me
 
 ufw allow 80/tcp && ufw allow 443/tcp && ufw deny 4001/tcp
