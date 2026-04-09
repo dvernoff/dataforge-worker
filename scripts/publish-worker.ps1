@@ -15,7 +15,7 @@ if (-not $latestTag) {
     $newTag = "v$($parts[0]).$($parts[1]).$patch"
 }
 
-Write-Host "Previous: $($latestTag ?? 'none')"
+Write-Host "Previous: $(if ($latestTag) { $latestTag } else { 'none' })"
 Write-Host "New:      $newTag`n"
 
 Write-Host "[1/4] Splitting worker-node subtree..." -ForegroundColor Yellow
