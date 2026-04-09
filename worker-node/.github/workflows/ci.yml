@@ -40,6 +40,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Get version
+        id: version
+        run: echo "tag=$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')" >> "$GITHUB_OUTPUT"
+
       - name: Worker Node
         uses: docker/build-push-action@v6
         with:
@@ -48,6 +52,6 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
           build-args: |
-            APP_VERSION=${{ github.sha }}
+            APP_VERSION=${{ steps.version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

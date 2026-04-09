@@ -74,7 +74,7 @@ export class HeartbeatService {
       disk_free_gb: disk.disk_free_gb,
       active_connections: 0,
       request_count: 0,
-      current_version: process.env.APP_VERSION || 'dev',
+      current_version: (process.env.APP_VERSION || 'dev').slice(0, 20),
     };
 
     try {
