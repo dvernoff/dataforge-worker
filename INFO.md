@@ -11,4 +11,5 @@ docker compose pull worker && docker compose up -d worker
 
 bash scripts/publish-worker.sh
 или
-& "C:\Program Files\Git\bin\bash.exe" -c "sed -i 's/\r$//' scripts/publish-worker.sh && bash scripts/publish-worker.sh"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\publish-worker.ps1
