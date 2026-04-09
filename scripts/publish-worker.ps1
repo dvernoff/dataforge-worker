@@ -31,29 +31,28 @@ if (-not $latestTag) {
 Write-Host "Previous: $(if ($latestTag) { $latestTag } else { 'none' })"
 Write-Host "New:      $newTag`n"
 
-# Split subtree
+# Split subtree into a temp branch
 Write-Host "[1/4] Splitting worker-node subtree..." -ForegroundColor Yellow
-$splitHash = git subtree split --prefix=worker-node 2>&1 | Select-Object -Last 1
-Write-Host "       Split commit: $splitHash"
+git subtree split --prefix=worker-node -b worker-tmp 2>&1 | Out-Null
+Write-Host "       Done."
 
-# Create orphan branch with single commit
+# Create orphan commit from that branch's tree
 Write-Host "[2/4] Creating clean orphan commit..." -ForegroundColor Yellow
-git checkout $splitHash 2>&1 | Out-Null
-git checkout --orphan worker-push 2>&1 | Out-Null
-git commit -m "DataForge Worker Node $newTag" 2>&1 | Out-Null
+$treeHash = git log worker-tmp -1 --format="%T"
+$commitHash = git commit-tree $treeHash -m "DataForge Worker Node $newTag"
+Write-Host "       Commit: $commitHash"
 
 # Force push to worker remote
 Write-Host "[3/4] Pushing to worker remote..." -ForegroundColor Yellow
-git push worker worker-push:main --force 2>&1 | ForEach-Object { Write-Host "       $_" }
+git push worker "${commitHash}:main" --force 2>&1 | ForEach-Object { Write-Host "       $_" }
 
 # Create and push tag on worker remote
 Write-Host "[4/4] Tagging $newTag..." -ForegroundColor Yellow
-git tag $newTag 2>&1 | Out-Null
-git push worker $newTag 2>&1 | ForEach-Object { Write-Host "       $_" }
+git tag -f $newTag $commitHash 2>&1 | Out-Null
+git push worker $newTag --force 2>&1 | ForEach-Object { Write-Host "       $_" }
 
 # Cleanup
-git checkout main 2>&1 | Out-Null
-git branch -D worker-push 2>&1 | Out-Null
+git branch -D worker-tmp 2>&1 | Out-Null
 
 Write-Host "`n=== Done! ===" -ForegroundColor Green
 Write-Host "Published: $newTag"
