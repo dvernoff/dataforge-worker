@@ -1,0 +1,215 @@
+{
+  "pageTitle": "AI Gateway",
+  "subtitle": "Подключите любой LLM для управления проектом — создание таблиц, эндпоинтов, индексов и многое другое.",
+  "letAiManage": "Позвольте AI управлять вашими",
+  "fullDesc": "Подключите любой LLM к вашему проекту DataForge. Создавайте, изменяйте и оптимизируйте схему базы данных и API эндпоинты через естественный язык.",
+  "backToAi": "AI Gateway",
+  "active": "Активен",
+  "disabled": "Отключён",
+  "off": "ВЫКЛ",
+
+  "rotating": {
+    "tables": "таблицами",
+    "endpoints": "эндпоинтами",
+    "indexes": "индексами",
+    "schemas": "схемами",
+    "queries": "запросами",
+    "foreignKeys": "связями",
+    "caching": "кэшированием",
+    "rateLimits": "лимитами"
+  },
+
+  "tabs": {
+    "rest": {
+      "label": "REST Gateway",
+      "desc": "Универсальный HTTP API",
+      "fullDesc": "Совместим с GPT, Claude, Codex, Gemini и любым LLM. Отправляйте HTTP запросы для управления проектом."
+    },
+    "mcp": {
+      "label": "MCP Server",
+      "desc": "Прямая интеграция с AI",
+      "fullDesc": "Model Context Protocol для Claude Code, Cursor, Claude Desktop. AI подключается напрямую и управляет проектом."
+    },
+    "studio": {
+      "label": "AI Studio",
+      "desc": "Кастомные AI эндпоинты",
+      "fullDesc": "Создавайте AI-эндпоинты с кастомными промптами, несколькими провайдерами, валидацией ответов и контекстом диалога."
+    }
+  },
+
+  "stats": {
+    "totalCalls": "Всего вызовов",
+    "avgResponse": "Среднее время",
+    "last24h": "За 24ч",
+    "totalOps": "Всего AI операций",
+    "avgResponseTime": "Среднее время ответа",
+    "last24hours": "За последние 24 часа"
+  },
+
+  "tools": {
+    "title": "Доступные инструменты",
+    "get_project_info": {
+      "name": "get_project_info",
+      "desc": "Узнать о платформе DataForge, её возможностях и о том, как работать с этим проектом"
+    },
+    "get_schema_context": {
+      "name": "get_schema_context",
+      "desc": "Получить полную схему проекта: все таблицы, колонки, типы, индексы, FK и API эндпоинты"
+    },
+    "create_table": {
+      "name": "create_table",
+      "desc": "Создать новую таблицу с колонками, UUID первичным ключом и метками времени"
+    },
+    "alter_columns": {
+      "name": "alter_columns",
+      "desc": "Изменить структуру таблицы: добавить колонки, изменить типы, переименовать или удалить"
+    },
+    "drop_table": {
+      "name": "drop_table",
+      "desc": "Удалить таблицу со всеми данными, индексами, FK и связанными эндпоинтами"
+    },
+    "add_index": {
+      "name": "add_index",
+      "desc": "Создать индекс для ускорения запросов. Типы: btree, hash, gin, gist"
+    },
+    "drop_index": {
+      "name": "drop_index",
+      "desc": "Удалить индекс по имени, когда он больше не нужен"
+    },
+    "add_foreign_key": {
+      "name": "add_foreign_key",
+      "desc": "Добавить внешний ключ для обеспечения ссылочной целостности между таблицами"
+    },
+    "drop_foreign_key": {
+      "name": "drop_foreign_key",
+      "desc": "Удалить внешний ключ по имени"
+    },
+    "create_endpoint": {
+      "name": "create_endpoint",
+      "desc": "Создать API эндпоинт — табличный CRUD или кастомный SQL с параметрами, авторизацией, кэшем"
+    },
+    "update_endpoint": {
+      "name": "update_endpoint",
+      "desc": "Обновить запрос, авторизацию, кэш или rate limit существующего эндпоинта"
+    },
+    "delete_endpoint": {
+      "name": "delete_endpoint",
+      "desc": "Удалить API эндпоинт"
+    },
+    "execute_sql": {
+      "name": "execute_sql",
+      "desc": "Выполнить SQL только для чтения (SELECT/EXPLAIN/WITH) для анализа и отладки"
+    }
+  },
+
+  "activity": {
+    "title": "Последняя активность",
+    "noActivity": "Нет активности"
+  },
+
+  "setup": {
+    "title": "Гайд подключения",
+    "restTitle": "Подключение REST Gateway",
+    "mcpTitle": "Подключение MCP Server",
+
+    "step1title": "Создайте API токен",
+    "step1desc": "Перейдите в Настройки → API Токены → Создайте токен с правами admin.",
+
+    "step2restTitle": "Отправьте это вашему AI",
+    "step2restDesc": "Скопируйте текст ниже и вставьте в чат с AI (ChatGPT, Claude и т.д.):",
+    "step2restPrompt": "Я хочу чтобы ты управлял моим проектом DataForge через REST API.\n\nBase URL: {{url}}\nЗаголовок авторизации: x-api-key: ВСТАВЬ_СВОЙ_ТОКЕН\n\nДоступные эндпоинты:\n- GET /info — узнать о платформе DataForge, типах данных, best practices\n- GET /context — получить полную схему проекта (таблицы, колонки, индексы, FK, эндпоинты)\n- POST /tables — создать таблицу (body: {name, columns[], add_uuid_pk, add_timestamps})\n- PUT /tables/:name/columns — изменить колонки (body: {changes: [{action: add|alter|drop|rename, name, ...}]})\n- DELETE /tables/:name — удалить таблицу со всеми данными и эндпоинтами\n- POST /tables/:name/indexes — добавить индекс (body: {columns[], type: btree|hash|gin|gist, is_unique})\n- DELETE /tables/:name/indexes/:indexName — удалить индекс\n- POST /tables/:name/foreign-keys — добавить FK (body: {source_column, target_table, target_column, on_delete, on_update})\n- DELETE /tables/:name/foreign-keys/:constraintName — удалить FK\n- POST /endpoints — создать API эндпоинт (body: {method, path, source_type, source_config, auth_type, cache_enabled, cache_ttl, rate_limit})\n- PUT /endpoints/:id — обновить эндпоинт\n- DELETE /endpoints/:id — удалить эндпоинт\n- POST /execute-sql — выполнить SQL только для чтения (body: {query})\n\nНачни с вызова GET /info чтобы узнать о платформе, затем GET /context чтобы увидеть текущую схему.",
+
+    "step2mcpTitle": "Добавьте MCP конфиг в ваш AI клиент",
+    "step2mcpDesc": "Скопируйте этот JSON и добавьте в настройки MCP вашего AI клиента:",
+    "step2mcpClients": "Поддерживаемые клиенты: Claude Code, Claude Desktop, Cursor, Windsurf, VS Code",
+
+    "step3title": "Проверьте подключение",
+    "step3restDesc": "Выполните эту команду для проверки:",
+    "step3mcpDesc": "Спросите AI: \"Покажи схему моего проекта DataForge\"",
+
+    "waitingTitle": "Ожидание первого подключения...",
+    "waitingDesc": "Активность появится здесь после первого запроса от AI",
+
+    "copied": "Скопировано в буфер обмена"
+  },
+
+  "plugins": {
+    "restName": "AI REST Gateway",
+    "restDesc": "Универсальный REST API для любого LLM — GPT, Claude, Codex, Gemini, локальные модели.",
+    "mcpName": "AI MCP Server",
+    "mcpDesc": "Прямая интеграция через протокол MCP — Claude Code, Cursor, Claude Desktop.",
+    "studioName": "AI Studio",
+    "studioDesc": "Создавайте AI-эндпоинты с кастомными промптами, валидацией ответов и контекстом диалога."
+  },
+
+  "studio": {
+    "pageTitle": "AI Studio",
+    "noEndpoints": "Нет эндпоинтов",
+    "selectEndpoint": "Выберите эндпоинт или создайте новый",
+    "newEndpoint": "Новый AI эндпоинт",
+    "editEndpoint": "Редактировать эндпоинт",
+    "deleteTitle": "Удалить эндпоинт",
+    "deleteDesc": "Будет безвозвратно удалён AI эндпоинт, все его логи и сессии контекста.",
+    "endpointCreated": "Эндпоинт создан",
+    "endpointUpdated": "Эндпоинт обновлён",
+    "endpointDeleted": "Эндпоинт удалён",
+
+    "stats": {
+      "totalCalls": "Вызовов (24ч)",
+      "avgResponse": "Среднее время",
+      "totalTokens": "Всего токенов",
+      "endpoints": "Эндпоинты"
+    },
+
+    "tabs": {
+      "test": "Тест",
+      "config": "Конфигурация",
+      "logs": "Логи"
+    },
+
+    "test": {
+      "placeholder": "Введите сообщение для теста...",
+      "send": "Отправить",
+      "tokens": "токенов",
+      "attempts": "попыток"
+    },
+
+    "config": {
+      "systemPrompt": "Системный промпт",
+      "temperature": "Температура",
+      "maxTokens": "Макс. токенов",
+      "context": "Контекст",
+      "contextEnabled": "Включён ({{ttl}} мин TTL)",
+      "contextDisabled": "Отключён",
+      "retry": "Повтор",
+      "retryEnabled": "До {{max}} повторов",
+      "retryDisabled": "Отключён",
+      "responseFormat": "Формат ответа"
+    },
+
+    "form": {
+      "name": "Название",
+      "namePlaceholder": "например moderate-chat",
+      "provider": "Провайдер",
+      "model": "Модель",
+      "systemPrompt": "Системный промпт",
+      "systemPromptPlaceholder": "Пример структуры промпта:\n\nРОЛЬ:\nТы — [роль]. Твоя задача — [задача].\n\nЧТО ПРИХОДИТ:\nТебе будут приходить [какие данные].\n\nФОРМАТ ОТВЕТА (только JSON, ничего кроме):\n{\n  \"result\": true/false,\n  \"category\": \"категория\" или null,\n  \"reason\": \"краткое объяснение\"\n}\n\nПРАВИЛА:\n1. [Правило первое]\n2. [Правило второе]\n3. ...\n\nВАЖНО:\n- Отвечай ТОЛЬКО валидным JSON\n- Если непонятно — возвращай отрицательный результат\n- [Другие граничные случаи]",
+      "temperature": "Температура",
+      "maxTokens": "Макс. токенов",
+      "contextLabel": "Контекст (история диалога)",
+      "contextDesc": "Хранить историю сообщений по сессиям",
+      "contextTtl": "TTL контекста (минуты)",
+      "retryLabel": "Повтор при невалидном ответе",
+      "retryDesc": "Переспрашивать AI если ответ не прошёл валидацию",
+      "save": "Сохранить",
+      "create": "Создать"
+    },
+
+    "logs": {
+      "noLogs": "Логов пока нет",
+      "tokens": "ток"
+    },
+    "category": "AI Gateway",
+    "tabTitle": "AI"
+  }
+}

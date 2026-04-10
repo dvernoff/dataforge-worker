@@ -166,6 +166,24 @@ export class PluginManager {
   }
 
   private async onPluginEnabled(projectId: string, pluginId: string) {
+    if (pluginId === 'ai-rest-gateway' || pluginId === 'ai-mcp-server') {
+      try {
+        const exists = await this.db.raw(`SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ai_gateway_logs'`);
+        if (exists.rows.length === 0) {
+          await this.db.raw(`CREATE TABLE IF NOT EXISTS ai_gateway_logs (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            project_id UUID NOT NULL,
+            gateway_type VARCHAR(20) NOT NULL,
+            tool_name VARCHAR(100) NOT NULL,
+            request_summary JSONB,
+            response_status INTEGER,
+            duration_ms INTEGER,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )`);
+          await this.db.raw(`CREATE INDEX IF NOT EXISTS idx_ai_gateway_logs_project ON ai_gateway_logs (project_id, created_at)`);
+        }
+      } catch {}
+    }
     if (pluginId === 'uptime-ping') {
       try {
         const project = await this.db('projects').where({ id: projectId }).select('db_schema').first();
@@ -187,9 +205,82 @@ export class PluginManager {
         }
       } catch {}
     }
+    if (pluginId === 'ai-studio') {
+      try {
+        const project = await this.db('projects').where({ id: projectId }).select('db_schema').first();
+        if (project?.db_schema) {
+          const schema = project.db_schema;
+          validateSchema(schema);
+          const exists = await this.db.raw(`SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = 'ai_studio_endpoints'`, [schema]);
+          if (exists.rows.length === 0) {
+            await this.db.raw(`CREATE TABLE "${schema}".ai_studio_endpoints (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              name VARCHAR(255) NOT NULL,
+              slug VARCHAR(255) NOT NULL,
+              provider VARCHAR(50) NOT NULL,
+              model VARCHAR(100) NOT NULL,
+              api_key TEXT,
+              system_prompt TEXT,
+              response_format JSONB,
+              temperature FLOAT DEFAULT 0.7,
+              max_tokens INTEGER DEFAULT 1024,
+              context_enabled BOOLEAN DEFAULT false,
+              context_ttl_minutes INTEGER DEFAULT 60,
+              max_context_messages INTEGER DEFAULT 50,
+              max_tokens_per_session INTEGER DEFAULT 0,
+              validation_rules JSONB,
+              retry_on_invalid BOOLEAN DEFAULT false,
+              max_retries INTEGER DEFAULT 3,
+              is_active BOOLEAN DEFAULT true,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              updated_at TIMESTAMPTZ DEFAULT NOW(),
+              UNIQUE(slug)
+            )`);
+            await this.db.raw(`CREATE TABLE "${schema}".ai_studio_logs (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              endpoint_id UUID NOT NULL REFERENCES "${schema}".ai_studio_endpoints(id) ON DELETE CASCADE,
+              provider VARCHAR(50),
+              model VARCHAR(100),
+              input_messages JSONB,
+              output JSONB,
+              tokens_used INTEGER,
+              duration_ms INTEGER,
+              status VARCHAR(30),
+              error TEXT,
+              created_at TIMESTAMPTZ DEFAULT NOW()
+            )`);
+            await this.db.raw(`CREATE INDEX idx_ai_studio_logs_ep ON "${schema}".ai_studio_logs (endpoint_id, created_at)`);
+            await this.db.raw(`CREATE TABLE "${schema}".ai_studio_contexts (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              endpoint_id UUID NOT NULL REFERENCES "${schema}".ai_studio_endpoints(id) ON DELETE CASCADE,
+              session_id VARCHAR(255) NOT NULL,
+              messages JSONB DEFAULT '[]',
+              tokens_used INTEGER DEFAULT 0,
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              updated_at TIMESTAMPTZ DEFAULT NOW(),
+              UNIQUE(endpoint_id, session_id)
+            )`);
+          }
+          await this.db.raw(`ALTER TABLE "${schema}".ai_studio_endpoints ADD COLUMN IF NOT EXISTS api_key TEXT`).catch(() => {});
+          await this.db.raw(`COMMENT ON TABLE "${schema}".ai_studio_endpoints IS 'system:ai-studio'`).catch(() => {});
+          await this.db.raw(`COMMENT ON TABLE "${schema}".ai_studio_logs IS 'system:ai-studio'`).catch(() => {});
+          await this.db.raw(`COMMENT ON TABLE "${schema}".ai_studio_contexts IS 'system:ai-studio'`).catch(() => {});
+        }
+      } catch {}
+    }
   }
 
   private async onPluginDisabled(projectId: string, pluginId: string) {
+    if (pluginId === 'ai-studio') {
+      try {
+        const project = await this.db('projects').where({ id: projectId }).select('db_schema').first();
+        if (project?.db_schema) {
+          await this.db.raw(`DROP TABLE IF EXISTS "${project.db_schema}".ai_studio_contexts CASCADE`);
+          await this.db.raw(`DROP TABLE IF EXISTS "${project.db_schema}".ai_studio_logs CASCADE`);
+          await this.db.raw(`DROP TABLE IF EXISTS "${project.db_schema}".ai_studio_endpoints CASCADE`);
+        }
+      } catch {}
+    }
     if (pluginId === 'uptime-ping') {
       try {
         const project = await this.db('projects').where({ id: projectId }).select('db_schema').first();

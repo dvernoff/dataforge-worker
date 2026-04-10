@@ -7,7 +7,7 @@ import {
   FolderKanban, UserCog, FileText, Globe, LogOut, ChevronDown, Archive,
   Braces, Code, Activity, AlertTriangle, BarChart3, Search,
   Clock, Zap, Puzzle, Lock, LayoutDashboard, BookOpen, Map, PlayCircle,
-  HardDrive, Radio, Layers, MessageCircle, Send, Gamepad2,
+  HardDrive, Radio, Layers, MessageCircle, Send, Gamepad2, Sparkles,
 } from 'lucide-react';
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup,
@@ -85,6 +85,8 @@ export function AppSidebar() {
     { label: t('nav.uptimeMonitor'), icon: Activity, path: `${basePath}/integrations/uptime`, featureId: 'uptime-ping' },
     { label: t('nav.sboxAuth'), icon: Gamepad2, path: `${basePath}/integrations/sbox-auth`, featureId: 'sbox-auth' },
   ];
+
+  const isAiEnabled = checkFeature('ai-rest-gateway') || checkFeature('ai-mcp-server') || checkFeature('ai-studio');
 
   const mainNav = mainNavAll.filter(
     (item) => !item.featureId || checkFeature(item.featureId),
@@ -195,7 +197,26 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <SidebarSeparator />
+            {isAiEnabled && (
+              <>
+                <SidebarSeparator className="my-1" />
+                <SidebarMenu className="px-2">
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={isActive(`${basePath}/ai`)}
+                      onClick={() => navigate(`${basePath}/ai`)}
+                      className="relative overflow-hidden"
+                    >
+                      <Sparkles className="h-4 w-4 text-purple-400 animate-pulse" />
+                      <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent font-medium">AI</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+                <SidebarSeparator className="my-1" />
+              </>
+            )}
+
+            {!isAiEnabled && <SidebarSeparator className="my-1" />}
 
             <SidebarGroup>
               <SidebarGroupLabel>{t('nav.settings')}</SidebarGroupLabel>

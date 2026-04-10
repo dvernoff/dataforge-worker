@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, FolderKanban, Cpu, HardDrive, Server, Star, AlertTriangle, Shield, Database, Gauge } from 'lucide-react';
+import { Plus, FolderKanban, Cpu, HardDrive, Server, Star, AlertTriangle, Shield, Database, Gauge, Power } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -83,6 +85,29 @@ export function ProjectsListPage() {
   const [disclaimerOpen, setDisclaimerOpen] = useState(false);
   const [disclaimerCountdown, setDisclaimerCountdown] = useState(10);
   const [pendingFormData, setPendingFormData] = useState<CreateForm | null>(null);
+
+  const [disableTarget, setDisableTarget] = useState<{ id: string; slug: string; name: string } | null>(null);
+  const [disableSlugInput, setDisableSlugInput] = useState('');
+
+  const disableMutation = useMutation({
+    mutationFn: ({ id, slug }: { id: string; slug: string }) => projectsApi.disable(id, slug),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setDisableTarget(null);
+      setDisableSlugInput('');
+      toast.success(t('projects.disabled'));
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || err.message),
+  });
+
+  const enableMutation = useMutation({
+    mutationFn: (id: string) => projectsApi.enable(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast.success(t('projects.enabled'));
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || err.message),
+  });
 
   const { data: nodesData, isLoading: nodesLoading } = useQuery({
     queryKey: ['nodes', 'status'],
@@ -345,27 +370,57 @@ export function ProjectsListPage() {
           animate="animate"
           className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
         >
-          {projects.map((project) => (
+          {projects.map((project) => {
+            const isActive = project.is_active !== false;
+            return (
             <motion.div key={project.id} variants={staggerItem} {...cardHover}>
               <Card
-                className="cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => navigate(`/projects/${project.slug}/dashboard`)}
+                className={`cursor-pointer transition-colors ${isActive ? 'hover:border-primary/50' : 'opacity-60 border-destructive/30'}`}
+                onClick={() => isActive && navigate(`/projects/${project.slug}/dashboard`)}
               >
                 <CardHeader>
                   <div className="flex items-center gap-3">
                     <div
-                      className="h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold text-lg shrink-0"
+                      className={`h-10 w-10 rounded-lg flex items-center justify-center text-white font-bold text-lg shrink-0 ${!isActive ? 'grayscale' : ''}`}
                       style={{ backgroundColor: getProjectColor(project.name) }}
                     >
                       {project.name.charAt(0).toUpperCase()}
                     </div>
-                    <div className="min-w-0">
-                      <CardTitle className="text-lg">{project.name}</CardTitle>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-lg">{project.name}</CardTitle>
+                        {!isActive && (
+                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                            {t('projects.disabledBadge')}
+                          </Badge>
+                        )}
+                      </div>
                       <CardDescription className="truncate">{project.description ?? t('projects.noDescription')}</CardDescription>
                     </div>
+                    {((project as any).user_role === 'admin') && (
+                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Switch
+                          checked={isActive}
+                          onCheckedChange={(checked) => {
+                            if (!checked) {
+                              setDisableTarget({ id: project.id, slug: project.slug, name: project.name });
+                              setDisableSlugInput('');
+                            } else {
+                              enableMutation.mutate(project.id);
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {!isActive && project.disabled_reason && (
+                    <div className="flex items-center gap-1.5 mb-1.5 text-destructive">
+                      <AlertTriangle className="h-3 w-3" />
+                      <span className="text-xs">{project.disabled_reason}</span>
+                    </div>
+                  )}
                   {(project as any).node_name && (
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <Server className="h-3 w-3 text-muted-foreground" />
@@ -381,7 +436,8 @@ export function ProjectsListPage() {
                 </CardContent>
               </Card>
             </motion.div>
-          ))}
+            );
+          })}
         </motion.div>
       ) : (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -446,6 +502,57 @@ export function ProjectsListPage() {
               : createMutation.isPending ? t('actions.creating') : t('projects.disclaimer.accept')
             }
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!disableTarget} onOpenChange={(o) => { if (!o) { setDisableTarget(null); setDisableSlugInput(''); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Power className="h-5 w-5 text-destructive" />
+              {t('projects.disableDialog.title')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('projects.disableDialog.description', { name: disableTarget?.name })}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+              <p className="text-sm text-destructive font-medium mb-1">{t('projects.disableDialog.warning')}</p>
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                <li>{t('projects.disableDialog.stopsApi')}</li>
+                <li>{t('projects.disableDialog.stopsCron')}</li>
+                <li>{t('projects.disableDialog.stopsWebhooks')}</li>
+              </ul>
+            </div>
+
+            <div>
+              <Label className="text-sm">
+                {t('projects.disableDialog.confirmSlug', { slug: disableTarget?.slug })}
+              </Label>
+              <Input
+                className="mt-1.5"
+                placeholder={disableTarget?.slug}
+                value={disableSlugInput}
+                onChange={(e) => setDisableSlugInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDisableTarget(null); setDisableSlugInput(''); }}>
+              {t('actions.cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={disableSlugInput !== disableTarget?.slug || disableMutation.isPending}
+              onClick={() => disableTarget && disableMutation.mutate({ id: disableTarget.id, slug: disableTarget.slug })}
+            >
+              {disableMutation.isPending ? t('actions.disabling') : t('projects.disableDialog.confirm')}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

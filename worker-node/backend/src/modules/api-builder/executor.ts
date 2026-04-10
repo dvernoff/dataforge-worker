@@ -361,6 +361,12 @@ export class Executor {
 
     validateSchemaAccess(parameterizedSql, schema);
 
+    const upperSql = sql.trim().toUpperCase();
+    if (upperSql.startsWith('WITH') && /\b(INSERT|UPDATE|DELETE)\b/i.test(sql)) {
+      if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(endpoint.method ?? '')) {
+        throw new AppError(403, 'WITH clause with mutations only allowed on POST/PUT/PATCH/DELETE endpoints');
+      }
+    }
 
     const clamped = Math.max(1000, Math.min(timeoutMs, 120_000));
     const result = await this.db.transaction(async (trx) => {

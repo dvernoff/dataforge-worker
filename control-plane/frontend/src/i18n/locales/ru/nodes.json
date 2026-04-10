@@ -15,8 +15,13 @@
     "cpu": "CPU",
     "ram": "RAM",
     "disk": "Диск",
+    "db": "БД",
     "lastHeartbeat": "Последний heartbeat",
     "version": "Версия"
+  },
+  "dbStats": {
+    "projects": "Проекты",
+    "system": "Системные"
   },
   "status": {
     "online": "Онлайн",
@@ -82,6 +87,12 @@
   "userNodes": "Пользовательские ноды",
   "noSystemNodes": "Системные ноды не настроены",
   "triggerUpdate": "Обновить",
+  "bulkUpdate": {
+    "system": "Обновить все общие",
+    "personal": "Обновить все личные",
+    "triggered": "Обновление запущено для {{count}} нод(ы)",
+    "noNodes": "Нет нод для обновления"
+  },
   "updateTriggered": "Обновление запущено",
   "updateDialog": {
     "title": "Обновление ноды",

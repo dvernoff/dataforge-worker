@@ -21,6 +21,7 @@ import enPlugins from './locales/en/plugins.json';
 import enDashboards from './locales/en/dashboards.json';
 import enDocs from './locales/en/docs.json';
 import enSboxAuth from './locales/en/sbox-auth.json';
+import enAi from './locales/en/ai.json';
 
 import ruCommon from './locales/ru/common.json';
 import ruAuth from './locales/ru/auth.json';
@@ -41,6 +42,7 @@ import ruPlugins from './locales/ru/plugins.json';
 import ruDashboards from './locales/ru/dashboards.json';
 import ruDocs from './locales/ru/docs.json';
 import ruSboxAuth from './locales/ru/sbox-auth.json';
+import ruAi from './locales/ru/ai.json';
 
 i18n
   .use(LanguageDetector)
@@ -67,6 +69,7 @@ i18n
         dashboards: enDashboards,
         docs: enDocs,
         'sbox-auth': enSboxAuth,
+        ai: enAi,
       },
       ru: {
         common: ruCommon,
@@ -88,11 +91,12 @@ i18n
         dashboards: ruDashboards,
         docs: ruDocs,
         'sbox-auth': ruSboxAuth,
+        ai: ruAi,
       },
     },
     fallbackLng: 'en',
     defaultNS: 'common',
-    ns: ['common', 'auth', 'dashboard', 'tables', 'data', 'api', 'webhooks', 'sql', 'audit', 'settings', 'system', 'nodes', 'analytics', 'explorer', 'cron', 'plugins', 'dashboards', 'docs', 'sbox-auth'],
+    ns: ['common', 'auth', 'dashboard', 'tables', 'data', 'api', 'webhooks', 'sql', 'audit', 'settings', 'system', 'nodes', 'analytics', 'explorer', 'cron', 'plugins', 'dashboards', 'docs', 'sbox-auth', 'ai'],
     detection: {
       order: ['localStorage', 'navigator'],
       lookupLocalStorage: 'dataforge-lang',

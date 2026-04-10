@@ -12,17 +12,30 @@ export async function proxyRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
 
   // Map URL segments to quota resource types for POST enforcement
-  const createQuotaMap: Record<string, 'tables' | 'endpoints' | 'cron' | 'files' | 'backups'> = {
+  const createQuotaMap: Record<string, 'tables' | 'endpoints' | 'cron' | 'files' | 'backups' | 'webhooks' | 'discord_webhooks' | 'telegram_bots' | 'uptime_monitors'> = {
     tables: 'tables',
     endpoints: 'endpoints',
     cron: 'cron',
     files: 'files',
     backups: 'backups',
+    webhooks: 'webhooks',
+    'discord-webhooks': 'discord_webhooks',
+    'telegram-notifications': 'telegram_bots',
+    'uptime-monitors': 'uptime_monitors',
   };
 
   // Shared proxy handler
   async function handleProxy(request: FastifyRequest, reply: FastifyReply) {
     const { projectId } = request.params as { projectId: string };
+
+    const project = await app.db('projects').where({ id: projectId }).select('is_active', 'disabled_reason').first();
+    if (project && project.is_active === false) {
+      return reply.status(503).send({
+        error: `Project is disabled: ${project.disabled_reason || 'Disabled by admin'}`,
+        errorCode: 'PROJECT_DISABLED',
+      });
+    }
+
     const wildcardPath = (request.params as Record<string, string>)['*'] ?? '';
 
     const rawUrl = request.url;
@@ -41,6 +54,10 @@ export async function proxyRoutes(app: FastifyInstance) {
       if (resourceType && !wildcardPath) {
         const blocked = await projectQuotasService.checkProjectCreateQuota(projectId, resourceType);
         if (blocked) {
+          logAudit(request, 'quota.create_blocked', segment, undefined, {
+            resource: resourceType,
+            message: blocked,
+          });
           return reply.status(429).send({
             error: blocked,
             errorCode: 'QUOTA_EXCEEDED',
@@ -64,6 +81,19 @@ export async function proxyRoutes(app: FastifyInstance) {
         quotaHeaders['x-quota-concurrent'] = String(quota.max_concurrent_requests ?? 10);
         quotaHeaders['x-quota-max-rows'] = String(quota.max_rows_per_query ?? 1000);
         quotaHeaders['x-quota-max-export'] = String(quota.max_export_rows ?? 10000);
+        quotaHeaders['x-quota-max-records'] = String(quota.max_records ?? 0);
+        quotaHeaders['x-quota-max-storage-mb'] = String(quota.max_storage_mb ?? 0);
+        quotaHeaders['x-quota-max-api-requests'] = String(quota.max_api_requests ?? 0);
+
+        try {
+          const stats = await app.db('backups')
+            .where({ project_id: projectId, status: 'completed' })
+            .select(app.db.raw('COALESCE(SUM(file_size), 0)::bigint as total_size'))
+            .first();
+          quotaHeaders['x-quota-backups-size-mb'] = String(Math.round(Number(stats?.total_size ?? 0) / 1024 / 1024 * 100) / 100);
+        } catch {
+          quotaHeaders['x-quota-backups-size-mb'] = '0';
+        }
       } catch { /* use worker defaults */ }
     }
 
@@ -147,6 +177,8 @@ export async function proxyRoutes(app: FastifyInstance) {
     '/:projectId/discord-webhooks/*', '/:projectId/discord-webhooks',
     '/:projectId/telegram-notifications/*', '/:projectId/telegram-notifications',
     '/:projectId/uptime-monitors/*', '/:projectId/uptime-monitors',
+    '/:projectId/ai-gateway/*', '/:projectId/ai-gateway',
+    '/:projectId/ai-studio/*', '/:projectId/ai-studio',
   ];
   for (const pattern of editorPatterns) {
     app.all(pattern, { preHandler: [requireRole('editor')] }, handleProxy);

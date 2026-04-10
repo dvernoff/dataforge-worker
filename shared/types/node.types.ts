@@ -13,6 +13,9 @@ export interface WorkerNode {
   disk_usage: number;
   disk_total_gb?: number;
   disk_free_gb?: number;
+  db_size_mb?: number;
+  db_projects_size_mb?: number;
+  db_system_size_mb?: number;
   last_heartbeat: string | null;
   api_key_hash: string;
   created_at: string;
@@ -53,6 +56,9 @@ export interface HeartbeatPayload {
   active_connections: number;
   request_count: number;
   current_version?: string;
+  db_size_mb?: number;
+  db_projects_size_mb?: number;
+  db_system_size_mb?: number;
 }
 
 export const PROXY_HEADERS = {

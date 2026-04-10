@@ -150,6 +150,34 @@ export class ProjectsService {
     });
   }
 
+  async disable(id: string, reason: string) {
+    const [project] = await this.db('projects')
+      .where({ id })
+      .update({
+        is_active: false,
+        disabled_reason: reason,
+        disabled_at: new Date(),
+        updated_at: new Date(),
+      })
+      .returning('*');
+    if (!project) throw new AppError(404, 'Project not found');
+    return project;
+  }
+
+  async enable(id: string) {
+    const [project] = await this.db('projects')
+      .where({ id })
+      .update({
+        is_active: true,
+        disabled_reason: null,
+        disabled_at: null,
+        updated_at: new Date(),
+      })
+      .returning('*');
+    if (!project) throw new AppError(404, 'Project not found');
+    return project;
+  }
+
   async getMembers(projectId: string) {
     return this.db('project_members')
       .join('users', 'project_members.user_id', 'users.id')

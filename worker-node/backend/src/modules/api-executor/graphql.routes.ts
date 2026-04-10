@@ -13,6 +13,11 @@ export async function graphqlRoutes(app: FastifyInstance) {
     const project = await app.db('projects').where({ slug: projectSlug }).first();
     if (!project) return reply.status(404).send({ error: 'Project not found' });
 
+    const isDisabled = await app.redis.get(`project_disabled:${project.id}`);
+    if (isDisabled) {
+      return reply.status(503).send({ error: 'Project is disabled', errorCode: 'PROJECT_DISABLED' });
+    }
+
     const graphqlEnabled = await isModuleEnabled(app.db, project.id, 'feature-graphql');
     if (!graphqlEnabled) {
       return reply.status(404).send(moduleDisabledError('GraphQL'));

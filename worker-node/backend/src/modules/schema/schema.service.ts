@@ -310,7 +310,7 @@ export class SchemaService {
         ['validation_rules', this.db('validation_rules').where({ project_id: projectId, table_name: tableName }).delete()],
         ['rls_rules', this.db('rls_rules').where({ project_id: projectId, table_name: tableName }).delete()],
         ['data_history', this.db('data_history').where({ project_id: projectId, table_name: tableName }).delete()],
-        ['comments', this.db('comments').where({ project_id: projectId, table_name: tableName }).delete()],
+        ['record_comments', this.db('record_comments').where({ project_id: projectId, table_name: tableName }).delete()],
         ['files', this.db('files').where({ project_id: projectId, table_name: tableName }).delete()],
       ];
 

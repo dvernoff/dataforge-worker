@@ -157,8 +157,16 @@ try {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - auditDays);
       const cutoffISO = cutoff.toISOString();
+      const nowISO = new Date().toISOString();
+
       try { await app.db('audit_logs').where('created_at', '<', cutoffISO).del(); } catch {}
       try { await app.db('tracked_errors').where('created_at', '<', cutoffISO).del(); } catch {}
+      try { await app.db('webhook_logs').where('sent_at', '<', cutoffISO).del(); } catch {}
+      try { await app.db('refresh_tokens').where('expires_at', '<', nowISO).del(); } catch {}
+      try { await app.db('api_tokens').whereNotNull('expires_at').where('expires_at', '<', nowISO).del(); } catch {}
+      try { await app.db('api_tokens').where({ is_active: false }).where('updated_at', '<', cutoffISO).del(); } catch {}
+      try { await app.db('invite_keys').where('expires_at', '<', nowISO).del(); } catch {}
+      try { await app.db('invite_keys').where({ is_active: false }).where('created_at', '<', cutoffISO).del(); } catch {}
     } catch {}
   }, 60 * 60 * 1000);
 } catch (err) {

@@ -15,7 +15,8 @@
     "token": "Token",
     "invite": "Invite",
     "sql": "SQL",
-    "cache": "Cache"
+    "cache": "Cache",
+    "quota": "Quota"
   },
   "searchPlaceholder": "Search by user, action or details...",
   "headers": {

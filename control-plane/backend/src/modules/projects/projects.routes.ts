@@ -180,6 +180,84 @@ export async function projectRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
+  app.post('/:projectId/disable', {
+    preHandler: [requireRole('admin')],
+  }, async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    const body = z.object({
+      slug: z.string().min(1),
+      reason: z.string().max(500).optional(),
+    }).parse(request.body);
+
+    const project = await projectsService.findById(projectId);
+    if (project.slug !== body.slug) {
+      throw new AppError(400, 'Slug does not match');
+    }
+    if (project.is_active === false) {
+      throw new AppError(400, 'Project is already disabled');
+    }
+
+    const reason = body.reason || 'Manually disabled';
+    const updated = await projectsService.disable(projectId, reason);
+    logAudit(request, 'project.disable', 'project', projectId, { reason });
+
+    try {
+      const worker = await proxyService.getWorkerForProject(projectId);
+      await fetchWithKeepAlive(`${worker.url.replace(/\/$/, '')}/internal/projects/${projectId}/toggle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Node-Api-Key': worker.apiKey,
+          ...(env.INTERNAL_SECRET ? { 'X-Internal-Secret': env.INTERNAL_SECRET } : {}),
+        },
+        body: JSON.stringify({ is_active: false }),
+      });
+    } catch (err) {
+      app.log.warn({ err, projectId }, 'Failed to notify worker about project disable');
+    }
+
+    const keys = await app.redis.keys('cp:projects:*');
+    if (keys.length) await app.redis.del(...keys.map(k => k.replace(/^cp:/, '')));
+    await app.redis.del(`node-map:${projectId}`);
+
+    return { project: updated };
+  });
+
+  app.post('/:projectId/enable', {
+    preHandler: [requireRole('admin')],
+  }, async (request) => {
+    const { projectId } = request.params as { projectId: string };
+
+    const project = await projectsService.findById(projectId);
+    if (project.is_active !== false) {
+      throw new AppError(400, 'Project is already active');
+    }
+
+    const updated = await projectsService.enable(projectId);
+    logAudit(request, 'project.enable', 'project', projectId);
+
+    try {
+      const worker = await proxyService.getWorkerForProject(projectId);
+      await fetchWithKeepAlive(`${worker.url.replace(/\/$/, '')}/internal/projects/${projectId}/toggle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Node-Api-Key': worker.apiKey,
+          ...(env.INTERNAL_SECRET ? { 'X-Internal-Secret': env.INTERNAL_SECRET } : {}),
+        },
+        body: JSON.stringify({ is_active: true }),
+      });
+    } catch (err) {
+      app.log.warn({ err, projectId }, 'Failed to notify worker about project enable');
+    }
+
+    const keys = await app.redis.keys('cp:projects:*');
+    if (keys.length) await app.redis.del(...keys.map(k => k.replace(/^cp:/, '')));
+    await app.redis.del(`node-map:${projectId}`);
+
+    return { project: updated };
+  });
+
   app.get('/:projectId/members', {
     preHandler: [requireRole('viewer')],
   }, async (request) => {

@@ -15,7 +15,7 @@ import { useCurrentProject } from '@/hooks/useProject';
 import { auditApi } from '@/api/audit.api';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
-const ACTION_TYPES = ['all', 'auth', 'project', 'node', 'table', 'data', 'api', 'webhook', 'token', 'invite', 'sql', 'cache'];
+const ACTION_TYPES = ['all', 'auth', 'project', 'node', 'table', 'data', 'api', 'webhook', 'token', 'invite', 'sql', 'cache', 'quota'];
 
 function actionVariant(action: string): 'default' | 'destructive' | 'outline' {
   if (action.includes('delete') || action.includes('drop') || action.includes('block')) return 'destructive';
@@ -24,6 +24,7 @@ function actionVariant(action: string): 'default' | 'destructive' | 'outline' {
 }
 
 function actionColor(action: string): string {
+  if (action.startsWith('quota')) return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
   if (action.startsWith('auth')) return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
   if (action.includes('delete') || action.includes('drop')) return 'bg-red-500/10 text-red-500 border-red-500/20';
   if (action.includes('create') || action.includes('insert')) return 'bg-green-500/10 text-green-500 border-green-500/20';

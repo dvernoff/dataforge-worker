@@ -1,6 +1,7 @@
 import type { Knex } from 'knex';
 import type Redis from 'ioredis';
 import { env } from '../../config/env.js';
+import { decrypt } from '../../utils/encryption.js';
 
 const PROJECT_QUOTA_FIELDS = [
   'max_tables',
@@ -8,6 +9,10 @@ const PROJECT_QUOTA_FIELDS = [
   'max_api_requests',
   'max_storage_mb',
   'max_endpoints',
+  'max_webhooks',
+  'max_discord_webhooks',
+  'max_telegram_bots',
+  'max_uptime_monitors',
   'max_files',
   'max_backups',
   'max_cron',
@@ -128,42 +133,57 @@ export class ProjectQuotasService {
     const workerUsage = await this.fetchWorkerProjectUsage(projectId);
 
     let backupsCount = 0;
+    let backupsSizeMb = 0;
     try {
       const stats = await this.db('backups')
-        .where({ project_id: projectId })
-        .select(this.db.raw('COUNT(*)::int as count'))
+        .where({ project_id: projectId, status: 'completed' })
+        .select(
+          this.db.raw('COUNT(*)::int as count'),
+          this.db.raw('COALESCE(SUM(file_size), 0)::bigint as total_size'),
+        )
         .first();
       backupsCount = stats?.count ?? 0;
+      backupsSizeMb = Math.round(Number(stats?.total_size ?? 0) / 1024 / 1024 * 100) / 100;
     } catch { /* backups table may not exist */ }
 
     return {
       tables: workerUsage.tables,
       records: workerUsage.records,
       api_requests: 0,
-      storage_mb: workerUsage.storage_mb,
+      storage_mb: Math.round((workerUsage.storage_mb + backupsSizeMb) * 100) / 100,
       endpoints: workerUsage.endpoints,
       files: workerUsage.files,
       backups: backupsCount,
       cron: workerUsage.cron,
+      webhooks: workerUsage.webhooks,
+      discord_webhooks: workerUsage.discord_webhooks,
+      telegram_bots: workerUsage.telegram_bots,
+      uptime_monitors: workerUsage.uptime_monitors,
     };
   }
 
   private async fetchWorkerProjectUsage(projectId: string): Promise<{
     tables: number; records: number; storage_mb: number; files: number;
-    cron: number; endpoints: number;
+    cron: number; endpoints: number; webhooks: number;
+    discord_webhooks: number; telegram_bots: number; uptime_monitors: number;
   }> {
-    const defaults = { tables: 0, records: 0, storage_mb: 0, files: 0, cron: 0, endpoints: 0 };
+    const defaults = { tables: 0, records: 0, storage_mb: 0, files: 0, cron: 0, endpoints: 0, webhooks: 0, discord_webhooks: 0, telegram_bots: 0, uptime_monitors: 0 };
     try {
       const row = await this.db('projects as p')
         .join('nodes as n', 'p.node_id', 'n.id')
         .where('p.id', projectId)
-        .select('n.url')
+        .select('n.url', 'n.api_key_encrypted')
         .first();
       if (!row?.url) return defaults;
 
+      let apiKey = env.WORKER_NODE_API_KEY;
+      if (row.api_key_encrypted) {
+        try { apiKey = decrypt(row.api_key_encrypted); } catch { /* fall back to shared key */ }
+      }
+
       const res = await fetch(`${String(row.url).replace(/\/$/, '')}/internal/projects/${projectId}/usage`, {
         headers: {
-          'X-Node-Api-Key': env.WORKER_NODE_API_KEY,
+          'X-Node-Api-Key': apiKey,
           ...(env.INTERNAL_SECRET ? { 'X-Internal-Secret': env.INTERNAL_SECRET } : {}),
         },
         signal: AbortSignal.timeout(5000),
@@ -177,7 +197,7 @@ export class ProjectQuotasService {
 
   async checkProjectCreateQuota(
     projectId: string,
-    resourceType: 'tables' | 'endpoints' | 'cron' | 'files' | 'backups',
+    resourceType: 'tables' | 'endpoints' | 'cron' | 'files' | 'backups' | 'webhooks' | 'discord_webhooks' | 'telegram_bots' | 'uptime_monitors',
   ): Promise<string | null> {
     const quotaFieldMap: Record<string, string> = {
       tables: 'max_tables',
@@ -185,6 +205,10 @@ export class ProjectQuotasService {
       cron: 'max_cron',
       files: 'max_files',
       backups: 'max_backups',
+      webhooks: 'max_webhooks',
+      discord_webhooks: 'max_discord_webhooks',
+      telegram_bots: 'max_telegram_bots',
+      uptime_monitors: 'max_uptime_monitors',
     };
 
     const field = quotaFieldMap[resourceType];

@@ -37,7 +37,8 @@ export function Header() {
       if (part === 'system') continue;
 
       const label = part.charAt(0).toUpperCase() + part.slice(1).replace(/-/g, ' ');
-      const href = i < parts.length - 1
+      const isTableName = i > 0 && parts[i - 1] === 'tables';
+      const href = i < parts.length - 1 && !isTableName
         ? '/' + parts.slice(0, i + 1).join('/')
         : undefined;
       items.push({ label, href });

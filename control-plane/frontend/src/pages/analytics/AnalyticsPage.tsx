@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { BarChart3, Clock, AlertCircle, Globe } from 'lucide-react';
+import { BarChart3, Clock, AlertCircle, Globe, Database, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PageWrapper } from '@/components/shared/PageWrapper';
 import { analyticsApi } from '@/api/analytics.api';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -16,6 +17,84 @@ function statusBadgeVariant(code: number): 'default' | 'destructive' | 'outline'
   if (code < 300) return 'default';
   if (code < 400) return 'outline';
   return 'destructive';
+}
+
+function parsePathParams(fullPath: string) {
+  const [basePath, queryString] = fullPath.split('?');
+  if (!queryString) return { basePath, params: [] };
+  const params = queryString.split('&').map(p => {
+    const [key, val] = p.split('=');
+    return { key: decodeURIComponent(key), value: val ? decodeURIComponent(val) : '' };
+  });
+  return { basePath, params };
+}
+
+function getIndexHint(param: string): string {
+  const hints: Record<string, string> = {
+    sort: 'Добавьте btree индекс на поле сортировки для ускорения ORDER BY',
+    filter: 'Добавьте индекс на фильтруемое поле. Используйте hash для =, btree для диапазонов',
+    search: 'Для полнотекстового поиска используйте GIN индекс с to_tsvector',
+    id: 'UUID поля обычно уже имеют индекс через PRIMARY KEY',
+    status: 'Частая фильтрация по статусу — добавьте hash индекс',
+    created_at: 'Для фильтрации по дате добавьте btree индекс',
+    updated_at: 'Для фильтрации по дате добавьте btree индекс',
+    user_id: 'FK поля нуждаются в btree индексе для JOIN',
+    limit: 'LIMIT сам по себе не требует индекса',
+    offset: 'Большой OFFSET медленный — используйте cursor-based пагинацию',
+    page: 'Пагинация через offset медленная на больших таблицах',
+  };
+  const lower = param.toLowerCase();
+  for (const [key, hint] of Object.entries(hints)) {
+    if (lower.includes(key)) return hint;
+  }
+  return 'Если это поле используется в WHERE — добавьте индекс (btree для диапазонов, hash для точных совпадений)';
+}
+
+function SlowQueryPath({ path, responseTime }: { path: string; responseTime: number }) {
+  const { basePath, params } = parsePathParams(path);
+  const isSlow = responseTime >= 500;
+  const isCritical = responseTime >= 1000;
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <div className="font-mono text-sm max-w-[350px]">
+        <span className="truncate block">{basePath}</span>
+        {params.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {params.map((p, i) => (
+              <Tooltip key={i}>
+                <TooltipTrigger asChild>
+                  <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border cursor-help ${
+                    isCritical ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                    isSlow ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                    'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                  }`}>
+                    <span className="font-semibold">{p.key}</span>
+                    {p.value && <span className="opacity-60">={p.value.length > 15 ? p.value.slice(0, 15) + '…' : p.value}</span>}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[300px]">
+                  <div className="space-y-1">
+                    <p className="font-semibold text-xs flex items-center gap-1">
+                      <Database className="h-3 w-3" /> {p.key}
+                      {p.value && <span className="font-normal opacity-70">= {p.value}</span>}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">{getIndexHint(p.key)}</p>
+                    {isCritical && (
+                      <p className="text-[10px] text-red-400 flex items-center gap-1">
+                        <Zap className="h-3 w-3" />
+                        Критически медленный запрос — добавьте индекс на это поле
+                      </p>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </div>
+        )}
+      </div>
+    </TooltipProvider>
+  );
 }
 
 export function AnalyticsPage() {
@@ -188,11 +267,15 @@ export function AnalyticsPage() {
                     <TableCell>
                       <Badge variant="outline">{req.method}</Badge>
                     </TableCell>
-                    <TableCell className="font-mono text-sm max-w-[300px] truncate">{req.path}</TableCell>
+                    <TableCell><SlowQueryPath path={req.path} responseTime={req.response_time_ms} /></TableCell>
                     <TableCell>
                       <Badge variant={statusBadgeVariant(req.status_code)}>{req.status_code}</Badge>
                     </TableCell>
-                    <TableCell>{t('ms', { value: req.response_time_ms })}</TableCell>
+                    <TableCell>
+                      <span className={`font-mono ${req.response_time_ms >= 1000 ? 'text-red-400 font-bold' : req.response_time_ms >= 500 ? 'text-amber-400' : ''}`}>
+                        {t('ms', { value: req.response_time_ms })}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {new Date(req.created_at).toLocaleString()}
                     </TableCell>

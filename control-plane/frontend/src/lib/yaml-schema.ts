@@ -9,6 +9,7 @@ export interface YamlColumnDef {
   default?: string;
   unique?: boolean;
   primary?: boolean;
+  rename_from?: string;
 }
 
 export interface YamlForeignKeyDef {
@@ -100,11 +101,12 @@ const SCHEMA_HEADER = `# DataForge Schema Definition
 #   timestamptz, uuid, json, jsonb, text[], integer[], serial, bigserial
 #
 # COLUMN PROPERTIES (inside columns → column_name):
-#   type       - (required) one of the types above
-#   nullable   - (optional, default: true)
-#   default    - (optional) e.g. "now()", "0", "'draft'"
-#   unique     - (optional, default: false)
-#   primary    - (optional, default: false)
+#   type        - (required) one of the types above
+#   nullable    - (optional, default: true)
+#   default     - (optional) e.g. "now()", "0", "'draft'"
+#   unique      - (optional, default: false)
+#   primary     - (optional, default: false)
+#   rename_from - (optional) rename existing column: new_name: { rename_from: old_name }
 #
 # TABLE OPTIONS:
 #   uuid_pk    - (default: true) auto-add UUID "id" primary key
@@ -265,10 +267,29 @@ export function parseYamlSchema(yamlString: string): ParseResult {
       }
     }
 
-    // Check uuid_pk + manual id conflict
     const opts = table.options ?? {};
+
     if ((opts.uuid_pk ?? true) && 'id' in table.columns) {
       warnings.push(`${prefix}: uuid_pk is enabled but "id" column is also defined manually. The manual column will be used, uuid_pk ignored for this table.`);
+    }
+
+    if (columnNames.length > 20) {
+      warnings.push(`${prefix}: has ${columnNames.length} columns — consider splitting into multiple tables for better maintainability`);
+    }
+
+    if (opts.endpoints === false) {
+      warnings.push(`${prefix}: CRUD endpoints are disabled — table will only be accessible via direct SQL`);
+    }
+
+    if ((opts.timestamps ?? true) === false && !columnNames.includes('created_at')) {
+      warnings.push(`${prefix}: timestamps disabled and no "created_at" column — records will have no creation date`);
+    }
+
+    for (const colName of columnNames) {
+      const col = table.columns[colName];
+      if (col && col.unique && table.indexes?.some(idx => idx.columns.length === 1 && idx.columns[0] === colName)) {
+        warnings.push(`${prefix}.${colName}: column is marked unique and also has a separate index — the unique constraint already creates an index`);
+      }
     }
 
     // Validate indexes
@@ -477,7 +498,7 @@ export function tableInfoToYaml(tables: TableInfo[]): string {
       if (hasUuidPk && col.name === 'id') continue;
       if (hasTimestamps && (col.name === 'created_at' || col.name === 'updated_at')) continue;
 
-      const def: Record<string, unknown> = { type: mapPgType(col.type) };
+      const def: Record<string, unknown> = { type: mapPgType(col.type), rename_from: col.name };
       if (!col.nullable) def.nullable = false;
       if (col.default_value && !col.default_value.includes('nextval')) def.default = col.default_value;
       if (col.is_unique) def.unique = true;
@@ -526,4 +547,161 @@ export function tableInfoToYaml(tables: TableInfo[]): string {
 
   const yamlBody = stringify({ tables: schema }, { indent: 2, lineWidth: 0 });
   return SCHEMA_HEADER + '\n' + yamlBody;
+}
+
+// ── Safe re-import: detect conflicts with existing tables ──
+
+export interface TableConflict {
+  tableName: string;
+  action: 'skip' | 'update';
+  changes: string[];
+  newColumns: { name: string; type: string; nullable: boolean; default_value?: string; is_unique: boolean }[];
+  alteredColumns: { name: string; type?: string; nullable?: boolean; default_value?: string; is_unique?: boolean }[];
+  renamedColumns: { oldName: string; newName: string }[];
+  removedColumns: string[];
+  newIndexes: { columns: string[]; type: string; is_unique: boolean }[];
+  removedIndexes: { name: string; columns: string[] }[];
+  newForeignKeys: { source_column: string; target_table: string; target_column: string; on_delete: string; on_update: string }[];
+  removedForeignKeys: { constraint_name: string; source_column: string; target_table: string }[];
+}
+
+export interface ReImportPayloads extends ApiPayloads {
+  tablesToCreate: ApiPayloads['tables'];
+  tableConflicts: TableConflict[];
+}
+
+export function detectTableConflicts(
+  schema: YamlSchema,
+  existingTables: import('@/api/schema.api').TableInfo[],
+): ReImportPayloads {
+  const base = yamlSchemaToApiPayloads(schema);
+  const existingMap = new Map(existingTables.map(t => [t.name, t]));
+
+  const tablesToCreate: ApiPayloads['tables'] = [];
+  const tableConflicts: TableConflict[] = [];
+
+  for (const table of base.tables) {
+    const existing = existingMap.get(table._name);
+    if (!existing) {
+      tablesToCreate.push(table);
+      continue;
+    }
+
+    const def = schema.tables[table._name];
+    const existingColMap = new Map(existing.columns.map(c => [c.name, c]));
+    const yamlColNames = Object.keys(def.columns);
+    const changes: string[] = [];
+
+    const newColumns: TableConflict['newColumns'] = [];
+    const alteredColumns: TableConflict['alteredColumns'] = [];
+    const renamedColumns: TableConflict['renamedColumns'] = [];
+    const removedColumns: string[] = [];
+
+    const renamedFromSet = new Set<string>();
+
+    for (const colName of yamlColNames) {
+      const yamlCol = def.columns[colName];
+
+      if (yamlCol.rename_from && yamlCol.rename_from !== colName && existingColMap.has(yamlCol.rename_from)) {
+        renamedColumns.push({ oldName: yamlCol.rename_from, newName: colName });
+        renamedFromSet.add(yamlCol.rename_from);
+        changes.push(`rename ${yamlCol.rename_from}→${colName}`);
+        continue;
+      }
+
+      const dbCol = existingColMap.get(colName);
+
+      if (!dbCol) {
+        newColumns.push({
+          name: colName, type: yamlCol.type, nullable: yamlCol.nullable !== false,
+          default_value: yamlCol.default, is_unique: yamlCol.unique ?? false,
+        });
+        changes.push(`+col ${colName}`);
+      } else {
+        const dbFriendly = mapPgType(dbCol.type);
+        const alter: TableConflict['alteredColumns'][0] = { name: colName };
+        let hasChange = false;
+
+        if (dbFriendly !== yamlCol.type) {
+          alter.type = yamlCol.type;
+          hasChange = true;
+          changes.push(`~type ${colName}: ${dbFriendly}→${yamlCol.type}`);
+        }
+        const yamlNullable = yamlCol.nullable !== false;
+        if (dbCol.nullable !== yamlNullable) {
+          alter.nullable = yamlNullable;
+          hasChange = true;
+          changes.push(`~nullable ${colName}`);
+        }
+        if (hasChange) alteredColumns.push(alter);
+      }
+    }
+
+    const systemCols = new Set(['id', 'created_at', 'updated_at']);
+    for (const dbCol of existing.columns) {
+      if (systemCols.has(dbCol.name)) continue;
+      if (renamedFromSet.has(dbCol.name)) continue;
+      if (!yamlColNames.includes(dbCol.name)) {
+        removedColumns.push(dbCol.name);
+        changes.push(`-col ${dbCol.name}`);
+      }
+    }
+
+    const existingUserIndexes = existing.indexes.filter(idx => !idx.name.endsWith('_pkey'));
+    const existingIdxMap = new Map(
+      existingUserIndexes.map(idx => [[...idx.columns].sort().join(',') + ':' + idx.type, idx])
+    );
+    const yamlIdxKeys = new Set<string>();
+    const newIndexes: TableConflict['newIndexes'] = [];
+    for (const idx of def.indexes ?? []) {
+      const key = [...idx.columns].sort().join(',') + ':' + (idx.type ?? 'btree');
+      yamlIdxKeys.add(key);
+      if (!existingIdxMap.has(key)) {
+        newIndexes.push({ columns: idx.columns, type: idx.type ?? 'btree', is_unique: idx.unique ?? false });
+        changes.push(`+idx(${idx.columns.join(',')})`);
+      }
+    }
+    const removedIndexes: TableConflict['removedIndexes'] = [];
+    for (const [key, idx] of existingIdxMap) {
+      if (!yamlIdxKeys.has(key)) {
+        removedIndexes.push({ name: idx.name, columns: idx.columns });
+        changes.push(`-idx(${idx.columns.join(',')})`);
+      }
+    }
+
+    const existingFkMap = new Map(
+      existing.foreign_keys.map(fk => [`${fk.source_column}:${fk.target_table}.${fk.target_column}`, fk])
+    );
+    const yamlFkKeys = new Set<string>();
+    const newForeignKeys: TableConflict['newForeignKeys'] = [];
+    for (const fk of def.foreign_keys ?? []) {
+      const [targetTable, targetColumn] = fk.references.split('.');
+      const key = `${fk.column}:${targetTable}.${targetColumn}`;
+      yamlFkKeys.add(key);
+      if (!existingFkMap.has(key)) {
+        newForeignKeys.push({
+          source_column: fk.column, target_table: targetTable, target_column: targetColumn,
+          on_delete: fk.on_delete ?? 'NO ACTION', on_update: fk.on_update ?? 'NO ACTION',
+        });
+        changes.push(`+fk(${fk.column}→${targetTable})`);
+      }
+    }
+    const removedForeignKeys: TableConflict['removedForeignKeys'] = [];
+    for (const [key, fk] of existingFkMap) {
+      if (!yamlFkKeys.has(key)) {
+        removedForeignKeys.push({ constraint_name: fk.constraint_name, source_column: fk.source_column, target_table: fk.target_table });
+        changes.push(`-fk(${fk.source_column}→${fk.target_table})`);
+      }
+    }
+
+    if (changes.length > 0) {
+      tableConflicts.push({
+        tableName: table._name, action: 'skip', changes,
+        newColumns, alteredColumns, renamedColumns, removedColumns,
+        newIndexes, removedIndexes, newForeignKeys, removedForeignKeys,
+      });
+    }
+  }
+
+  return { ...base, tablesToCreate, tableConflicts };
 }

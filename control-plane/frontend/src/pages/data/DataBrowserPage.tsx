@@ -77,6 +77,7 @@ export function DataBrowserPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null);
+  const [jsonPreview, setJsonPreview] = useState<{ title: string; value: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [seedingOpen, setSeedingOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'kanban' | 'calendar' | 'gallery'>('table');
@@ -272,12 +273,13 @@ export function DataBrowserPage() {
   // Cell value renderer
   function renderCellValue(value: unknown, type: string): string {
     if (value === null || value === undefined) return 'NULL';
-    if (typeof value === 'object') return JSON.stringify(value);
+    if (typeof value === 'object') {
+      const s = JSON.stringify(value);
+      return s.length > 50 ? s.substring(0, 50) + '…' : s;
+    }
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     const str = String(value);
-    // Shorten UUIDs: show first 8 chars + "…"
     if (type.toLowerCase() === 'uuid' && str.length >= 32) return str.substring(0, 8) + '…';
-    // Shorten timestamps: show date + time without seconds/ms
     if (techTypes.has(type.toLowerCase()) && str.length > 16) {
       const d = new Date(str);
       if (!isNaN(d.getTime())) return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
@@ -285,11 +287,20 @@ export function DataBrowserPage() {
     return str;
   }
 
+  function formatValue(value: unknown): string {
+    if (value === null || value === undefined) return 'NULL';
+    if (typeof value === 'object') return JSON.stringify(value, null, 2);
+    return String(value);
+  }
+
   const readOnlyFields = ['id', 'created_at', 'updated_at', 'deleted_at'];
 
   function handleCellClick(rowId: string, field: string, currentValue: unknown) {
     if (readOnlyFields.includes(field)) return;
-    // Don't re-enter edit if already editing this cell
+    if (typeof currentValue === 'object' && currentValue !== null) {
+      setJsonPreview({ title: field, value: JSON.stringify(currentValue, null, 2) });
+      return;
+    }
     if (editingCell?.rowId === rowId && editingCell?.field === field) return;
     setEditingCell({ rowId, field });
     setEditValue(currentValue === null ? '' : String(currentValue));
@@ -512,7 +523,7 @@ export function DataBrowserPage() {
           {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
         </div>
       ) : viewMode === 'table' ? (
-        <div className="border rounded-lg overflow-auto">
+        <div className="border rounded-lg overflow-auto max-h-[calc(100vh-280px)] max-w-[calc(100vw-var(--sidebar-width,256px)-80px)]">
           <Table>
             <TableHeader>
               <TableRow>
@@ -619,10 +630,11 @@ export function DataBrowserPage() {
                               />
                             ) : (
                               <span
-                                className={value === null ? 'text-muted-foreground italic' : ''}
+                                className={`${value === null ? 'text-muted-foreground italic' : ''} ${typeof value === 'object' && value !== null ? 'cursor-pointer hover:text-primary transition-colors' : ''}`}
                                 title={value != null && isTech ? String(value) : undefined}
+                                onClick={typeof value === 'object' && value !== null ? () => setJsonPreview({ title: col.name, value: JSON.stringify(value, null, 2) }) : undefined}
                               >
-                                {isTech && !isExpanded ? renderCellValue(value, col.type) : (value === null ? 'NULL' : String(value))}
+                                {value === null ? 'NULL' : typeof value === 'object' ? renderCellValue(value, col.type) : (isTech && !isExpanded ? renderCellValue(value, col.type) : String(value))}
                               </span>
                             )}
                           </TableCell>
@@ -797,6 +809,20 @@ export function DataBrowserPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={!!jsonPreview} onOpenChange={(o) => !o && setJsonPreview(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm">{jsonPreview?.title}</DialogTitle>
+          </DialogHeader>
+          <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-auto max-h-[60vh] whitespace-pre-wrap">{jsonPreview?.value}</pre>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(jsonPreview?.value ?? ''); }}>
+              Copy
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

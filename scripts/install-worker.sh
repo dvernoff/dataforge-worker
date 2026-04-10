@@ -42,6 +42,59 @@ fi
 log "DataForge Worker Node Installer"
 log "Control Plane: $CP_URL"
 
+# ── Check existing installation ─────────────────────
+
+INSTALL_DIR="${HOME}/dataforge-worker"
+
+if [ -d "$INSTALL_DIR" ] && [ -f "$INSTALL_DIR/.env" ]; then
+  warn "DataForge Worker is already installed in $INSTALL_DIR"
+
+  EXISTING_NODE_ID=$(grep -oP 'NODE_ID=\K.*' "$INSTALL_DIR/.env" 2>/dev/null || echo "unknown")
+  log "  Existing Node ID: $EXISTING_NODE_ID"
+
+  if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+    RUNNING=$(cd "$INSTALL_DIR" && docker compose ps --status running -q 2>/dev/null | wc -l || echo 0)
+    if [ "$RUNNING" -gt 0 ]; then
+      log "  Status: ${GREEN}running${NC} ($RUNNING containers)"
+    else
+      log "  Status: ${YELLOW}stopped${NC}"
+    fi
+  fi
+
+  echo ""
+  echo -e "${YELLOW}Options:${NC}"
+  echo "  1) Cancel installation"
+  echo "  2) Reinstall (stop old, backup .env, install fresh)"
+  echo "  3) Update only (pull latest images, restart)"
+  echo ""
+  read -p "Choose [1/2/3]: " CHOICE
+
+  case "$CHOICE" in
+    2)
+      log "Backing up existing installation..."
+      BACKUP="$INSTALL_DIR/.env.backup.$(date +%Y%m%d%H%M%S)"
+      cp "$INSTALL_DIR/.env" "$BACKUP"
+      log "Backup saved: $BACKUP"
+      cd "$INSTALL_DIR" && docker compose down 2>/dev/null || true
+      log "Old containers stopped. Proceeding with fresh install..."
+      ;;
+    3)
+      log "Updating worker..."
+      cd "$INSTALL_DIR"
+      docker compose pull worker
+      docker compose up -d
+      log ""
+      log "${BOLD}Worker updated!${NC}"
+      log "  Node ID: $EXISTING_NODE_ID"
+      exit 0
+      ;;
+    *)
+      log "Installation cancelled."
+      exit 0
+      ;;
+  esac
+fi
+
 # ── Check Docker ─────────────────────────────────────
 
 if ! command -v docker &>/dev/null; then
@@ -56,11 +109,24 @@ log "Docker found: $(docker --version)"
 
 # ── Create install directory ─────────────────────────
 
-INSTALL_DIR="${HOME}/dataforge-worker"
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
 log "Installing to: $INSTALL_DIR"
+
+# ── Lock against parallel installs ───────────────────
+
+LOCKFILE="$INSTALL_DIR/.install.lock"
+if [ -f "$LOCKFILE" ]; then
+  LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || stat -f %m "$LOCKFILE" 2>/dev/null || echo 0) ))
+  if [ "$LOCK_AGE" -lt 300 ]; then
+    err "Another installation is in progress (lock age: ${LOCK_AGE}s). If stuck, remove $LOCKFILE"
+  fi
+  warn "Stale lock file found (${LOCK_AGE}s old), removing..."
+  rm -f "$LOCKFILE"
+fi
+touch "$LOCKFILE"
+trap 'rm -f "$LOCKFILE"' EXIT
 
 # ── Generate passwords ───────────────────────────────
 

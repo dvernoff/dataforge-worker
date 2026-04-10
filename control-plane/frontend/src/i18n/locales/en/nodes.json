@@ -15,8 +15,13 @@
     "cpu": "CPU",
     "ram": "RAM",
     "disk": "Disk",
+    "db": "DB",
     "lastHeartbeat": "Last Heartbeat",
     "version": "Version"
+  },
+  "dbStats": {
+    "projects": "Projects",
+    "system": "System"
   },
   "status": {
     "online": "Online",
@@ -82,6 +87,12 @@
   "created": "Node created",
   "deleted": "Node deleted",
   "triggerUpdate": "Trigger Update",
+  "bulkUpdate": {
+    "system": "Update All System",
+    "personal": "Update All Personal",
+    "triggered": "Update triggered for {{count}} node(s)",
+    "noNodes": "No nodes available for update"
+  },
   "updateTriggered": "Update triggered successfully",
   "updateDialog": {
     "title": "Update Node",

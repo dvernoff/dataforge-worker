@@ -3,7 +3,29 @@ import { env } from '../config/env.js';
 
 const concurrentByUser = new Map<string, number>();
 
-async function reportQuotaViolation(
+const autoDisableRequested = new Set<string>();
+
+export async function requestAutoDisable(projectId: string, reason: string): Promise<void> {
+  if (autoDisableRequested.has(projectId)) return;
+  autoDisableRequested.add(projectId);
+  setTimeout(() => autoDisableRequested.delete(projectId), 60_000);
+
+  try {
+    const cpUrl = env.CONTROL_PLANE_URL;
+    if (!cpUrl) return;
+    await fetch(`${cpUrl}/internal/auto-disable`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-node-api-key': env.NODE_API_KEY,
+      },
+      body: JSON.stringify({ project_id: projectId, reason }),
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => {});
+  } catch {}
+}
+
+export async function reportQuotaViolation(
   projectId: string,
   userId: string,
   action: string,
@@ -12,7 +34,7 @@ async function reportQuotaViolation(
   try {
     const cpUrl = env.CONTROL_PLANE_URL;
     if (!cpUrl) return;
-    await fetch(`${cpUrl}/api/internal/audit`, {
+    await fetch(`${cpUrl}/internal/audit`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -102,6 +124,140 @@ export async function checkResourceQuota(
 
     if (count >= cfg.max) {
       return `Quota exceeded: maximum ${cfg.max} ${resource} allowed`;
+    }
+  } catch {}
+
+  return null;
+}
+
+export async function checkRecordsQuota(
+  redis: any,
+  db: any,
+  projectId: string,
+  schema: string,
+  maxRecords: number,
+): Promise<string | null> {
+  if (maxRecords <= 0) return null;
+
+  const cacheKey = `records_count:${projectId}`;
+
+  try {
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) {
+        const total = Number(cached);
+        if (total >= maxRecords) {
+          return `Quota exceeded: total records (${total}/${maxRecords})`;
+        }
+        return null;
+      }
+    }
+  } catch {}
+
+  try {
+    const tables = await db.raw(
+      `SELECT tablename FROM pg_tables WHERE schemaname = ?`, [schema]
+    );
+    if (!tables.rows?.length) return null;
+
+    const countQueries = tables.rows.map((t: { tablename: string }) =>
+      `SELECT COUNT(*)::bigint AS c FROM "${schema}"."${t.tablename}"`
+    );
+    const result = await db.raw(countQueries.join(' UNION ALL '));
+    const total = (result.rows ?? []).reduce(
+      (sum: number, r: { c: string }) => sum + Number(r.c), 0
+    );
+
+    try {
+      if (redis) await redis.set(cacheKey, String(total), 'EX', 60);
+    } catch {}
+
+    if (total >= maxRecords) {
+      requestAutoDisable(projectId, `Records limit exceeded: ${total}/${maxRecords}`);
+      return `Quota exceeded: total records (${total}/${maxRecords})`;
+    }
+  } catch {}
+
+  return null;
+}
+
+export async function checkStorageQuota(
+  redis: any,
+  db: any,
+  projectId: string,
+  schema: string,
+  maxStorageMb: number,
+  backupsSizeMb = 0,
+): Promise<string | null> {
+  if (maxStorageMb <= 0) return null;
+
+  const cacheKey = `storage_mb:${projectId}`;
+
+  try {
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached !== null) {
+        const totalMb = Number(cached) + backupsSizeMb;
+        if (totalMb >= maxStorageMb) {
+          return `Storage quota exceeded: ${totalMb.toFixed(1)}MB / ${maxStorageMb}MB`;
+        }
+        return null;
+      }
+    }
+  } catch {}
+
+  try {
+    const sizeResult = await db.raw(
+      `SELECT COALESCE(SUM(pg_total_relation_size('"' || ? || '"."' || tablename || '"')), 0)::bigint AS size_bytes
+       FROM pg_tables WHERE schemaname = ?`,
+      [schema, schema]
+    );
+    let localMb = Number(sizeResult.rows?.[0]?.size_bytes ?? 0) / 1024 / 1024;
+
+    try {
+      const hasFiles = await db.schema.hasTable('files');
+      if (hasFiles) {
+        const fileStats = await db('files')
+          .where({ project_id: projectId })
+          .select(db.raw('COALESCE(SUM(size), 0)::bigint as total_bytes'))
+          .first();
+        localMb += Number(fileStats?.total_bytes ?? 0) / 1024 / 1024;
+      }
+    } catch {}
+
+    try {
+      if (redis) await redis.set(cacheKey, String(Math.round(localMb * 100) / 100), 'EX', 60);
+    } catch {}
+
+    const totalMb = localMb + backupsSizeMb;
+    if (totalMb >= maxStorageMb) {
+      requestAutoDisable(projectId, `Storage limit exceeded: ${totalMb.toFixed(1)}MB / ${maxStorageMb}MB`);
+      return `Storage quota exceeded: ${totalMb.toFixed(1)}MB / ${maxStorageMb}MB`;
+    }
+  } catch {}
+
+  return null;
+}
+
+export async function checkApiRequestQuota(
+  redis: any,
+  projectId: string,
+  maxApiRequests: number,
+): Promise<string | null> {
+  if (maxApiRequests <= 0 || !redis) return null;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const key = `api_req_count:${projectId}:${today}`;
+
+  try {
+    const current = await redis.incr(key);
+    if (current === 1) {
+      await redis.expire(key, 90000);
+    }
+
+    if (current > maxApiRequests) {
+      requestAutoDisable(projectId, `Daily API request limit exceeded: ${current}/${maxApiRequests}`);
+      return `Daily API request quota exceeded (${current}/${maxApiRequests})`;
     }
   } catch {}
 

@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Plug, MoreHorizontal, Pencil, Trash2, Copy, Link, Table2, Code, ChevronDown, Search, ChevronsUpDown } from 'lucide-react';
+import { Plus, Plug, MoreHorizontal, Pencil, Trash2, Copy, Link, Table2, Code, ChevronDown, Search, ChevronsUpDown, FileUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,8 +13,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/shared/PageWrapper';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { EndpointImportDialog } from '@/components/api-builder/EndpointImportDialog';
 import { useCurrentProject } from '@/hooks/useProject';
 import { endpointsApi } from '@/api/endpoints.api';
+import { endpointsToYaml } from '@/lib/yaml-endpoints';
 import { HTTP_METHOD_COLORS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -52,6 +54,8 @@ export function EndpointsListPage() {
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
+  const [editYaml, setEditYaml] = useState<string | undefined>(undefined);
 
   // Track which groups are explicitly closed (default = all open)
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
@@ -214,6 +218,9 @@ export function EndpointsListPage() {
               <DropdownMenuItem onClick={() => navigate(`${basePath}/endpoints/${ep.id}`)}>
                 <Pencil className="h-4 w-4 mr-2" />{t('common:actions.edit')}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setEditYaml(endpointsToYaml([ep as import('@shared/types/api.types').ApiEndpoint])); setImportOpen(true); }}>
+                <Code className="h-4 w-4 mr-2" />{t('api:editYaml')}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => versionMutation.mutate(ep.id as string)}>
                 <Copy className="h-4 w-4 mr-2" />{t('api:versioning.createNew')}
               </DropdownMenuItem>
@@ -231,10 +238,16 @@ export function EndpointsListPage() {
     <PageWrapper>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">{t('api:pageTitle')}</h1>
-        <Button onClick={() => navigate(`${basePath}/endpoints/new`)}>
-          <Plus className="h-4 w-4 mr-2" />
-          {t('api:createEndpoint')}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileUp className="h-4 w-4 mr-2" />
+            {t('api:yamlImport.title')}
+          </Button>
+          <Button onClick={() => navigate(`${basePath}/endpoints/new`)}>
+            <Plus className="h-4 w-4 mr-2" />
+            {t('api:createEndpoint')}
+          </Button>
+        </div>
       </div>
 
       {endpoints.length > 0 && (
@@ -329,6 +342,13 @@ export function EndpointsListPage() {
         variant="destructive"
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
         loading={deleteMutation.isPending}
+      />
+
+      <EndpointImportDialog
+        open={importOpen}
+        onOpenChange={(o) => { setImportOpen(o); if (!o) setEditYaml(undefined); }}
+        projectId={project?.id ?? ''}
+        initialYaml={editYaml}
       />
     </PageWrapper>
   );

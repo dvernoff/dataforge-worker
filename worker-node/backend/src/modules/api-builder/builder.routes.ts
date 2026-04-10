@@ -5,6 +5,8 @@ import { CacheService } from './cache.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
 import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
+import { checkApiRequestQuota, reportQuotaViolation } from '../../middleware/quota-enforcement.middleware.js';
+import { env } from '../../config/env.js';
 import { z } from 'zod';
 
 async function resolveProject(app: FastifyInstance, projectId: string) {
@@ -176,8 +178,46 @@ export async function apiDynamicRoutes(app: FastifyInstance) {
     const project = await resolveProjectBySlug(projectSlug);
     if (!project) return reply.status(404).send({ error: 'Project not found' });
 
+    const isDisabled = await app.redis.get(`project_disabled:${project.id}`);
+    if (isDisabled) {
+      return reply.status(503).send({ error: 'Project is disabled', errorCode: 'PROJECT_DISABLED' });
+    }
+
     request.projectId = project.id;
     request.projectSchema = project.db_schema;
+
+    try {
+      let maxApiRequests = 0;
+      const quotaCacheKey = `project_quotas:${project.id}`;
+      let cachedQuota = await app.redis.get(quotaCacheKey);
+      if (!cachedQuota) {
+        const cpUrl = env.CONTROL_PLANE_URL;
+        if (cpUrl) {
+          try {
+            const res = await fetch(`${cpUrl}/internal/project-quotas/${project.id}`, {
+              headers: { 'x-node-api-key': env.NODE_API_KEY },
+              signal: AbortSignal.timeout(3000),
+            });
+            if (res.ok) {
+              const data = await res.json() as { quota: Record<string, number> };
+              cachedQuota = JSON.stringify(data.quota);
+              await app.redis.set(quotaCacheKey, cachedQuota, 'EX', 300);
+            }
+          } catch {}
+        }
+      }
+      if (cachedQuota) {
+        const quota = JSON.parse(cachedQuota);
+        maxApiRequests = quota.max_api_requests ?? 0;
+      }
+      if (maxApiRequests > 0) {
+        const blocked = await checkApiRequestQuota(app.redis, project.id, maxApiRequests);
+        if (blocked) {
+          reportQuotaViolation(project.id, '', 'quota.api_requests_exceeded', { limit: maxApiRequests, path: request.url });
+          return reply.status(429).send({ error: blocked, errorCode: 'QUOTA_API_REQUESTS' });
+        }
+      }
+    } catch {}
 
     try {
       const secRaw = await app.redis.get(`security:${project.id}`);

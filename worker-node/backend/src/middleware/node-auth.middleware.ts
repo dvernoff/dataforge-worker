@@ -29,6 +29,10 @@ export async function nodeAuthMiddleware(request: FastifyRequest, reply: Fastify
     concurrent: isSharedNode ? Number(request.headers['x-quota-concurrent'] || 10) : 0,
     maxRows: isSharedNode ? Number(request.headers['x-quota-max-rows'] || 1000) : 0,
     maxExport: isSharedNode ? Number(request.headers['x-quota-max-export'] || 10000) : 0,
+    maxRecords: isSharedNode ? Number(request.headers['x-quota-max-records'] || 0) : 0,
+    maxStorageMb: isSharedNode ? Number(request.headers['x-quota-max-storage-mb'] || 0) : 0,
+    maxApiRequests: isSharedNode ? Number(request.headers['x-quota-max-api-requests'] || 0) : 0,
+    backupsSizeMb: isSharedNode ? Number(request.headers['x-quota-backups-size-mb'] || 0) : 0,
   };
 
   const urlProjectId = (request.params as Record<string, string>)?.projectId;

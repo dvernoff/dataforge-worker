@@ -7,7 +7,7 @@ import { CacheService } from '../api-builder/cache.service.js';
 import { CacheInvalidationService } from '../api-builder/cache-invalidation.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
 import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
-import { getQuotaHelpers } from '../../middleware/quota-enforcement.middleware.js';
+import { getQuotaHelpers, checkRecordsQuota, checkStorageQuota, reportQuotaViolation } from '../../middleware/quota-enforcement.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
 import { validateIdentifier } from '../../utils/sql-guard.js';
 import { z } from 'zod';
@@ -77,11 +77,27 @@ export async function dataRoutes(app: FastifyInstance) {
     return { record };
   });
 
-  app.post('/:projectId/tables/:tableName/data', { preHandler: [requireWorkerRole('editor')] }, async (request) => {
+  app.post('/:projectId/tables/:tableName/data', { preHandler: [requireWorkerRole('editor')] }, async (request, reply) => {
     const { tableName } = request.params as { tableName: string };
     const projectId = resolveProjectId(request);
     const dbSchema = resolveProjectSchema(request);
     const body = request.body as Record<string, unknown>;
+
+    if (request.isSharedNode && request.quotas?.maxRecords > 0) {
+      const blocked = await checkRecordsQuota(app.redis, app.db, projectId, dbSchema, request.quotas.maxRecords);
+      if (blocked) {
+        reportQuotaViolation(projectId, request.userId, 'quota.records_exceeded', { limit: request.quotas.maxRecords, table: tableName });
+        return reply.status(429).send({ error: blocked, errorCode: 'QUOTA_EXCEEDED' });
+      }
+    }
+
+    if (request.isSharedNode && request.quotas?.maxStorageMb > 0) {
+      const blocked = await checkStorageQuota(app.redis, app.db, projectId, dbSchema, request.quotas.maxStorageMb, request.quotas.backupsSizeMb);
+      if (blocked) {
+        reportQuotaViolation(projectId, request.userId, 'quota.storage_exceeded', { limit: request.quotas.maxStorageMb });
+        return reply.status(429).send({ error: blocked, errorCode: 'QUOTA_EXCEEDED' });
+      }
+    }
 
     const validationErrors = await validationService.validateRecord(projectId, dbSchema, tableName, body);
     if (validationErrors.length > 0) {
@@ -172,12 +188,22 @@ export async function dataRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
-  app.post('/:projectId/tables/:tableName/import', { preHandler: [requireWorkerRole('editor')], bodyLimit: 100 * 1024 * 1024 }, async (request) => {
+  app.post('/:projectId/tables/:tableName/import', { preHandler: [requireWorkerRole('editor')], bodyLimit: 100 * 1024 * 1024 }, async (request, reply) => {
     const { tableName } = request.params as { tableName: string };
+    const projectId = resolveProjectId(request);
     const body = z.object({
       records: z.array(z.record(z.unknown())).min(1).max(50000),
     }).parse(request.body);
     const dbSchema = resolveProjectSchema(request);
+
+    if (request.isSharedNode && request.quotas?.maxRecords > 0) {
+      const blocked = await checkRecordsQuota(app.redis, app.db, projectId, dbSchema, request.quotas.maxRecords);
+      if (blocked) {
+        reportQuotaViolation(projectId, request.userId, 'quota.records_exceeded', { limit: request.quotas.maxRecords, table: tableName, importCount: body.records.length });
+        return reply.status(429).send({ error: blocked, errorCode: 'QUOTA_EXCEEDED' });
+      }
+    }
+
     const result = await dataService.importRecords(dbSchema, tableName, body.records);
     return result;
   });

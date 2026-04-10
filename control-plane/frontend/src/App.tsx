@@ -36,6 +36,10 @@ const SwaggerPage = lazy(() => import('@/pages/api-builder/SwaggerPage'), 'Swagg
 const GraphQLPage = lazy(() => import('@/pages/api-builder/GraphQLPage'), 'GraphQLPage');
 const APIPlaygroundPage = lazy(() => import('@/pages/api-builder/APIPlaygroundPage'), 'APIPlaygroundPage');
 
+// AI
+const AIDashboardPage = lazy(() => import('@/pages/ai/AIDashboardPage'), 'AIDashboardPage');
+const AIStudioPage = lazy(() => import('@/pages/ai/AIStudioPage'), 'AIStudioPage');
+
 // Integrations
 const DiscordWebhookPage = lazy(() => import('@/pages/integrations/DiscordWebhookPage'), 'DiscordWebhookPage');
 const TelegramBotPage = lazy(() => import('@/pages/integrations/TelegramBotPage'), 'TelegramBotPage');
@@ -178,6 +182,10 @@ export default function App() {
               <Route path="/projects/:slug/integrations/telegram" element={<S><TelegramBotPage /></S>} />
               <Route path="/projects/:slug/integrations/uptime" element={<S><UptimeMonitorPage /></S>} />
               <Route path="/projects/:slug/integrations/sbox-auth" element={<S><SboxAuthPage /></S>} />
+
+              {/* AI */}
+              <Route path="/projects/:slug/ai" element={<S><AIDashboardPage /></S>} />
+              <Route path="/projects/:slug/ai/studio" element={<S><AIStudioPage /></S>} />
 
               {/* Dashboards */}
               <Route path="/projects/:slug/dashboards" element={<S><DashboardsListPage /></S>} />

@@ -1,0 +1,215 @@
+{
+  "pageTitle": "AI Gateway",
+  "subtitle": "Connect any LLM to manage your project — create tables, endpoints, indexes, and more.",
+  "letAiManage": "Let AI manage your",
+  "fullDesc": "Connect any LLM to your DataForge project. Create, modify, and optimize your database schema and API endpoints through natural language.",
+  "backToAi": "AI Gateway",
+  "active": "Active",
+  "disabled": "Disabled",
+  "off": "OFF",
+
+  "rotating": {
+    "tables": "tables",
+    "endpoints": "endpoints",
+    "indexes": "indexes",
+    "schemas": "schemas",
+    "queries": "queries",
+    "foreignKeys": "foreign keys",
+    "caching": "caching",
+    "rateLimits": "rate limits"
+  },
+
+  "tabs": {
+    "rest": {
+      "label": "REST Gateway",
+      "desc": "Universal HTTP API",
+      "fullDesc": "Compatible with GPT, Claude, Codex, Gemini, and any LLM. Send HTTP requests to manage your project."
+    },
+    "mcp": {
+      "label": "MCP Server",
+      "desc": "Direct AI integration",
+      "fullDesc": "Model Context Protocol for Claude Code, Cursor, Claude Desktop. AI connects directly and manages your project."
+    },
+    "studio": {
+      "label": "AI Studio",
+      "desc": "Custom AI endpoints",
+      "fullDesc": "Create AI-powered endpoints with custom prompts, multiple providers, response validation, and conversation context."
+    }
+  },
+
+  "stats": {
+    "totalCalls": "Total calls",
+    "avgResponse": "Avg response",
+    "last24h": "Last 24h",
+    "totalOps": "Total AI operations",
+    "avgResponseTime": "Avg response time",
+    "last24hours": "Last 24 hours"
+  },
+
+  "tools": {
+    "title": "Available Tools",
+    "get_project_info": {
+      "name": "get_project_info",
+      "desc": "Learn about DataForge platform, its capabilities, and how to work with this project"
+    },
+    "get_schema_context": {
+      "name": "get_schema_context",
+      "desc": "Get the full project schema: all tables, columns, types, indexes, foreign keys, and API endpoints"
+    },
+    "create_table": {
+      "name": "create_table",
+      "desc": "Create a new database table with columns, UUID primary key, and timestamps"
+    },
+    "alter_columns": {
+      "name": "alter_columns",
+      "desc": "Modify table structure: add new columns, change types, rename, or drop existing columns"
+    },
+    "drop_table": {
+      "name": "drop_table",
+      "desc": "Delete a table with all its data, indexes, foreign keys, and associated endpoints"
+    },
+    "add_index": {
+      "name": "add_index",
+      "desc": "Create an index on columns to speed up queries. Supports btree, hash, gin, gist types"
+    },
+    "drop_index": {
+      "name": "drop_index",
+      "desc": "Remove an index by name when it's no longer needed or hurts write performance"
+    },
+    "add_foreign_key": {
+      "name": "add_foreign_key",
+      "desc": "Add a foreign key constraint to enforce referential integrity between tables"
+    },
+    "drop_foreign_key": {
+      "name": "drop_foreign_key",
+      "desc": "Remove a foreign key constraint by its name"
+    },
+    "create_endpoint": {
+      "name": "create_endpoint",
+      "desc": "Create an API endpoint — table-based CRUD or custom SQL with parameters, auth, caching"
+    },
+    "update_endpoint": {
+      "name": "update_endpoint",
+      "desc": "Update an existing endpoint's query, auth type, cache settings, rate limits"
+    },
+    "delete_endpoint": {
+      "name": "delete_endpoint",
+      "desc": "Remove an API endpoint permanently"
+    },
+    "execute_sql": {
+      "name": "execute_sql",
+      "desc": "Run read-only SQL (SELECT/EXPLAIN/WITH) for data analysis, debugging, and optimization"
+    }
+  },
+
+  "activity": {
+    "title": "Recent Activity",
+    "noActivity": "No activity yet"
+  },
+
+  "setup": {
+    "title": "Setup Guide",
+    "restTitle": "REST Gateway Setup",
+    "mcpTitle": "MCP Server Setup",
+
+    "step1title": "Create an API token",
+    "step1desc": "Go to Settings → API Tokens → Create a token with admin permissions.",
+
+    "step2restTitle": "Send this to your AI",
+    "step2restDesc": "Copy the text below and paste it to your AI (ChatGPT, Claude, etc.):",
+    "step2restPrompt": "I want you to manage my DataForge database project via REST API.\n\nBase URL: {{url}}\nAuth header: x-api-key: YOUR_TOKEN_HERE\n\nAvailable endpoints:\n- GET /info — learn about DataForge platform, capabilities, data types, best practices\n- GET /context — get full project schema (tables, columns, indexes, foreign keys, endpoints)\n- POST /tables — create table (body: {name, columns[], add_uuid_pk, add_timestamps})\n- PUT /tables/:name/columns — alter columns (body: {changes: [{action: add|alter|drop|rename, name, ...}]})\n- DELETE /tables/:name — drop table with all data and endpoints\n- POST /tables/:name/indexes — add index (body: {columns[], type: btree|hash|gin|gist, is_unique})\n- DELETE /tables/:name/indexes/:indexName — drop index\n- POST /tables/:name/foreign-keys — add FK (body: {source_column, target_table, target_column, on_delete, on_update})\n- DELETE /tables/:name/foreign-keys/:constraintName — drop FK\n- POST /endpoints — create API endpoint (body: {method, path, source_type, source_config, auth_type, cache_enabled, cache_ttl, rate_limit})\n- PUT /endpoints/:id — update endpoint\n- DELETE /endpoints/:id — delete endpoint\n- POST /execute-sql — run read-only SQL (body: {query})\n\nStart by calling GET /info to learn about the platform, then GET /context to see the current schema.",
+
+    "step2mcpTitle": "Add MCP config to your AI client",
+    "step2mcpDesc": "Copy this JSON and add it to your AI client's MCP settings:",
+    "step2mcpClients": "Supported clients: Claude Code, Claude Desktop, Cursor, Windsurf, VS Code",
+
+    "step3title": "Test the connection",
+    "step3restDesc": "Run this command to verify:",
+    "step3mcpDesc": "Ask your AI: \"Get the schema of my DataForge project\"",
+
+    "waitingTitle": "Waiting for first connection...",
+    "waitingDesc": "Activity will appear here once your AI makes the first request",
+
+    "copied": "Copied to clipboard"
+  },
+
+  "plugins": {
+    "restName": "AI REST Gateway",
+    "restDesc": "Universal REST API for any LLM — GPT, Claude, Codex, Gemini, local models.",
+    "mcpName": "AI MCP Server",
+    "mcpDesc": "Direct integration via MCP protocol — Claude Code, Cursor, Claude Desktop.",
+    "studioName": "AI Studio",
+    "studioDesc": "Create AI-powered endpoints with custom prompts, response validation, and conversation context."
+  },
+
+  "studio": {
+    "pageTitle": "AI Studio",
+    "noEndpoints": "No endpoints",
+    "selectEndpoint": "Select an endpoint or create a new one",
+    "newEndpoint": "New AI Endpoint",
+    "editEndpoint": "Edit Endpoint",
+    "deleteTitle": "Delete endpoint",
+    "deleteDesc": "This will permanently delete this AI endpoint, all its logs and context sessions.",
+    "endpointCreated": "Endpoint created",
+    "endpointUpdated": "Endpoint updated",
+    "endpointDeleted": "Endpoint deleted",
+
+    "stats": {
+      "totalCalls": "Calls (24h)",
+      "avgResponse": "Avg response",
+      "totalTokens": "Total tokens",
+      "endpoints": "Endpoints"
+    },
+
+    "tabs": {
+      "test": "Test",
+      "config": "Config",
+      "logs": "Logs"
+    },
+
+    "test": {
+      "placeholder": "Type a message to test...",
+      "send": "Send",
+      "tokens": "tokens",
+      "attempts": "attempts"
+    },
+
+    "config": {
+      "systemPrompt": "System Prompt",
+      "temperature": "Temperature",
+      "maxTokens": "Max Tokens",
+      "context": "Context",
+      "contextEnabled": "Enabled ({{ttl}}m TTL)",
+      "contextDisabled": "Disabled",
+      "retry": "Retry",
+      "retryEnabled": "Up to {{max}} retries",
+      "retryDisabled": "Disabled",
+      "responseFormat": "Response Format"
+    },
+
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "e.g. moderate-chat",
+      "provider": "Provider",
+      "model": "Model",
+      "systemPrompt": "System Prompt",
+      "systemPromptPlaceholder": "Example prompt structure:\n\nROLE:\nYou are [role]. Your task is [task].\n\nINPUT FORMAT:\nYou will receive [what kind of data].\n\nRESPONSE FORMAT (JSON only, nothing else):\n{\n  \"result\": true/false,\n  \"category\": \"category name\" or null,\n  \"reason\": \"short explanation\"\n}\n\nRULES:\n1. [Rule one]\n2. [Rule two]\n3. ...\n\nIMPORTANT:\n- Respond ONLY with valid JSON\n- If unclear — return negative result\n- [Other edge cases]",
+      "temperature": "Temperature",
+      "maxTokens": "Max Tokens",
+      "contextLabel": "Context (conversation history)",
+      "contextDesc": "Store message history per session",
+      "contextTtl": "Context TTL (minutes)",
+      "retryLabel": "Retry on invalid response",
+      "retryDesc": "Re-ask AI if response fails validation",
+      "save": "Save",
+      "create": "Create"
+    },
+
+    "logs": {
+      "noLogs": "No logs yet",
+      "tokens": "tok"
+    },
+    "category": "AI Gateway",
+    "tabTitle": "AI"
+  }
+}

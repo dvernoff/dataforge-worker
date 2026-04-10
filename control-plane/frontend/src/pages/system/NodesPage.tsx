@@ -18,6 +18,11 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { toast } from 'sonner';
 import type { WorkerNode } from '@shared/types/node.types';
 
+function formatDbSize(mb: number): string {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+  return `${Math.round(mb)} MB`;
+}
+
 const TRANSLIT_MAP: Record<string, string> = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'zh', з: 'z',
   и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r',
@@ -157,6 +162,20 @@ export function NodesPage() {
     },
   });
 
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (type: 'system' | 'personal') => nodesApi.bulkUpdate(type),
+    onSuccess: (res, type) => {
+      queryClient.invalidateQueries({ queryKey: ['nodes'] });
+      if (res.triggered.length > 0) {
+        setIsUpdating(true);
+        toast.success(t('bulkUpdate.triggered', { count: res.triggered.length }));
+      } else {
+        toast.info(t('bulkUpdate.noNodes'));
+      }
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   useEffect(() => {
     if (updateStep !== 'progress') return;
     progressTimer.current = setInterval(() => {
@@ -281,6 +300,18 @@ export function NodesPage() {
             <span className="text-xs text-muted-foreground w-10 text-right">{node.disk_usage}%</span>
           </div>
         </TableCell>
+        <TableCell>
+          {(node.db_size_mb ?? 0) > 0 ? (
+            <div className="text-sm" title={`${t('dbStats.projects')}: ${formatDbSize(node.db_projects_size_mb ?? 0)} / ${t('dbStats.system')}: ${formatDbSize(node.db_system_size_mb ?? 0)}`}>
+              <span className="font-medium">{formatDbSize(node.db_size_mb!)}</span>
+              <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                {formatDbSize(node.db_projects_size_mb ?? 0)} / {formatDbSize(node.db_system_size_mb ?? 0)}
+              </div>
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">-</span>
+          )}
+        </TableCell>
         <TableCell className="text-sm font-mono">
           <div className="flex items-center gap-1.5">
             <span>{node.current_version || '-'}</span>
@@ -371,7 +402,24 @@ export function NodesPage() {
         <div className="space-y-6">
           {/* System Nodes */}
           <div>
-            <h2 className="text-lg font-semibold mb-3">{t('systemNodes')}</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold">{t('systemNodes')}</h2>
+              {latestWorkerVersion && systemNodes.some((n) => n.status === 'online' && n.current_version && n.current_version !== latestWorkerVersion && n.update_status !== 'updating') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => bulkUpdateMutation.mutate('system')}
+                  disabled={bulkUpdateMutation.isPending}
+                >
+                  {bulkUpdateMutation.isPending && bulkUpdateMutation.variables === 'system' ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2 text-orange-500" />
+                  )}
+                  {t('bulkUpdate.system')}
+                </Button>
+              )}
+            </div>
             <Card>
               <Table>
                 <TableHeader>
@@ -384,6 +432,7 @@ export function NodesPage() {
                     <TableHead>{t('headers.cpu')}</TableHead>
                     <TableHead>{t('headers.ram')}</TableHead>
                     <TableHead>{t('headers.disk')}</TableHead>
+                    <TableHead>{t('headers.db')}</TableHead>
                     <TableHead>{t('headers.version')}</TableHead>
                     <TableHead>{t('headers.lastHeartbeat')}</TableHead>
                     <TableHead className="w-36" />
@@ -392,7 +441,7 @@ export function NodesPage() {
                 <TableBody>
                   {systemNodes.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">{t('noSystemNodes')}</TableCell>
+                      <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">{t('noSystemNodes')}</TableCell>
                     </TableRow>
                   ) : systemNodes.map(renderNodeRow)}
                 </TableBody>
@@ -403,7 +452,24 @@ export function NodesPage() {
           {/* User Nodes */}
           {userNodes.length > 0 && (
             <div>
-              <h2 className="text-lg font-semibold mb-3">{t('userNodes')}</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold">{t('userNodes')}</h2>
+                {latestWorkerVersion && userNodes.some((n) => n.status === 'online' && n.current_version && n.current_version !== latestWorkerVersion && n.update_status !== 'updating') && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => bulkUpdateMutation.mutate('personal')}
+                    disabled={bulkUpdateMutation.isPending}
+                  >
+                    {bulkUpdateMutation.isPending && bulkUpdateMutation.variables === 'personal' ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2 text-orange-500" />
+                    )}
+                    {t('bulkUpdate.personal')}
+                  </Button>
+                )}
+              </div>
               <Card>
                 <Table>
                   <TableHeader>

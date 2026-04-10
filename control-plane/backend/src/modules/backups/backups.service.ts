@@ -93,7 +93,13 @@ export class BackupsService {
         throw new Error(`Worker returned ${result.status}: ${JSON.stringify(result.body)}`);
       }
 
-      const exportData = result.body as { tables: string[]; data: Record<string, unknown[]>; exportedAt: string };
+      const exportData = result.body as {
+        version?: number;
+        tables: string[];
+        data: Record<string, unknown[]>;
+        systemTables?: Record<string, unknown[]>;
+        exportedAt: string;
+      };
 
       const jsonStr = JSON.stringify(exportData);
       const compressed = zlib.gzipSync(jsonStr);
@@ -103,6 +109,7 @@ export class BackupsService {
       fs.writeFileSync(filePath, compressed);
 
       const fileSize = compressed.length;
+      const systemTableNames = exportData.systemTables ? Object.keys(exportData.systemTables) : [];
 
       await this.db('backups')
         .where({ id: backup.id })
@@ -110,11 +117,15 @@ export class BackupsService {
           status: 'completed',
           file_path: filePath,
           file_size: fileSize,
-          metadata: JSON.stringify({ tables: exportData.tables }),
+          metadata: JSON.stringify({
+            tables: exportData.tables,
+            version: exportData.version ?? 1,
+            systemTables: systemTableNames,
+          }),
           completed_at: this.db.fn.now(),
         });
 
-      return { ...backup, status: 'completed', file_path: filePath, file_size: fileSize, metadata: JSON.stringify({ tables: exportData.tables }) };
+      return { ...backup, status: 'completed', file_path: filePath, file_size: fileSize };
     } catch (err: any) {
       await this.db('backups')
         .where({ id: backup.id })
@@ -209,6 +220,13 @@ export class BackupsService {
     const data: Record<string, any[]> = parsed.data ?? parsed;
     const schema = parsed.schema ?? undefined;
 
+    const restorePayload: Record<string, any> = { data, schema };
+    if (parsed.version) restorePayload.version = parsed.version;
+    if (parsed.indexes) restorePayload.indexes = parsed.indexes;
+    if (parsed.constraints) restorePayload.constraints = parsed.constraints;
+    if (parsed.checkDefs) restorePayload.checkDefs = parsed.checkDefs;
+    if (parsed.systemTables) restorePayload.systemTables = parsed.systemTables;
+
     const worker = await this.proxyService.getWorkerForProject(projectId);
     const workerPath = `/api/projects/${projectId}/backups/restore-data`;
 
@@ -218,7 +236,7 @@ export class BackupsService {
       'POST',
       workerPath,
       { 'content-type': 'application/json', 'x-user-role': 'admin' },
-      { data, schema },
+      restorePayload,
       projectId,
       worker.schema,
     );

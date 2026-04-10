@@ -13,6 +13,12 @@ export class ConsoleService {
       if (!normalized.startsWith('SELECT') && !normalized.startsWith('EXPLAIN') && !normalized.startsWith('WITH')) {
         throw new AppError(403, 'Your role only allows SELECT queries');
       }
+      if (normalized.startsWith('WITH')) {
+        const dangerousPattern = /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE)\b/i;
+        if (dangerousPattern.test(query)) {
+          throw new AppError(403, 'Your role only allows SELECT queries (WITH clause cannot contain mutations)');
+        }
+      }
     }
 
     validateSchemaAccess(query, schema);

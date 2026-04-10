@@ -279,6 +279,7 @@
     "tabVisual": "Visual",
     "tabYaml": "YAML"
   },
+  "editYaml": "Edit YAML",
   "importSchema": "Import Schema",
   "yamlImport": {
     "title": "Import Schema (YAML)",
@@ -297,6 +298,16 @@
     "addingIndexes": "Adding indexes...",
     "success": "All objects created successfully!",
     "partialSuccess": "Completed with some errors",
-    "tablesCreatedCount": "{{count}} table(s) created"
+    "tablesCreatedCount": "{{count}} table(s) created",
+    "existingTables": "{{count}} existing table(s) detected",
+    "newColumnsCount": "{{count}} new column(s)",
+    "newIndexesCount": "{{count}} new index(es)",
+    "newFksCount": "{{count}} new FK(s)",
+    "typeMismatch": "Type mismatch: {{column}} is {{dbType}} in DB, {{yamlType}} in YAML",
+    "removedColumn": "Column {{column}} exists in DB but not in YAML (won't be deleted)",
+    "addingColumns": "Adding columns to {{name}}...",
+    "columnsAddedCount": "{{count}} column(s) added to existing tables",
+    "tableExists": "Exists",
+    "tableNew": "New"
   }
 }

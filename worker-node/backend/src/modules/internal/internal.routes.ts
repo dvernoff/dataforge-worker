@@ -108,7 +108,7 @@ export async function internalRoutes(app: FastifyInstance) {
 
     try { await app.db('saved_queries').where({ project_id: projectId }).del(); } catch {}
 
-    try { await app.db('comments').where({ project_id: projectId }).del(); } catch {}
+    try { await app.db('record_comments').where({ project_id: projectId }).del(); } catch {}
 
     try { await app.db('api_tokens_cache').where({ project_id: projectId }).del(); } catch {}
 
@@ -149,6 +149,23 @@ export async function internalRoutes(app: FastifyInstance) {
     } catch {}
 
     return reply.status(204).send();
+  });
+
+  app.post('/projects/:projectId/toggle', async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    const body = z.object({ is_active: z.boolean() }).parse(request.body);
+
+    const cronService = (app as unknown as Record<string, any>).cronService;
+
+    if (!body.is_active) {
+      if (cronService) await cronService.stopByProject(projectId);
+      await app.redis.set(`project_disabled:${projectId}`, '1');
+    } else {
+      if (cronService) await cronService.startByProject(projectId);
+      await app.redis.del(`project_disabled:${projectId}`);
+    }
+
+    return { success: true };
   });
 
   app.get('/projects/:projectId/usage', async (request) => {
@@ -210,6 +227,24 @@ export async function internalRoutes(app: FastifyInstance) {
     let webhooksCount = 0;
     try { webhooksCount = Number((await app.db('webhooks').where({ project_id: projectId }).count('id as count').first())?.count ?? 0); } catch {}
 
+    let discordWebhooksCount = 0;
+    try {
+      const has = await app.db.schema.hasTable('discord_webhooks');
+      if (has) discordWebhooksCount = Number((await app.db('discord_webhooks').where({ project_id: projectId }).count('id as count').first())?.count ?? 0);
+    } catch {}
+
+    let telegramBotsCount = 0;
+    try {
+      const has = await app.db.schema.hasTable('telegram_notifications');
+      if (has) telegramBotsCount = Number((await app.db('telegram_notifications').where({ project_id: projectId }).count('id as count').first())?.count ?? 0);
+    } catch {}
+
+    let uptimeMonitorsCount = 0;
+    try {
+      const has = await app.db.schema.hasTable('uptime_monitors');
+      if (has) uptimeMonitorsCount = Number((await app.db('uptime_monitors').where({ project_id: projectId }).count('id as count').first())?.count ?? 0);
+    } catch {}
+
     return {
       tables: tablesCount,
       records: recordsCount,
@@ -218,6 +253,9 @@ export async function internalRoutes(app: FastifyInstance) {
       cron: cronCount,
       endpoints: endpointsCount,
       webhooks: webhooksCount,
+      discord_webhooks: discordWebhooksCount,
+      telegram_bots: telegramBotsCount,
+      uptime_monitors: uptimeMonitorsCount,
     };
   });
 

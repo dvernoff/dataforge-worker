@@ -4,6 +4,7 @@ import { FilesService } from './files.service.js';
 import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
 import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
 import { AppError } from '../../middleware/error-handler.js';
+import { checkStorageQuota, reportQuotaViolation } from '../../middleware/quota-enforcement.middleware.js';
 
 export async function filesRoutes(app: FastifyInstance) {
   await app.register(multipart, {
@@ -17,8 +18,17 @@ export async function filesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', nodeAuthMiddleware);
   app.addHook('preHandler', requireWorkerRole('viewer'));
 
-  app.post('/:projectId/files/upload', async (request) => {
+  app.post('/:projectId/files/upload', async (request, reply) => {
     const { projectId } = request.params as { projectId: string };
+
+    if (request.isSharedNode && request.quotas?.maxStorageMb > 0) {
+      const dbSchema = request.projectSchema;
+      const blocked = await checkStorageQuota(app.redis, app.db, projectId, dbSchema, request.quotas.maxStorageMb, request.quotas.backupsSizeMb);
+      if (blocked) {
+        reportQuotaViolation(projectId, request.userId, 'quota.storage_exceeded', { limit: request.quotas.maxStorageMb });
+        return reply.status(429).send({ error: blocked, errorCode: 'QUOTA_EXCEEDED' });
+      }
+    }
 
     const data = await request.file();
     if (!data) {

@@ -33,6 +33,11 @@ import { discordWebhookRoutes } from './modules/plugins/built-in/discord-webhook
 import { telegramBotRoutes } from './modules/plugins/built-in/telegram-bot/telegram-bot.routes.js';
 import { uptimeMonitorRoutes } from './modules/plugins/built-in/uptime-ping/uptime-ping.routes.js';
 import { UptimeScheduler } from './modules/plugins/built-in/uptime-ping/uptime-scheduler.js';
+import { aiRestGatewayRoutes } from './modules/ai-gateway/rest-gateway.routes.js';
+import { aiMcpServerRoutes } from './modules/ai-gateway/mcp-server.routes.js';
+import { aiManagementRoutes } from './modules/ai-gateway/ai-management.routes.js';
+import { aiStudioRoutes } from './modules/ai-studio/ai-studio.routes.js';
+import { aiStudioPublicRoutes } from './modules/ai-studio/ai-studio.public.js';
 
 import fastifyWebsocket from '@fastify/websocket';
 import { websocketRoutes } from './modules/realtime/websocket.service.js';
@@ -99,6 +104,12 @@ await app.register(openapiRoutes);
 
 await app.register(sboxAuthRoutes, { prefix: '/api/v1' });
 await app.register(sboxAuthManagementRoutes, { prefix: '/api/projects' });
+
+await app.register(aiRestGatewayRoutes);
+await app.register(aiMcpServerRoutes);
+await app.register(aiManagementRoutes, { prefix: '/api/projects' });
+await app.register(aiStudioRoutes, { prefix: '/api/projects' });
+await app.register(aiStudioPublicRoutes);
 
 
 registerRequestLogger(app);
@@ -180,9 +191,10 @@ app.get('/api/health', async () => {
   };
 });
 
-const heartbeat = new HeartbeatService();
+const heartbeat = new HeartbeatService(app.db);
 
 const cronService = new CronService(app.db);
+(app as unknown as Record<string, unknown>).cronService = cronService;
 const uptimeScheduler = new UptimeScheduler(app.db);
 (app as unknown as Record<string, unknown>).uptimeScheduler = uptimeScheduler;
 
@@ -208,19 +220,15 @@ const cleanupInterval = setInterval(async () => {
     const auditCutoffISO = auditCutoff.toISOString();
 
     try { await app.db('api_request_logs').where('created_at', '<', requestCutoffISO).del(); } catch {}
+    try { await app.db('api_request_stats').where('hour', '<', requestCutoffISO).del(); } catch {}
     try { await app.db('webhook_logs').where('sent_at', '<', requestCutoffISO).del(); } catch {}
     try { await app.db('cron_job_runs').where('started_at', '<', requestCutoffISO).del(); } catch {}
-    try { await app.db('flow_runs').where('started_at', '<', requestCutoffISO).del(); } catch {}
 
-    try {
-      const hasAudit = await app.db.schema.hasTable('audit_logs');
-      if (hasAudit) {
-        await app.db('audit_logs').where('created_at', '<', auditCutoffISO).del();
-      }
-    } catch {}
-
+    try { await app.db('record_comments').where('created_at', '<', auditCutoffISO).del(); } catch {}
     try { await app.db('data_history').where('created_at', '<', auditCutoffISO).del(); } catch {}
-    try { await app.db('comments').where('created_at', '<', auditCutoffISO).del(); } catch {}
+    try { await app.db('schema_versions').where('created_at', '<', auditCutoffISO).del(); } catch {}
+    try { await app.db('api_tokens_cache').where('expires_at', '<', new Date().toISOString()).del(); } catch {}
+    try { await app.db('ai_gateway_logs').where('created_at', '<', requestCutoffISO).del(); } catch {}
   } catch {}
 }, 60 * 60 * 1000);
 

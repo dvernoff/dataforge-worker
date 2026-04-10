@@ -32,6 +32,12 @@ export const projectsApi = {
   delete: (id: string) =>
     api.delete(`/projects/${id}`),
 
+  disable: (id: string, slug: string, reason?: string) =>
+    api.post<ProjectResponse>(`/projects/${id}/disable`, { slug, reason }),
+
+  enable: (id: string) =>
+    api.post<ProjectResponse>(`/projects/${id}/enable`),
+
   getMembers: (projectId: string) =>
     api.get<MembersResponse>(`/projects/${projectId}/members`),
 

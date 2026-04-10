@@ -112,6 +112,48 @@ export async function nodesRoutes(app: FastifyInstance) {
     return result;
   });
 
+  // POST /api/nodes/bulk-update — trigger update on all nodes of a type (superadmin)
+  app.post('/bulk-update', {
+    preHandler: [authMiddleware, requireSuperadmin()],
+  }, async (request) => {
+    const { type } = z.object({ type: z.enum(['system', 'personal']) }).parse(request.body);
+    await nodesService.ensurePersonalNodeColumns();
+    const allNodes = await app.db('nodes')
+      .where('status', 'online')
+      .where(function () {
+        if (type === 'system') {
+          this.whereNull('owner_id');
+        } else {
+          this.whereNotNull('owner_id');
+        }
+      })
+      .select('id', 'name', 'update_status');
+
+    const triggered: string[] = [];
+    const skipped: string[] = [];
+
+    for (const node of allNodes) {
+      if (node.update_status === 'updating') {
+        skipped.push(node.id);
+        continue;
+      }
+      try {
+        await nodesService.triggerUpdate(node.id);
+        triggered.push(node.id);
+      } catch {
+        skipped.push(node.id);
+      }
+    }
+
+    logAudit(request, 'node.bulk_update', 'node', undefined, {
+      type,
+      triggered: triggered.length,
+      skipped: skipped.length,
+    });
+
+    return { triggered, skipped };
+  });
+
   // DELETE /api/nodes/:nodeId (soft delete — sets status to offline)
   app.delete('/:nodeId', {
     preHandler: [authMiddleware, requireSuperadmin()],

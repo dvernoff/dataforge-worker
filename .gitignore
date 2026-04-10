@@ -10,6 +10,7 @@ logs/
 Thumbs.db
 .idea/
 .vscode/
+.mcp.json
 coverage/
 tmp/
 .pid-*

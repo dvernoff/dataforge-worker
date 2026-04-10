@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import {
   Puzzle, Settings, Clock, Webhook, Play, Braces, Radio,
   Archive, Lock, LayoutDashboard, Kanban, CalendarDays, Image,
-  Map, Search, BarChart3, Zap, Code, Terminal,
+  Map, Search, BarChart3, Zap, Code, Terminal, Sparkles, Cpu, Wand2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,9 @@ const ICON_MAP: Record<string, typeof Puzzle> = {
   'bar-chart-3': BarChart3,
   'zap': Zap,
   'code': Code,
+  'sparkles': Sparkles,
+  'cpu': Cpu,
+  'wand-2': Wand2,
 };
 
 interface ModulePlugin {
@@ -78,6 +81,12 @@ const VIEWS: ViewPlugin[] = [
   { id: 'feature-analytics', name: 'Analytics', icon: 'bar-chart-3', default_enabled: true },
   { id: 'feature-api-playground', name: 'API Playground', icon: 'play', default_enabled: false },
   { id: 'feature-sdk', name: 'SDK', icon: 'code', default_enabled: false },
+];
+
+const AI_PLUGINS: ModulePlugin[] = [
+  { id: 'ai-rest-gateway', name: 'AI REST Gateway', icon: 'sparkles', default_enabled: false },
+  { id: 'ai-mcp-server', name: 'AI MCP Server', icon: 'cpu', default_enabled: false },
+  { id: 'ai-studio', name: 'AI Studio', icon: 'wand-2', default_enabled: false, configurable: true },
 ];
 
 const CONFIGURABLE_ROUTES: Record<string, string> = {
@@ -152,6 +161,8 @@ export function PluginsPage() {
       pluginsApi.enable(project!.id, pluginId, settings),
     onSuccess: async () => {
       await refreshFeatures();
+      queryClient.invalidateQueries({ queryKey: ['ai-gateway-status'] });
+      queryClient.invalidateQueries({ queryKey: ['features'] });
       toast.success(t('plugins:pluginEnabled'));
       setSelectedPlugin(null);
     },
@@ -162,6 +173,8 @@ export function PluginsPage() {
     mutationFn: (pluginId: string) => pluginsApi.disable(project!.id, pluginId),
     onSuccess: async () => {
       await refreshFeatures();
+      queryClient.invalidateQueries({ queryKey: ['ai-gateway-status'] });
+      queryClient.invalidateQueries({ queryKey: ['features'] });
       toast.success(t('plugins:pluginDisabled'));
     },
     onError: (err: Error) => toast.error(err.message),
@@ -179,7 +192,8 @@ export function PluginsPage() {
   });
 
   const plugins = (data?.plugins ?? []) as PluginData[];
-  const workerPlugins = plugins.filter((p) => p.runtime === 'worker');
+  const AI_PLUGIN_IDS = new Set(AI_PLUGINS.map(p => p.id));
+  const workerPlugins = plugins.filter((p) => p.runtime === 'worker' && !AI_PLUGIN_IDS.has(String(p.id)));
 
   function getSettingDefs(plugin: PluginData): PluginSettingDef[] {
     if (Array.isArray(plugin.settings)) return plugin.settings;
@@ -225,6 +239,17 @@ export function PluginsPage() {
     setFeatureEnabled(mod.id, !enabled);
   }
 
+  function handleToggleAiPlugin(mod: ModulePlugin) {
+    const enabled = isFeatureEnabled(mod.id);
+    if (enabled) {
+      setFeatureEnabled(mod.id, false);
+      disableMutation.mutate(mod.id);
+    } else {
+      setFeatureEnabled(mod.id, true);
+      enableMutation.mutate({ pluginId: mod.id, settings: {} });
+    }
+  }
+
   function handleToggleView(view: ViewPlugin) {
     const enabled = isFeatureEnabled(view.id);
     setFeatureEnabled(view.id, !enabled);
@@ -241,6 +266,10 @@ export function PluginsPage() {
           <TabsTrigger value="views">{t('plugins:tabs.views')}</TabsTrigger>
           <TabsTrigger value="modules">{t('plugins:tabs.modules')}</TabsTrigger>
           <TabsTrigger value="integrations">{t('plugins:tabs.integrations')}</TabsTrigger>
+          <TabsTrigger value="ai" className="gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" />
+            AI
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="modules">
@@ -400,6 +429,44 @@ export function PluginsPage() {
                           {enabled ? t('plugins:enabled') : t('plugins:disabled')}
                         </Badge>
                       </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </TabsContent>
+
+        <TabsContent value="ai">
+          <div className="mb-4">
+            <p className="text-sm text-muted-foreground">{t('ai:subtitle')}</p>
+          </div>
+          <motion.div variants={staggerContainer} initial={false} animate="animate" className="columns-1 md:columns-2 gap-4 [&>*]:mb-4 [&>*]:break-inside-avoid">
+            {AI_PLUGINS.map((mod) => {
+              const Icon = ICON_MAP[mod.icon] ?? Puzzle;
+              const enabled = isFeatureEnabled(mod.id);
+              return (
+                <motion.div key={mod.id} variants={staggerItem}>
+                  <Card className={enabled ? 'border-purple-500/30 bg-purple-500/5' : ''}>
+                    <CardContent>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                            <Icon className="h-5 w-5 text-purple-500" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium">{t(`ai:plugins.${mod.id === 'ai-rest-gateway' ? 'restName' : mod.id === 'ai-mcp-server' ? 'mcpName' : 'studioName'}`)}</h3>
+                            <p className="text-xs text-muted-foreground">{t('ai:plugins.category')}</p>
+                          </div>
+                        </div>
+                        <Switch checked={enabled} onCheckedChange={() => handleToggleAiPlugin(mod)} />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {t(`ai:plugins.${mod.id === 'ai-rest-gateway' ? 'restDesc' : mod.id === 'ai-mcp-server' ? 'mcpDesc' : 'studioDesc'}`)}
+                      </p>
+                      {enabled && (
+                        <Badge variant="outline" className="mt-2 text-[10px] border-purple-500/30 text-purple-500">{t('ai:active')}</Badge>
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>

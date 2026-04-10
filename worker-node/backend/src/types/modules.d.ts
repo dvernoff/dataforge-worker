@@ -10,6 +10,10 @@ declare module 'fastify' {
       concurrent: number;
       maxRows: number;
       maxExport: number;
+      maxRecords: number;
+      maxStorageMb: number;
+      maxApiRequests: number;
+      backupsSizeMb: number;
     };
   }
 }

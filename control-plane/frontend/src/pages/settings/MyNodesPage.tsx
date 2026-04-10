@@ -35,6 +35,9 @@ interface PersonalNode {
   disk_usage: number;
   disk_total_gb?: number;
   disk_free_gb?: number;
+  db_size_mb?: number;
+  db_projects_size_mb?: number;
+  db_system_size_mb?: number;
   current_version?: string;
   update_mode?: string;
   update_status?: 'idle' | 'updating' | 'failed';
@@ -463,6 +466,17 @@ export function MyNodesPage() {
                               : `${node.disk_usage}%`}
                           </span>
                         </div>
+                        {(node.db_size_mb ?? 0) > 0 && (
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-muted-foreground w-8">DB</span>
+                            <span className="text-xs">
+                              {node.db_size_mb! >= 1024 ? `${(node.db_size_mb! / 1024).toFixed(1)} GB` : `${Math.round(node.db_size_mb!)} MB`}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              ({node.db_projects_size_mb! >= 1024 ? `${(node.db_projects_size_mb! / 1024).toFixed(1)} GB` : `${Math.round(node.db_projects_size_mb ?? 0)} MB`} / {node.db_system_size_mb! >= 1024 ? `${(node.db_system_size_mb! / 1024).toFixed(1)} GB` : `${Math.round(node.db_system_size_mb ?? 0)} MB`})
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

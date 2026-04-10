@@ -163,6 +163,20 @@ export class CronService {
     console.log(`[CronService] Started ${activeJobs.length} active cron jobs`);
   }
 
+  async stopByProject(projectId: string) {
+    const jobs = await this.db('cron_jobs').where({ project_id: projectId, is_active: true }).select('id');
+    for (const job of jobs) {
+      this.stop(job.id);
+    }
+  }
+
+  async startByProject(projectId: string) {
+    const jobs = await this.db('cron_jobs').where({ project_id: projectId, is_active: true });
+    for (const job of jobs) {
+      this.scheduleJob(job);
+    }
+  }
+
   stopAll() {
     for (const [id, task] of this.scheduledJobs) {
       task.stop();
@@ -280,6 +294,12 @@ export class CronService {
     for (const keyword of blockedKeywords) {
       if (normalized.includes(keyword)) {
         throw new Error(`DDL statements (${keyword.trim()}) are not allowed in cron jobs`);
+      }
+    }
+    if (normalized.startsWith('WITH')) {
+      const mutationPattern = /\b(INSERT|UPDATE|DELETE)\b/i;
+      if (mutationPattern.test(cleaned)) {
+        throw new Error('WITH clause cannot contain mutations (INSERT/UPDATE/DELETE) in cron jobs');
       }
     }
 

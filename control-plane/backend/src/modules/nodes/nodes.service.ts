@@ -29,6 +29,9 @@ export interface HeartbeatPayload {
   disk_free_gb?: number;
   active_projects?: number;
   current_version?: string;
+  db_size_mb?: number;
+  db_projects_size_mb?: number;
+  db_system_size_mb?: number;
 }
 
 export class NodesService {
@@ -67,6 +70,15 @@ export class NodesService {
     if (!hasEncryptedKey) {
       await this.db.schema.alterTable('nodes', (t) => {
         t.text('api_key_encrypted').nullable();
+      });
+    }
+    // Add database size metrics columns
+    const hasDbSize = await this.db.schema.hasColumn('nodes', 'db_size_mb');
+    if (!hasDbSize) {
+      await this.db.schema.alterTable('nodes', (t) => {
+        t.float('db_size_mb').defaultTo(0);
+        t.float('db_projects_size_mb').defaultTo(0);
+        t.float('db_system_size_mb').defaultTo(0);
       });
     }
   }
@@ -293,6 +305,9 @@ export class NodesService {
     };
     if (payload.disk_total_gb !== undefined) updateData.disk_total_gb = payload.disk_total_gb;
     if (payload.disk_free_gb !== undefined) updateData.disk_free_gb = payload.disk_free_gb;
+    if (payload.db_size_mb !== undefined) updateData.db_size_mb = payload.db_size_mb;
+    if (payload.db_projects_size_mb !== undefined) updateData.db_projects_size_mb = payload.db_projects_size_mb;
+    if (payload.db_system_size_mb !== undefined) updateData.db_system_size_mb = payload.db_system_size_mb;
 
     if (payload.current_version) {
       const currentNode = await this.db('nodes').where({ id: nodeId }).select('current_version', 'update_status', 'updated_at').first();

@@ -36,4 +36,7 @@ export const nodesApi = {
 
   triggerPersonalUpdate: (nodeId: string) =>
     api.post<{ status: string }>(`/nodes/personal/${nodeId}/update`),
+
+  bulkUpdate: (type: 'system' | 'personal') =>
+    api.post<{ triggered: string[]; skipped: string[] }>('/nodes/bulk-update', { type }),
 };

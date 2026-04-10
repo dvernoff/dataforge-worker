@@ -279,6 +279,7 @@
     "tabVisual": "Визуальный",
     "tabYaml": "YAML"
   },
+  "editYaml": "Редактировать YAML",
   "importSchema": "Импорт схемы",
   "yamlImport": {
     "title": "Импорт схемы (YAML)",
@@ -297,6 +298,16 @@
     "addingIndexes": "Добавляются индексы...",
     "success": "Все объекты успешно созданы!",
     "partialSuccess": "Завершено с ошибками",
-    "tablesCreatedCount": "Создано {{count}} таблиц(ы)"
+    "tablesCreatedCount": "Создано {{count}} таблиц(ы)",
+    "existingTables": "Обнаружено {{count}} существующих таблиц",
+    "newColumnsCount": "{{count}} новых колонок",
+    "newIndexesCount": "{{count}} новых индексов",
+    "newFksCount": "{{count}} новых FK",
+    "typeMismatch": "Несоответствие типа: {{column}} — {{dbType}} в БД, {{yamlType}} в YAML",
+    "removedColumn": "Колонка {{column}} есть в БД, но нет в YAML (не будет удалена)",
+    "addingColumns": "Добавляются колонки в {{name}}...",
+    "columnsAddedCount": "{{count}} колонок добавлено в существующие таблицы",
+    "tableExists": "Существует",
+    "tableNew": "Новая"
   }
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Table2, LayoutGrid, List, MoreHorizontal, Pencil, Eye, Trash2, History, FileUp } from 'lucide-react';
+import { Plus, Table2, LayoutGrid, List, MoreHorizontal, Pencil, Eye, Trash2, History, FileUp, Code } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { staggerContainer, staggerItem, cardHover } from '@/lib/animations';
 import { useCurrentProject } from '@/hooks/useProject';
 import { schemaApi } from '@/api/schema.api';
+import { tableInfoToYaml } from '@/lib/yaml-schema';
 import { toast } from 'sonner';
 import { showErrorToast } from '@/lib/show-error-toast';
 import { CreateTableDialog } from '@/components/schema/CreateTableDialog';
@@ -30,6 +31,7 @@ export function TablesListPage() {
   const handleViewChange = (mode: string) => { setViewMode(mode); localStorage.setItem('dataforge-tables-view', mode); };
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [editYaml, setEditYaml] = useState<string | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -150,6 +152,15 @@ export function TablesListPage() {
                         <Pencil className="h-4 w-4 mr-2" />
                         {t('tables:editSchema')}
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={async (e) => {
+                        e.stopPropagation();
+                        const { table: info } = await schemaApi.getTable(project!.id, table.name);
+                        setEditYaml(tableInfoToYaml([info]));
+                        setImportOpen(true);
+                      }}>
+                        <Code className="h-4 w-4 mr-2" />
+                        {t('tables:editYaml')}
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`${basePath}/tables/${table.name}/data`); }}>
                         <Eye className="h-4 w-4 mr-2" />
                         {t('tables:viewData')}
@@ -217,6 +228,15 @@ export function TablesListPage() {
                           <Pencil className="h-4 w-4 mr-2" />
                           {t('tables:editSchema')}
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={async (e) => {
+                          e.stopPropagation();
+                          const { table: info } = await schemaApi.getTable(project!.id, table.name);
+                          setEditYaml(tableInfoToYaml([info]));
+                          setImportOpen(true);
+                        }}>
+                          <Code className="h-4 w-4 mr-2" />
+                          {t('tables:editYaml')}
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`${basePath}/tables/${table.name}/data`); }}>
                           <Eye className="h-4 w-4 mr-2" />
                           {t('tables:viewData')}
@@ -246,8 +266,9 @@ export function TablesListPage() {
 
       <SchemaImportDialog
         open={importOpen}
-        onOpenChange={setImportOpen}
+        onOpenChange={(o) => { setImportOpen(o); if (!o) setEditYaml(undefined); }}
         projectId={project?.id ?? ''}
+        initialYaml={editYaml}
       />
 
       <ConfirmDialog
