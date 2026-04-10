@@ -304,7 +304,13 @@ export async function backupExportRoutes(app: FastifyInstance) {
             await trx(sysTable).where({ project_id: projectId }).del();
             const batchSize = 500;
             for (let i = 0; i < rows.length; i += batchSize) {
-              const batch = rows.slice(i, i + batchSize);
+              const batch = rows.slice(i, i + batchSize).map((row: Record<string, unknown>) => {
+                const fixed: Record<string, unknown> = {};
+                for (const [k, v] of Object.entries(row)) {
+                  fixed[k] = (v !== null && typeof v === 'object') ? JSON.stringify(v) : v;
+                }
+                return fixed;
+              });
               await trx(sysTable).insert(batch);
             }
             await trx.raw('RELEASE SAVEPOINT sys_sp');
