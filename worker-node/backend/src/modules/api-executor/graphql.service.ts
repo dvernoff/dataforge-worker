@@ -170,12 +170,14 @@ export class GraphQLService {
 
       Mutation[`create${typeName}`] = async (args: { data: Record<string, unknown> }) => {
         const data = camelToSnake(args.data);
+        for (const [k, v] of Object.entries(data)) { if (v !== null && typeof v === 'object') data[k] = JSON.stringify(v); }
         const [row] = await db(fullTable).insert(data).returning('*');
         return row;
       };
 
       Mutation[`update${typeName}`] = async (args: { id: string; data: Record<string, unknown> }) => {
         const data = camelToSnake(args.data);
+        for (const [k, v] of Object.entries(data)) { if (v !== null && typeof v === 'object') data[k] = JSON.stringify(v); }
         const [row] = await db(fullTable).where({ id: args.id }).update(data).returning('*');
         return row;
       };

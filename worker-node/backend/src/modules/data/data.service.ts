@@ -9,6 +9,14 @@ import { isModuleEnabled } from '../../utils/module-check.js';
 import { fireDiscordWebhooks } from '../plugins/built-in/discord-webhook/discord-webhook.routes.js';
 import { fireTelegramNotifications } from '../plugins/built-in/telegram-bot/telegram-bot.routes.js';
 
+function stringifyJsonbFields(row: Record<string, unknown>): Record<string, unknown> {
+  const fixed: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    fixed[k] = (v !== null && typeof v === 'object') ? JSON.stringify(v) : v;
+  }
+  return fixed;
+}
+
 export interface RLSContext {
   projectId: string;
   userId?: string;
@@ -177,17 +185,18 @@ export class DataService {
   }
 
   async create(schema: string, tableName: string, data: Record<string, unknown>, projectId?: string) {
-    const [row] = await this.db(`${schema}.${tableName}`).insert(data).returning('*');
+    const [row] = await this.db(`${schema}.${tableName}`).insert(stringifyJsonbFields(data)).returning('*');
     if (projectId) this.fireWebhooks(projectId, tableName, 'INSERT', row);
     return row;
   }
 
   async update(schema: string, tableName: string, id: string, data: Record<string, unknown>, projectId?: string) {
     const { id: _id, created_at: _ca, updated_at: _ua, ...updateData } = data;
+    const safeData = stringifyJsonbFields(updateData);
 
     const [row] = await this.db(`${schema}.${tableName}`)
       .where({ id })
-      .update(updateData)
+      .update(safeData)
       .returning('*');
 
     if (!row) {
@@ -256,7 +265,7 @@ export class DataService {
     const batchSize = 500;
     let inserted = 0;
     for (let i = 0; i < records.length; i += batchSize) {
-      const batch = records.slice(i, i + batchSize);
+      const batch = records.slice(i, i + batchSize).map(stringifyJsonbFields);
       const rows = await this.db(`${schema}.${tableName}`).insert(batch).returning('*');
       inserted += rows.length;
       for (const row of rows) {
@@ -274,9 +283,10 @@ export class DataService {
   }
 
   async bulkUpdate(schema: string, tableName: string, ids: string[], field: string, value: unknown) {
+    const safeValue = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
     const updated = await this.db(`${schema}.${tableName}`)
       .whereIn('id', ids)
-      .update({ [field]: value });
+      .update({ [field]: safeValue });
     return { updated };
   }
 
@@ -286,7 +296,7 @@ export class DataService {
     const errors: { index: number; error: string }[] = [];
 
     for (let i = 0; i < records.length; i += batchSize) {
-      const batch = records.slice(i, i + batchSize);
+      const batch = records.slice(i, i + batchSize).map(stringifyJsonbFields);
       try {
         await this.db(`${schema}.${tableName}`).insert(batch);
         inserted += batch.length;

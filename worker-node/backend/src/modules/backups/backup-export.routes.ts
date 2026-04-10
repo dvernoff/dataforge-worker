@@ -230,7 +230,13 @@ export async function backupExportRoutes(app: FastifyInstance) {
         if (Array.isArray(rows) && rows.length > 0) {
           const batchSize = 500;
           for (let i = 0; i < rows.length; i += batchSize) {
-            const batch = rows.slice(i, i + batchSize);
+            const batch = rows.slice(i, i + batchSize).map((row: Record<string, unknown>) => {
+              const fixed: Record<string, unknown> = {};
+              for (const [k, v] of Object.entries(row)) {
+                fixed[k] = (v !== null && typeof v === 'object') ? JSON.stringify(v) : v;
+              }
+              return fixed;
+            });
             await trx(`${dbSchema}.${table}`).insert(batch);
           }
         }
