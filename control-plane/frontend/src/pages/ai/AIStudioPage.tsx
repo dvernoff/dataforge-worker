@@ -177,7 +177,7 @@ export function AIStudioPage() {
   }
 
   const basePath = `/projects/${project?.slug}`;
-  const workerUrl = window.location.origin.replace('3000', '4001');
+  const workerUrl = project?.node_url?.replace(/\/$/, '') ?? window.location.origin;
 
   return (
     <PageWrapper>

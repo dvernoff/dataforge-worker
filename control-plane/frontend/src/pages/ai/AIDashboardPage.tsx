@@ -186,7 +186,7 @@ export function AIDashboardPage() {
     enabled: !!project?.id, refetchInterval: 15000,
   });
 
-  const workerUrl = window.location.origin.replace('3000', '4000');
+  const workerUrl = project?.node_url?.replace(/\/$/, '') ?? window.location.origin;
 
   function copy(text: string) {
     navigator.clipboard.writeText(text);

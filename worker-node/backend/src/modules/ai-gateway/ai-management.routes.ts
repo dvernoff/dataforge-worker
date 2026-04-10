@@ -13,10 +13,11 @@ export async function aiManagementRoutes(app: FastifyInstance) {
     const restEnabled = await isModuleEnabled(app.db, projectId, 'ai-rest-gateway');
     const mcpEnabled = await isModuleEnabled(app.db, projectId, 'ai-mcp-server');
     const studioEnabled = await isModuleEnabled(app.db, projectId, 'ai-studio');
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const recentCount = await app.db('ai_gateway_logs')
       .where({ project_id: projectId })
-      .where('created_at', '>', new Date(Date.now() - 24 * 60 * 60 * 1000))
+      .where('created_at', '>', cutoff)
       .count('* as count')
       .first()
       .catch(() => ({ count: 0 }));
