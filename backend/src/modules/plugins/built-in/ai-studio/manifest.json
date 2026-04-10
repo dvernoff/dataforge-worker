@@ -1,0 +1,34 @@
+{
+  "id": "ai-studio",
+  "name": "AI Studio",
+  "description": "Create AI-powered endpoints with custom prompts, multiple providers (OpenAI, DeepSeek, Claude), response validation, and conversation context.",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "icon": "wand-2",
+  "settings": [
+    {
+      "key": "openai_key",
+      "label": "OpenAI API Key",
+      "type": "password",
+      "required": false,
+      "placeholder": "sk-...",
+      "description": "API key for OpenAI (GPT-4o, GPT-4o-mini, etc.)"
+    },
+    {
+      "key": "deepseek_key",
+      "label": "DeepSeek API Key",
+      "type": "password",
+      "required": false,
+      "placeholder": "sk-...",
+      "description": "API key for DeepSeek (deepseek-chat, deepseek-reasoner)"
+    },
+    {
+      "key": "claude_key",
+      "label": "Claude API Key",
+      "type": "password",
+      "required": false,
+      "placeholder": "sk-ant-...",
+      "description": "API key for Anthropic Claude (claude-sonnet, claude-haiku)"
+    }
+  ]
+}
