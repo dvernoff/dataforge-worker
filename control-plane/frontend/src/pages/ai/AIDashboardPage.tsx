@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, Cpu, Zap, Database, Plug, Key, Hash, Code, Terminal,
   Copy, Check, ExternalLink, Activity, Lock, ArrowLeft, ArrowRight,
-  Info, Loader2, BookOpen, Trash2, Wand2,
+  Info, Loader2, BookOpen, Trash2, Wand2, Clock,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,8 @@ const TOOL_KEYS = [
   'get_project_info', 'get_schema_context', 'create_table', 'alter_columns',
   'drop_table', 'add_index', 'drop_index', 'add_foreign_key', 'drop_foreign_key',
   'create_endpoint', 'update_endpoint', 'delete_endpoint', 'execute_sql',
+  'list_cron_jobs', 'get_cron_job', 'create_cron_job', 'update_cron_job',
+  'delete_cron_job', 'toggle_cron_job', 'run_cron_job',
 ];
 
 const TOOL_ICONS: Record<string, typeof Database> = {
@@ -30,6 +32,9 @@ const TOOL_ICONS: Record<string, typeof Database> = {
   alter_columns: Key, drop_table: Trash2, add_index: Hash, drop_index: Hash,
   add_foreign_key: Key, drop_foreign_key: Key, create_endpoint: Plug,
   update_endpoint: Plug, delete_endpoint: Plug, execute_sql: Terminal,
+  list_cron_jobs: Clock, get_cron_job: Clock, create_cron_job: Clock,
+  update_cron_job: Clock, delete_cron_job: Clock, toggle_cron_job: Clock,
+  run_cron_job: Clock,
 };
 
 const TOOL_COLORS: Record<string, string> = {
@@ -39,6 +44,10 @@ const TOOL_COLORS: Record<string, string> = {
   add_foreign_key: 'text-purple-400', drop_foreign_key: 'text-red-400',
   create_endpoint: 'text-green-400', update_endpoint: 'text-amber-400',
   delete_endpoint: 'text-red-400', execute_sql: 'text-blue-400',
+  list_cron_jobs: 'text-blue-400', get_cron_job: 'text-blue-400',
+  create_cron_job: 'text-green-400', update_cron_job: 'text-amber-400',
+  delete_cron_job: 'text-red-400', toggle_cron_job: 'text-cyan-400',
+  run_cron_job: 'text-emerald-400',
 };
 
 interface TabDef {
@@ -56,7 +65,7 @@ const TABS: TabDef[] = [
   { id: 'studio', icon: Wand2, pluginId: 'ai-studio', color: 'emerald', activeColor: 'from-emerald-500/20 to-teal-500/20', navigateTo: 'ai/studio' },
 ];
 
-const ROTATING_KEYS = ['tables', 'endpoints', 'indexes', 'schemas', 'queries', 'foreignKeys', 'caching', 'rateLimits'];
+const ROTATING_KEYS = ['tables', 'endpoints', 'indexes', 'schemas', 'queries', 'foreignKeys', 'caching', 'rateLimits', 'cronJobs'];
 
 function RotatingText() {
   const { t } = useTranslation(['ai']);

@@ -169,6 +169,50 @@ export async function aiMcpServerRoutes(app: FastifyInstance) {
           case 'execute_sql':
             result = await service.executeSql(dbSchema, args.query as string, args.timeout as number);
             break;
+          case 'list_cron_jobs':
+            result = await service.listCronJobs(projectId);
+            break;
+          case 'get_cron_job': {
+            if (!args.job_id) throw new Error('Missing "job_id"');
+            result = await service.getCronJob(args.job_id as string, projectId);
+            break;
+          }
+          case 'create_cron_job': {
+            if (!args.name) throw new Error('Missing "name"');
+            if (!args.cron_expression) throw new Error('Missing "cron_expression"');
+            if (!args.action_type) throw new Error('Missing "action_type"');
+            if (!args.action_config) throw new Error('Missing "action_config"');
+            result = await service.createCronJob(projectId, {
+              name: args.name as string,
+              cron_expression: args.cron_expression as string,
+              action_type: args.action_type as string,
+              action_config: args.action_config as Record<string, unknown>,
+              is_active: args.is_active as boolean | undefined,
+            });
+            break;
+          }
+          case 'update_cron_job': {
+            if (!args.job_id) throw new Error('Missing "job_id"');
+            const { job_id: updateJobId, ...updateFields } = args;
+            result = await service.updateCronJob(updateJobId as string, projectId, updateFields);
+            break;
+          }
+          case 'delete_cron_job': {
+            if (!args.job_id) throw new Error('Missing "job_id"');
+            await service.deleteCronJob(args.job_id as string, projectId);
+            result = { deleted: true };
+            break;
+          }
+          case 'toggle_cron_job': {
+            if (!args.job_id) throw new Error('Missing "job_id"');
+            result = await service.toggleCronJob(args.job_id as string, projectId);
+            break;
+          }
+          case 'run_cron_job': {
+            if (!args.job_id) throw new Error('Missing "job_id"');
+            result = await service.runCronJob(args.job_id as string, projectId);
+            break;
+          }
           default:
             return respondError(msg.id, -32601, `Unknown tool: ${toolName}`);
         }

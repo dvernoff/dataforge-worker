@@ -165,4 +165,88 @@ export const MCP_TOOLS: McpToolDef[] = [
       required: ['query'],
     },
   },
+  {
+    name: 'list_cron_jobs',
+    description: 'List all cron jobs in the project. Returns each job with its name, cron expression, active status, last run info, and run count.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_cron_job',
+    description: 'Get details of a specific cron job including its configuration and the 20 most recent run results.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'create_cron_job',
+    description: 'Create a new scheduled cron job. Currently supports SQL action type. The job executes the query on the configured schedule. DDL statements (DROP, ALTER, CREATE, etc.) are blocked for safety.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Human-readable job name' },
+        cron_expression: { type: 'string', description: 'Cron schedule expression, e.g. "0 * * * *" (every hour), "*/5 * * * *" (every 5 min), "0 0 * * *" (daily midnight)' },
+        action_type: { type: 'string', enum: ['sql'], description: 'Type of action to execute' },
+        action_config: {
+          type: 'object',
+          description: 'Action configuration. For sql: { "query": "SELECT ..." }',
+          properties: { query: { type: 'string' } },
+        },
+        is_active: { type: 'boolean', default: true, description: 'Whether the job starts active (default true)' },
+      },
+      required: ['name', 'cron_expression', 'action_type', 'action_config'],
+    },
+  },
+  {
+    name: 'update_cron_job',
+    description: 'Update an existing cron job. Only provided fields are changed. The job is automatically rescheduled if the cron expression or active status changes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job to update' },
+        name: { type: 'string' },
+        cron_expression: { type: 'string' },
+        action_type: { type: 'string', enum: ['sql'] },
+        action_config: { type: 'object', properties: { query: { type: 'string' } } },
+        is_active: { type: 'boolean' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'delete_cron_job',
+    description: 'Delete a cron job permanently. Stops the scheduled execution and removes all run history.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job to delete' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'toggle_cron_job',
+    description: 'Toggle a cron job between active and inactive. Active jobs run on schedule; inactive jobs are paused but retain their configuration.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job to toggle' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'run_cron_job',
+    description: 'Execute a cron job immediately regardless of its schedule or active status. Returns the execution result including status, output rows, and any errors.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job to run' },
+      },
+      required: ['job_id'],
+    },
+  },
 ];

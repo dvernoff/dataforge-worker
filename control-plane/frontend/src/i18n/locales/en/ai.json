@@ -16,7 +16,8 @@
     "queries": "queries",
     "foreignKeys": "foreign keys",
     "caching": "caching",
-    "rateLimits": "rate limits"
+    "rateLimits": "rate limits",
+    "cronJobs": "cron jobs"
   },
 
   "tabs": {
@@ -99,6 +100,34 @@
     "execute_sql": {
       "name": "execute_sql",
       "desc": "Run read-only SQL (SELECT/EXPLAIN/WITH) for data analysis, debugging, and optimization"
+    },
+    "list_cron_jobs": {
+      "name": "list_cron_jobs",
+      "desc": "List all scheduled cron jobs with their status, schedule, and last run info"
+    },
+    "get_cron_job": {
+      "name": "get_cron_job",
+      "desc": "Get cron job details including configuration and recent execution history"
+    },
+    "create_cron_job": {
+      "name": "create_cron_job",
+      "desc": "Create a scheduled cron job to run SQL queries on a recurring schedule"
+    },
+    "update_cron_job": {
+      "name": "update_cron_job",
+      "desc": "Update a cron job's name, schedule, query, or active status"
+    },
+    "delete_cron_job": {
+      "name": "delete_cron_job",
+      "desc": "Delete a cron job permanently with all its run history"
+    },
+    "toggle_cron_job": {
+      "name": "toggle_cron_job",
+      "desc": "Pause or resume a cron job without deleting it"
+    },
+    "run_cron_job": {
+      "name": "run_cron_job",
+      "desc": "Execute a cron job immediately to test it, returns the result"
     }
   },
 

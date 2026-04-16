@@ -2,17 +2,20 @@ import type { Knex } from 'knex';
 import { SchemaService } from '../schema/schema.service.js';
 import { BuilderService } from '../api-builder/builder.service.js';
 import { ConsoleService } from '../sql-console/console.service.js';
+import { CronService } from '../cron/cron.service.js';
 import type { AiContextResponse, AiGatewayLogEntry } from './ai-gateway.types.js';
 
 export class AiGatewayService {
   private schema: SchemaService;
   private builder: BuilderService;
   private console: ConsoleService;
+  private cron: CronService;
 
   constructor(private db: Knex) {
     this.schema = new SchemaService(db);
     this.builder = new BuilderService(db);
     this.console = new ConsoleService(db);
+    this.cron = new CronService(db);
   }
 
   getProjectInfo(): string {
@@ -76,7 +79,29 @@ NAMING CONVENTIONS:
 - Tables: plural lowercase with underscores (users, order_items)
 - Columns: lowercase with underscores (user_name, created_at)
 - FK columns: target_table_singular + _id (user_id, category_id)
-- Indexes: auto-named as idx_tablename_columns`;
+- Indexes: auto-named as idx_tablename_columns
+
+CRON JOBS (scheduled tasks):
+- list_cron_jobs — view all scheduled jobs with status
+- get_cron_job — get job details and recent execution history
+- create_cron_job — schedule recurring SQL tasks (e.g. cleanup, aggregation, reports)
+- update_cron_job — change schedule, query, or name
+- delete_cron_job — remove a scheduled job permanently
+- toggle_cron_job — pause/resume a job without deleting it
+- run_cron_job — execute a job immediately to test it
+
+CRON EXPRESSIONS:
+- "* * * * *" — every minute
+- "*/5 * * * *" — every 5 minutes
+- "0 * * * *" — every hour
+- "0 0 * * *" — daily at midnight
+- "0 0 * * 1" — every Monday at midnight
+- "0 0 1 * *" — first day of month at midnight
+
+CRON SAFETY:
+- DDL (DROP, ALTER, CREATE, TRUNCATE, GRANT, REVOKE) is blocked
+- Mutations in WITH clauses are blocked
+- Queries run with project schema isolation and timeout (max 120s)`;
   }
 
   async getContext(projectId: string, dbSchema: string): Promise<AiContextResponse> {
@@ -173,6 +198,34 @@ NAMING CONVENTIONS:
 
   async executeSql(dbSchema: string, query: string, timeoutMs = 30000) {
     return this.console.execute(dbSchema, query, 'editor', timeoutMs);
+  }
+
+  async listCronJobs(projectId: string) {
+    return this.cron.findAll(projectId);
+  }
+
+  async getCronJob(jobId: string, projectId: string) {
+    return this.cron.findById(jobId, projectId);
+  }
+
+  async createCronJob(projectId: string, input: { name: string; cron_expression: string; action_type: string; action_config: Record<string, unknown>; is_active?: boolean }) {
+    return this.cron.create(projectId, input);
+  }
+
+  async updateCronJob(jobId: string, projectId: string, input: Record<string, unknown>) {
+    return this.cron.update(jobId, projectId, input);
+  }
+
+  async deleteCronJob(jobId: string, projectId: string) {
+    return this.cron.delete(jobId, projectId);
+  }
+
+  async toggleCronJob(jobId: string, projectId: string) {
+    return this.cron.toggle(jobId, projectId);
+  }
+
+  async runCronJob(jobId: string, projectId: string) {
+    return this.cron.runNow(jobId, projectId);
   }
 
   async logActivity(entry: AiGatewayLogEntry) {
