@@ -1,0 +1,9 @@
+{
+  "id": "telegram-bot",
+  "name": "Telegram Bot",
+  "description": "Send notifications and messages via Telegram Bot API.",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "icon": "send",
+  "settings": []
+}
