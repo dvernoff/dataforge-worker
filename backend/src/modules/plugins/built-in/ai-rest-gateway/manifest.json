@@ -1,0 +1,9 @@
+{
+  "id": "ai-rest-gateway",
+  "name": "AI REST Gateway",
+  "description": "REST API gateway for LLM-powered project management. Allows AI to create tables, endpoints, indexes, manage schema and optimize configurations.",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "icon": "sparkles",
+  "settings": []
+}
