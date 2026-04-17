@@ -1,0 +1,85 @@
+import type { FastifyInstance } from 'fastify';
+import { CronService } from './cron.service.js';
+import { nodeAuthMiddleware } from '../../middleware/node-auth.middleware.js';
+import { requireWorkerRole } from '../../middleware/worker-rbac.middleware.js';
+import { isModuleEnabled, moduleDisabledError } from '../../utils/module-check.js';
+import { z } from 'zod';
+
+export async function cronRoutes(app: FastifyInstance) {
+  const cronService = new CronService(app.db);
+
+  app.addHook('preHandler', nodeAuthMiddleware);
+  app.addHook('preHandler', requireWorkerRole('admin'));
+
+  app.addHook('preHandler', async (request, reply) => {
+    const { projectId } = request.params as { projectId: string };
+    if (!projectId) return;
+    const enabled = await isModuleEnabled(app.db, projectId, 'feature-cron');
+    if (!enabled) {
+      return reply.status(404).send(moduleDisabledError('Cron'));
+    }
+  });
+
+  app.get('/:projectId/cron', async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    const jobs = await cronService.findAll(projectId);
+    return { jobs };
+  });
+
+  app.post('/:projectId/cron', async (request) => {
+    const { projectId } = request.params as { projectId: string };
+    const body = z.object({
+      name: z.string().min(1).max(255),
+      cron_expression: z.string().min(1).max(100),
+      action_type: z.enum(['sql']),
+      action_config: z.record(z.unknown()),
+      is_active: z.boolean().optional(),
+    }).parse(request.body);
+    const job = await cronService.create(projectId, body);
+    return { job };
+  });
+
+  app.get('/:projectId/cron/:jobId', async (request) => {
+    const { projectId, jobId } = request.params as { projectId: string; jobId: string };
+    const job = await cronService.findById(jobId, projectId);
+    return { job };
+  });
+
+  app.put('/:projectId/cron/:jobId', async (request) => {
+    const { projectId, jobId } = request.params as { projectId: string; jobId: string };
+    const body = z.object({
+      name: z.string().min(1).max(255).optional(),
+      cron_expression: z.string().min(1).max(100).optional(),
+      action_type: z.enum(['sql']).optional(),
+      action_config: z.record(z.unknown()).optional(),
+      is_active: z.boolean().optional(),
+    }).parse(request.body);
+    const job = await cronService.update(jobId, projectId, body);
+    return { job };
+  });
+
+  app.delete('/:projectId/cron/:jobId', async (request, reply) => {
+    const { projectId, jobId } = request.params as { projectId: string; jobId: string };
+    await cronService.delete(jobId, projectId);
+    return reply.status(204).send();
+  });
+
+  app.post('/:projectId/cron/:jobId/toggle', async (request) => {
+    const { projectId, jobId } = request.params as { projectId: string; jobId: string };
+    const job = await cronService.toggle(jobId, projectId);
+    return { job };
+  });
+
+  app.post('/:projectId/cron/:jobId/run', async (request) => {
+    const { projectId, jobId } = request.params as { projectId: string; jobId: string };
+    const result = await cronService.runNow(jobId, projectId);
+    return { result };
+  });
+
+  app.get('/:projectId/cron/:jobId/runs', async (request) => {
+    const { projectId, jobId } = request.params as { projectId: string; jobId: string };
+    const query = request.query as Record<string, string>;
+    const runs = await cronService.getRuns(jobId, projectId, Number(query.limit ?? 50));
+    return { runs };
+  });
+}
