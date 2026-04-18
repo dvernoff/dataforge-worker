@@ -1,0 +1,9 @@
+{
+  "id": "ai-mcp-server",
+  "name": "AI MCP Server",
+  "description": "Model Context Protocol server for direct AI integration. Connect Claude, Cursor, or any MCP-compatible client to manage your project.",
+  "version": "1.0.0",
+  "runtime": "worker",
+  "icon": "cpu",
+  "settings": []
+}
