@@ -1,0 +1,45 @@
+{
+  "name": "dataforge-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "migrate": "tsx --import tsx/esm node_modules/knex/bin/cli.js migrate:latest --knexfile knexfile.ts",
+    "migrate:rollback": "tsx --import tsx/esm node_modules/knex/bin/cli.js migrate:rollback --knexfile knexfile.ts",
+    "seed": "tsx --import tsx/esm node_modules/knex/bin/cli.js seed:run --knexfile knexfile.ts"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.9.0",
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.0.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/multipart": "^9.4.0",
+    "@fastify/rate-limit": "^10.2.1",
+    "@fastify/swagger": "^9.4.2",
+    "@fastify/swagger-ui": "^5.2.1",
+    "@fastify/websocket": "^11.2.0",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "fastify-plugin": "^5.1.0",
+    "graphql": "^16.13.2",
+    "ioredis": "^5.4.2",
+    "jsonwebtoken": "^9.0.2",
+    "knex": "^3.1.0",
+    "nanoid": "^5.0.9",
+    "node-cron": "^4.2.1",
+    "pg": "^8.13.1",
+    "pg-query-stream": "^4.14.0",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.12.0",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
