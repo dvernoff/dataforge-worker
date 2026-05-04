@@ -1,0 +1,1341 @@
+export interface McpToolDef {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export const MCP_TOOLS: McpToolDef[] = [
+  {
+    name: 'get_project_info',
+    description: 'Learn about DataForge platform capabilities and how to work with this project. Call this first if you are unfamiliar with DataForge. Returns a guide explaining the platform, available tools, data types, best practices, and workflow recommendations.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_schema_context',
+    description: 'Get the complete current project schema: all tables with their columns (name, type, nullable, default, primary, unique), all indexes, all foreign key constraints, and all API endpoints with their configuration. Heavy on projects with many tables — prefer list_tables + describe_table(name) for large schemas.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'list_tables',
+    description: 'Fast thin listing of tables with row count estimates (pg_class.reltuples, not COUNT(*)), total size in bytes, and is_hypertable flag. P95 ≤ 500ms even on large schemas.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'describe_table',
+    description: [
+      'Get details for a single table: columns, indexes, foreign keys, row count.',
+      'For TimescaleDB hypertables, hypertable_info is enriched with: num_chunks, time_column, chunk_time_interval, oldest_chunk_range_start, newest_chunk_range_end, retention_policy summary, compression_policy summary, and a list of up to 100 most-recent chunks with size + is_compressed status.',
+      'NOTE: continuous aggregates appear in pg_class as views, not tables — describe_table works on the underlying hypertable, not on a CAG view. To inspect CAGs use list_continuous_aggregates.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'Table name' } },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'list_endpoints',
+    description: 'List API endpoints with optional filters. Returns ONLY metadata (id, method, path, source_type, auth_type, cache/rate-limit, is_active, version) — the SQL/source_config is intentionally omitted to keep responses small. To read the SQL body or validation_schema for an endpoint before editing, call get_endpoint with the id or path.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] },
+        path_contains: { type: 'string', description: 'Case-insensitive substring match on path' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_endpoint',
+    description: 'Fetch the FULL config of a single API endpoint — including source_config (which holds the raw SQL for custom_sql and composite steps), validation_schema, response_config, cache_invalidation, rate_limit, required_scopes, rollout, etc. Use this before update_endpoint on complex endpoints so you can safely edit (e.g. adding one branch to an UPSERT or one field to jsonb_agg) without blindly rewriting the whole thing. Lookup accepts a UUID id OR a path (method is required only when the same path exists for multiple methods). Returns null when nothing matches, or {matches,endpoints:[...]} when multiple methods share one path and you did not pass method.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id_or_path: { type: 'string', description: 'Endpoint UUID, or the path (e.g. "/players/sync" or "players/sync" — leading slash optional).' },
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], description: 'Only needed if id_or_path is a path AND multiple HTTP methods exist for that path.' },
+      },
+      required: ['id_or_path'],
+    },
+  },
+  {
+    name: 'create_table',
+    description: 'Create a new PostgreSQL table. By default adds a UUID "id" primary key and created_at/updated_at timestamps. Define only your business columns — system columns are auto-added based on options. Supports per-column and table-level CHECK constraints.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Table name (lowercase, underscores)' },
+        columns: {
+          type: 'array', items: {
+            type: 'object', properties: {
+              name: { type: 'string' },
+              type: { type: 'string', description: 'text|integer|bigint|float|decimal|boolean|date|timestamp|timestamptz|uuid|json|jsonb|inet|cidr|macaddr|text[]|integer[]|inet[]|serial|bigserial. inet/cidr store IP addresses natively (IPv4+IPv6) and support network operators (<<, <<=, >>, &&) for CIDR-range queries.' },
+              nullable: { type: 'boolean', default: true },
+              default_value: { type: 'string', description: 'SQL expression or literal. Typed casts preserved: "\'[]\'::jsonb", "0::bigint", "now()", "gen_random_uuid()". Plain strings (e.g. "active") are auto-quoted as string literals.' },
+              is_unique: { type: 'boolean', default: false },
+              is_primary: { type: 'boolean', default: false },
+              check: { type: 'string', description: 'Column-level CHECK expression, e.g. "role IN (\'admin\',\'user\')" or "price >= 0". Column name is implicit.' },
+            }, required: ['name', 'type'],
+          },
+        },
+        add_uuid_pk: { type: 'boolean', default: true, description: 'Auto-add UUID id primary key' },
+        add_timestamps: { type: 'boolean', default: true, description: 'Shortcut: true adds both created_at AND updated_at. For fine-grained control, use add_created_at / add_updated_at.' },
+        add_created_at: { type: 'boolean', description: 'Explicit override for created_at. If omitted, follows add_timestamps.' },
+        add_updated_at: { type: 'boolean', description: 'Explicit override for updated_at (also installs update trigger). If omitted, follows add_timestamps.' },
+        index_created_at: { type: 'boolean', description: 'Opt-in: create btree index on created_at (DESC). Strongly recommended for tables queried with ORDER BY created_at DESC (most admin UIs, feeds, audit logs). Default false to avoid write overhead on tables that do not need it.' },
+        index_updated_at: { type: 'boolean', description: 'Opt-in: create btree index on updated_at (DESC). Rarer use case than created_at — usually only for "what changed recently" queries. Default false.' },
+        checks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Optional constraint name. Defaults to chk_{table}_{n}.' },
+              expression: { type: 'string', description: 'Boolean SQL expression, e.g. "end_at > start_at" or "status IN (\'open\',\'closed\')".' },
+            },
+            required: ['expression'],
+          },
+          description: 'Table-level CHECK constraints (for multi-column or named checks).',
+        },
+        storage_params: {
+          type: 'object',
+          description: 'PostgreSQL table storage parameters. Allowed: fillfactor (10-100), autovacuum_vacuum_scale_factor (0-1), autovacuum_vacuum_threshold, autovacuum_analyze_scale_factor, autovacuum_analyze_threshold. Example: {"fillfactor":85} — recommended for write-heavy tables to enable HOT updates.',
+          properties: {
+            fillfactor: { type: 'number', minimum: 10, maximum: 100 },
+            autovacuum_vacuum_scale_factor: { type: 'number', minimum: 0, maximum: 1 },
+            autovacuum_vacuum_threshold: { type: 'number' },
+            autovacuum_analyze_scale_factor: { type: 'number', minimum: 0, maximum: 1 },
+            autovacuum_analyze_threshold: { type: 'number' },
+          },
+        },
+      },
+      required: ['name', 'columns'],
+    },
+  },
+  {
+    name: 'alter_columns',
+    description: 'Alter an existing table: add/alter/drop/rename columns, set or drop the PRIMARY KEY (single or composite), or tune storage parameters (fillfactor). Multiple changes execute sequentially in the same call.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table_name: { type: 'string' },
+        changes: {
+          type: 'array', items: {
+            type: 'object', properties: {
+              action: { type: 'string', enum: ['add', 'alter', 'drop', 'rename', 'set_primary_key', 'drop_primary_key', 'drop_constraint'] },
+              name: { type: 'string', description: 'Column name for add/alter/drop/rename. Constraint name for drop_constraint. Not used for set_primary_key / drop_primary_key.' },
+              newName: { type: 'string' },
+              type: { type: 'string' },
+              nullable: { type: 'boolean' },
+              default_value: { type: 'string' },
+              is_unique: { type: 'boolean' },
+              json_schema: { type: 'object', description: 'For jsonb columns: attach a CHECK (jsonb_matches_schema(...)) constraint. Requires pg_jsonschema extension.' },
+              columns: { type: 'array', items: { type: 'string' }, description: 'For set_primary_key: list of columns for the PK (composite supported).' },
+              constraint_name: { type: 'string', description: 'For set_primary_key: optional name for the PK constraint. Default: {table}_pkey.' },
+            }, required: ['action'],
+          },
+        },
+        storage_params: {
+          type: 'object',
+          description: 'Tune PostgreSQL storage parameters on the existing table. Same keys as in create_table. Emits ALTER TABLE ... SET (key = value).',
+          properties: {
+            fillfactor: { type: 'number', minimum: 10, maximum: 100 },
+            autovacuum_vacuum_scale_factor: { type: 'number', minimum: 0, maximum: 1 },
+            autovacuum_vacuum_threshold: { type: 'number' },
+            autovacuum_analyze_scale_factor: { type: 'number', minimum: 0, maximum: 1 },
+            autovacuum_analyze_threshold: { type: 'number' },
+          },
+        },
+      },
+      required: ['table_name'],
+    },
+  },
+  {
+    name: 'drop_table',
+    description: 'Drop a table and all its data, indexes, and endpoints.',
+    inputSchema: {
+      type: 'object',
+      properties: { table_name: { type: 'string' } },
+      required: ['table_name'],
+    },
+  },
+  {
+    name: 'truncate_table',
+    description: [
+      'Empty a table fast (TRUNCATE) without DDL. Faster than DELETE for large tables — bypasses MVCC, reclaims storage immediately.',
+      'WHY THIS IS A DEDICATED TOOL: TRUNCATE acquires AccessExclusiveLock and PostgreSQL classifies it alongside DDL, so execute_sql_mutation blocks it. Semantically though, TRUNCATE is data, not schema, and operators legitimately need to clear a table. Use this tool instead.',
+      'HYPERTABLES: TRUNCATE on a TimescaleDB hypertable atomically drops every chunk — equivalent to drop_chunks(table, older_than: \'0 second\'). The result reports `hypertable_chunks_dropped` so you see the chunk count.',
+      'SYSTEM TABLES (commented `system:<plugin>`) are refused — disable the plugin instead.',
+      'OPTIONS:',
+      '- cascade=true → TRUNCATE ... CASCADE: also truncates tables with FK references to this one. Without it, TRUNCATE fails if any other table FKs into this one.',
+      '- restart_identity=true → reset SERIAL/IDENTITY sequences to their starting value. Without it, sequences keep their current value.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table_name: { type: 'string' },
+        cascade: { type: 'boolean', description: 'Default false. Required if any other table FKs into this one.' },
+        restart_identity: { type: 'boolean', description: 'Default false. Reset auto-increment sequences.' },
+      },
+      required: ['table_name'],
+    },
+  },
+  {
+    name: 'add_index',
+    description: 'Add an index to a table for query optimization. Supports plain columns OR expressions (e.g. "lower(email)"), partial indexes via where, and covering indexes via include. For GIN/GIST on text columns, pg_trgm is enabled automatically and gin_trgm_ops / gist_trgm_ops is applied. For expression-form indexes (steam_id::text, data->>\'name\'), pass ops_class explicitly.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table_name: { type: 'string' },
+        columns: { type: 'array', items: { type: 'string' }, description: 'Plain column names. Use either columns OR expressions.' },
+        expressions: { type: 'array', items: { type: 'string' }, description: 'Expression index, e.g. ["lower(email)"] or ["(data->>\'status\')"] or ["steam_id::text"]. Use ops_class with gin/gist for text-returning expressions.' },
+        type: { type: 'string', enum: ['btree', 'hash', 'gin', 'gist', 'brin'], default: 'btree' },
+        is_unique: { type: 'boolean', default: false },
+        where: { type: 'string', description: 'Partial index predicate, e.g. "status = \'completed\'". Subqueries and side-effect functions are blocked.' },
+        include: { type: 'array', items: { type: 'string' }, description: 'INCLUDE columns for covering index (btree only).' },
+        name: { type: 'string', description: 'Custom index name. Default: idx_{table}_{cols}[_unique]' },
+        ops_class: {
+          oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+          description: 'PostgreSQL operator class. Scalar applies to every target; array matches by position. Allowed: gin_trgm_ops, gist_trgm_ops, jsonb_ops, jsonb_path_ops, inet_ops, array_ops, tsvector_ops, text_pattern_ops, varchar_pattern_ops, int4_ops, int8_ops, text_ops. Typical uses: gin on expression "steam_id::text" needs gin_trgm_ops; jsonb path indexes use jsonb_path_ops; LIKE \'prefix%\' on text benefits from text_pattern_ops btree.',
+        },
+      },
+      required: ['table_name'],
+    },
+  },
+  {
+    name: 'drop_index',
+    description: 'Drop an index by name.',
+    inputSchema: {
+      type: 'object',
+      properties: { index_name: { type: 'string' } },
+      required: ['index_name'],
+    },
+  },
+  {
+    name: 'add_foreign_key',
+    description: 'Add a foreign key constraint between tables.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table_name: { type: 'string' }, source_column: { type: 'string' },
+        target_table: { type: 'string' }, target_column: { type: 'string' },
+        on_delete: { type: 'string', enum: ['CASCADE', 'SET NULL', 'RESTRICT', 'NO ACTION'], default: 'NO ACTION' },
+        on_update: { type: 'string', enum: ['CASCADE', 'SET NULL', 'RESTRICT', 'NO ACTION'], default: 'NO ACTION' },
+      },
+      required: ['table_name', 'source_column', 'target_table', 'target_column'],
+    },
+  },
+  {
+    name: 'drop_foreign_key',
+    description: 'Drop a foreign key constraint by name.',
+    inputSchema: {
+      type: 'object',
+      properties: { table_name: { type: 'string' }, constraint_name: { type: 'string' } },
+      required: ['table_name', 'constraint_name'],
+    },
+  },
+  {
+    name: 'create_endpoint',
+    description: 'Create an API endpoint (table-based CRUD or custom SQL). Table endpoints auto-emit realtime events on every mutation. custom_sql endpoints do NOT emit automatically — add df_emit() calls via a CTE that IS referenced by the final SELECT (e.g. "SELECT COUNT(*) FROM emit" or CROSS JOIN) — otherwise PostgreSQL prunes the emit CTE and no event fires. AS MATERIALIZED alone does NOT force execution. See get_websocket_info for verified patterns, or use an AFTER INSERT/UPDATE/DELETE trigger for hot-path tables so you never have to remember.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] },
+        path: { type: 'string', description: 'URL path starting with /' },
+        description: { type: 'string' },
+        source_type: { type: 'string', enum: ['table', 'custom_sql'] },
+        source_config: { type: 'object', description: 'For table: {table, operation}. For custom_sql: {query, params?}. Use :param_name casts inside query (e.g. :user_id::uuid). For realtime: add a df_emit CTE AND reference it from the final SELECT (e.g. SELECT COUNT(*) FROM emit). MATERIALIZED alone is NOT enough — see get_websocket_info for verified patterns.' },
+        auth_type: { type: 'string', enum: ['api_token', 'public'], default: 'api_token' },
+        cache_enabled: { type: 'boolean', default: false },
+        cache_ttl: { type: 'number', description: 'Cache TTL in seconds (1-86400)' },
+        cache_key_template: { type: 'string', description: 'Optional. Overrides the default "include method+path+query+path-params" cache key. Syntax: {{dotted.path}} — sampling values from { method, path, query, params }. Examples: "{{path}}:{{query.q}}:{{query.limit}}" (only vary by q + limit), "{{query.tenant_id}}" (vary by tenant only), "v1" (fully static single-slot cache). Missing paths resolve to empty string. Use this to EXCLUDE volatile/irrelevant query fields (e.g. tracking IDs, timestamps) that would otherwise fragment the cache, OR to narrow caching to a few specific vary-by dimensions. Leave unset to include everything (default).' },
+        rate_limit: { type: 'object', properties: { max: { type: 'number' }, window: { type: 'number' }, per: { type: 'string' } } },
+        version: { type: 'number', description: 'Endpoint version (integer). Default 1. Router honors ?v=, X-API-Version, or /api/v{N}/.' },
+        rollout: {
+          type: 'object',
+          properties: {
+            strategy: { type: 'string', enum: ['full', 'canary'] },
+            percentage: { type: 'number', description: '0-100. For canary.' },
+            sticky_by: { type: 'string', enum: ['api_token', 'ip'], description: 'Sticky dimension for canary hash.' },
+          },
+        },
+        deprecates: {
+          type: 'object',
+          properties: {
+            replaces_version: { type: 'number' },
+            sunset_date: { type: 'string', description: 'ISO date when the endpoint should be removed.' },
+          },
+        },
+      },
+      required: ['method', 'path', 'source_type', 'source_config'],
+    },
+  },
+  {
+    name: 'update_endpoint',
+    description: 'Update an existing API endpoint.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        endpoint_id: { type: 'string' },
+        method: { type: 'string' }, path: { type: 'string' }, description: { type: 'string' },
+        source_type: { type: 'string' }, source_config: { type: 'object' },
+        auth_type: { type: 'string' }, cache_enabled: { type: 'boolean' }, cache_ttl: { type: 'number' },
+        cache_key_template: { type: 'string', description: 'Override default cache key with a {{dotted.path}} template — see create_endpoint.' },
+        rate_limit: { type: 'object' }, is_active: { type: 'boolean' },
+      },
+      required: ['endpoint_id'],
+    },
+  },
+  {
+    name: 'bulk_update_endpoint',
+    description: [
+      'Apply many endpoint patches in ONE database transaction. All-or-nothing on the wire — if any single patch fails, the whole batch rolls back.',
+      'TYPICAL USE: rename a column in your schema and need to update the SQL in 3-5 custom_sql endpoints simultaneously. Without bulk, the third failure leaves you in a half-updated state; with bulk, either every endpoint sees the new column name or none do.',
+      'Each entry in `updates` accepts the same fields as update_endpoint (endpoint_id is mandatory; everything else is a partial patch). Up to 100 entries per call.',
+      'RETURN SHAPE: { total, succeeded, failed, committed: bool, results: [{endpoint_id, status: "ok"|"error", error?, endpoint?}] }. When committed=false the per-row diagnostics tell you exactly which entries blew up so you can fix them and retry.',
+      'Endpoint resolve cache is invalidated once at the end (not per-row), and per-endpoint response caches are flushed only on commit.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        updates: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 100,
+          items: {
+            type: 'object',
+            properties: {
+              endpoint_id: { type: 'string', description: 'UUID of the endpoint to patch.' },
+              method: { type: 'string' }, path: { type: 'string' }, description: { type: 'string' },
+              source_type: { type: 'string' }, source_config: { type: 'object' },
+              validation_schema: { type: 'object' }, response_config: { type: 'object' },
+              auth_type: { type: 'string' }, cache_enabled: { type: 'boolean' }, cache_ttl: { type: 'number' },
+              cache_key_template: { type: 'string' }, rate_limit: { type: 'object' }, is_active: { type: 'boolean' },
+              version: { type: 'number' }, required_scopes: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['endpoint_id'],
+          },
+        },
+      },
+      required: ['updates'],
+    },
+  },
+  {
+    name: 'delete_endpoint',
+    description: 'Delete an API endpoint.',
+    inputSchema: {
+      type: 'object',
+      properties: { endpoint_id: { type: 'string' } },
+      required: ['endpoint_id'],
+    },
+  },
+  {
+    name: 'execute_sql',
+    description: [
+      'Execute a read-only SQL query (SELECT/EXPLAIN/WITH only).',
+      'TRANSACTION-WRAPPED: this tool wraps the query in BEGIN ... COMMIT to enforce SET LOCAL search_path and statement_timeout. As a consequence, TimescaleDB procedures that commit internally per chunk (CALL refresh_continuous_aggregate, CALL compress_chunk, CALL decompress_chunk, CALL reorder_chunk, CALL move_chunk) CANNOT run here — they error with "cannot run inside a transaction block". For those, use the dedicated MCP tools (today: refresh_continuous_aggregate; others on request).',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'SQL query (SELECT only). CALL is rejected with a redirect to the dedicated tool.' },
+        timeout: { type: 'number', description: 'Timeout in ms (default 30000, max 120000)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'execute_sql_mutation',
+    description: 'Execute a write SQL statement (INSERT, UPDATE, DELETE, MERGE). DDL (DROP/TRUNCATE/ALTER/CREATE/GRANT/REVOKE) is blocked — use schema tools instead. Requires confirm_write=true as an explicit guard. Supports {{name}} placeholders bound from "params". TRANSACTION-WRAPPED: same as execute_sql, this is wrapped in BEGIN ... COMMIT. TimescaleDB procedures (refresh_continuous_aggregate / compress_chunk / decompress_chunk) cannot run here — use dedicated tools (refresh_continuous_aggregate today). Realtime: by itself does NOT emit WS events — wrap your mutation in a CTE and call public.df_emit(table, action, pk) to broadcast. CRITICAL: the emit CTE MUST be referenced in the outer SELECT (e.g. "SELECT COUNT(*) FROM emit" or "FROM ins, emit") — AS MATERIALIZED alone is NOT enough, PostgreSQL still prunes unreferenced CTEs and df_emit silently never fires. See get_websocket_info for verified patterns. df_emit fires only on COMMIT, so it is transactional with your write.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'SQL mutation (INSERT/UPDATE/DELETE/MERGE; WITH + mutation allowed). Use {{name}} for parameters.' },
+        confirm_write: { type: 'boolean', description: 'Must be true to actually execute. Explicit guard.' },
+        params: { type: 'object', description: 'Parameter values for {{name}} placeholders. Example: {"id":"abc","active":true}' },
+        returning: { type: 'boolean', description: 'Default true. When true, RETURNING * is appended if not already present so you see exactly which rows changed. Pass false to skip — useful only for "fire and forget" updates where you genuinely do not care about the affected rows.' },
+        dry_run: { type: 'boolean', description: 'Execute in a transaction and roll back. Returns affected row count without persisting.' },
+        timeout: { type: 'number', description: 'Timeout in ms (default 30000, max 120000)' },
+        txn_id: { type: 'string', description: 'Optional open transaction (from begin_transaction). Multiple mutations inside a txn commit atomically.' },
+      },
+      required: ['query', 'confirm_write'],
+    },
+  },
+  {
+    name: 'create_hypertable',
+    description: 'Convert a table to a TimescaleDB hypertable partitioned by a time column. Requires TimescaleDB extension.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'string' },
+        time_column: { type: 'string', description: 'timestamptz or timestamp column used as the partitioning dimension' },
+        chunk_time_interval: { type: 'string', description: 'e.g. "1 day", "7 days", "1 hour". Default: "1 day"' },
+      },
+      required: ['table', 'time_column'],
+    },
+  },
+  {
+    name: 'add_continuous_aggregate',
+    description: [
+      'Create a continuous aggregate (materialized view with timescaledb.continuous) over a hypertable.',
+      'GOTCHAS:',
+      '- The view is created WITH NO DATA. First reads return zero rows until the refresh policy fires — for an immediate backfill use the dedicated refresh_continuous_aggregate tool (NOT execute_sql, which wraps in a transaction).',
+      '- COUNT(DISTINCT col) is NOT supported inside a continuous aggregate. For distinct-counts (e.g. DAU = distinct user_id per day), build a two-level rollup: a CAG GROUP BY (bucket, user_id) with count(*), then SELECT bucket, count(*) over that view in the consuming endpoint.',
+      '- refresh_policy constraints: end_offset >= time_bucket, start_offset > end_offset. Recommended pattern: end_offset = time_bucket (don\'t materialize the still-mutating current bucket), start_offset = a few buckets back (refresh window), schedule_interval = time_bucket.',
+      '- Reads from custom_sql endpoints work transparently: search_path is set to the project schema, so reference the view by its name only (no schema prefix needed).',
+      '- CASCADING (CAG-on-CAG, TimescaleDB 2.9+): source_table can be another continuous aggregate, not just a hypertable. Useful for tiered rollups (raw → 1min CAG → hourly CAG → daily CAG) where each level avoids re-aggregating the raw data. Just pass the lower-tier CAG name as source_table.',
+      'GOOD FIT: dashboard rollups (DAU/CCU/per-hour metrics) where the source table is a hypertable with millions of rows. AVOID for ad-hoc one-off queries — a regular materialized view + cron is simpler.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        view_name: { type: 'string' },
+        source_table: { type: 'string', description: 'A hypertable (see create_hypertable) OR another continuous aggregate (cascading CAGs, TimescaleDB 2.9+).' },
+        time_column: { type: 'string' },
+        time_bucket: { type: 'string', description: 'e.g. "1 hour", "1 day". Determines the materialization granularity.' },
+        aggregations: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              column: { type: 'string' },
+              function: { type: 'string', enum: ['count', 'sum', 'avg', 'min', 'max', 'first', 'last', 'stddev', 'variance'] },
+              alias: { type: 'string' },
+            },
+            required: ['column', 'function'],
+          },
+          description: 'COUNT(DISTINCT) is not supported here — use a two-level rollup pattern (group by the distinct column, then count(*) at query time).',
+        },
+        group_by: { type: 'array', items: { type: 'string' }, description: 'Extra dimensions beyond bucket. For DAU-style distinct counts, include the distinct column here and aggregate count(*).' },
+        refresh_policy: {
+          type: 'object',
+          properties: {
+            start_offset: { type: 'string', description: 'How far back the refresh window extends, e.g. "2 hours". Must be > end_offset.' },
+            end_offset: { type: 'string', description: 'How recent NOT to materialize, e.g. "5 minutes". Must be >= time_bucket. Skipping the latest bucket avoids contention with ongoing inserts.' },
+            schedule_interval: { type: 'string', description: 'How often the refresh job runs, e.g. "5 minutes". Typical value: equal to time_bucket.' },
+            initial_start: { type: 'string', description: 'Optional ISO 8601 timestamp for when the FIRST refresh should fire. Useful when you want backfill to start at a specific time (e.g. "now() + 30 seconds" — but pass an explicit timestamp). If omitted, the first run happens after one schedule_interval.' },
+          },
+          description: 'If omitted, the view exists but never refreshes — you must trigger refresh_continuous_aggregate manually.',
+        },
+      },
+      required: ['view_name', 'source_table', 'time_column', 'time_bucket', 'aggregations'],
+    },
+  },
+  {
+    name: 'add_compression_policy',
+    description: [
+      'Compress older chunks of a hypertable automatically. Pass dry_run=true to PREVIEW which chunks would be compressed (without creating the policy) — returns chunk list + bytes_currently_used + estimated_bytes_after_compression.',
+      'Use list_compression_policies first to see if a policy already exists; this tool fails with "already exists" if so. Use update_compression_policy to change compress_after on an existing policy.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'string' },
+        compress_after: { type: 'string', description: 'e.g. "7 days" — chunks older than this are compressed.' },
+        segment_by: { type: 'array', items: { type: 'string' }, description: 'Columns by which to segment compression (typically high-cardinality dimensions).' },
+        order_by: { type: 'string', description: 'Column + ASC/DESC for ordering rows within compressed chunks.' },
+        dry_run: { type: 'boolean', description: 'If true, no policy is created — returns a preview of which chunks would be compressed and an estimated size reduction.' },
+      },
+      required: ['table', 'compress_after'],
+    },
+  },
+  {
+    name: 'add_retention_policy',
+    description: [
+      'Automatically drop chunks older than the given interval. Pass dry_run=true to PREVIEW which chunks would be dropped (without creating the policy) — returns chunks_to_drop count, bytes_to_free total, and a per-chunk list.',
+      'Use list_retention_policies first to see if a policy already exists. Use update_retention_policy to change drop_after on an existing policy.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'string' },
+        drop_after: { type: 'string', description: 'e.g. "365 days". Chunks whose end-time is older than now() - drop_after get dropped.' },
+        dry_run: { type: 'boolean', description: 'If true, no policy is created — returns a preview of which chunks would be dropped and total bytes freed.' },
+      },
+      required: ['table', 'drop_after'],
+    },
+  },
+  {
+    name: 'list_hypertables',
+    description: 'List TimescaleDB hypertables in the project with chunk count, compression, size before/after.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'list_continuous_aggregates',
+    description: [
+      'List TimescaleDB continuous aggregates in the project schema.',
+      'Use this INSTEAD OF list_materialized_views for CAGs — they live in timescaledb_information.continuous_aggregates, not pg_matviews, so list_materialized_views will return an empty array even if you have CAGs.',
+      'Returned fields per CAG: view_name, source_table (the underlying hypertable), materialization_table (internal), finalized (TRUE = TimescaleDB 2.7+ default form, where the view is a regular view backed by a materialization hypertable).',
+      'For refresh-policy details on each CAG, see list_timescaledb_jobs (filter by proc_name="policy_refresh_continuous_aggregate") or build per-view view via list_timescaledb_jobs together with this output.',
+    ].join('\n'),
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'list_timescaledb_jobs',
+    description: [
+      'List ALL TimescaleDB background jobs in the project schema: refresh policies, retention policies, compression policies, custom jobs.',
+      'Different from list_cron_jobs (which lists DataForge cron jobs only — they do not overlap).',
+      'Returned fields: job_id, proc_name (policy_retention | policy_compression | policy_refresh_continuous_aggregate | other), hypertable_name, schedule_interval, config (JSONB with policy-specific params), last_run_started_at, last_run_status (Success | Failed), last_successful_finish, next_start, total_runs, total_successes, total_failures.',
+      'USE FOR: monitoring whether retention/compression actually fired ("did retention on server_snapshots run today?"), debugging silent failures (last_run_status=Failed for several days), seeing the schedule of automated work.',
+      'For typed filters use list_retention_policies / list_compression_policies — they return the same data narrowed to one job type with policy-specific config flattened.',
+    ].join('\n'),
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'list_retention_policies',
+    description: [
+      'List drop-old-chunks retention policies configured in the project.',
+      'Per policy: job_id, table (schema.table), drop_after (the INTERVAL beyond which chunks are dropped), schedule_interval, last_run_at, last_run_status, next_run_at, total_runs, total_failures.',
+      'USE BEFORE add_retention_policy to check if one already exists — add_retention_policy fails with "already exists" if a policy is configured. Use update_retention_policy (Tier 2) instead of remove + add.',
+      'Empty array means no retention policies — old chunks accumulate forever unless dropped manually via drop_chunks.',
+    ].join('\n'),
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'list_compression_policies',
+    description: [
+      'List automatic-compression policies configured on hypertables in the project.',
+      'Per policy: job_id, table (schema.table), compress_after (chunks older than this get compressed), schedule_interval, last_run_at, last_run_status, next_run_at, total_runs, total_failures.',
+      'USE BEFORE add_compression_policy to check if one already exists. For physical compression stats (how much space was saved per table), use list_hypertables — it reports size_before_compression and size_after_compression.',
+    ].join('\n'),
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'refresh_continuous_aggregate',
+    description: [
+      'Force-refresh (or backfill) a continuous aggregate over an explicit time window.',
+      'BACKGROUND: continuous aggregates are created WITH NO DATA, and refresh_policy only fills the FUTURE. The first time a CAG is created, you typically run this once with NULL bounds to backfill ALL history — then the policy keeps it up to date.',
+      'WHY THIS IS A DEDICATED TOOL: TimescaleDB\'s CALL refresh_continuous_aggregate(...) commits internally and refuses to run inside a transaction block. DataForge\'s execute_sql / execute_sql_mutation / cron jobs all wrap statements in transactions, so they cannot call it directly. This tool runs the CALL on a dedicated autocommit connection.',
+      'PARAMETERS:',
+      '- view_name: name of the CAG (no schema prefix; project schema is implicit)',
+      '- window_start (optional): timestamp; NULL or omitted means "from the beginning of source data". For a partial backfill use ISO 8601 like "2026-04-01T00:00:00Z".',
+      '- window_end (optional): timestamp; NULL or omitted means "up to now". Pair with window_start for incremental backfill.',
+      '- wait (default true): when true, blocks until refresh completes (returns duration_ms). When false, dispatches in the background and returns immediately — there is no job_id for one-shot refreshes, so use this only for fire-and-forget where you tolerate not knowing exact completion.',
+      '- statement_timeout_ms (default 300000 = 5 min, max 1800000 = 30 min): per-call timeout. For 30-day backfills on dense hypertables, raise this or split into multiple windowed calls.',
+      'TYPICAL FLOW after add_continuous_aggregate:',
+      '  refresh_continuous_aggregate({ view_name: "ccu_hourly" })  // blocks until full backfill done',
+      'INCREMENTAL BACKFILL (split a large range into chunks):',
+      '  refresh_continuous_aggregate({ view_name: "ccu_hourly", window_start: "2026-01-01T00:00:00Z", window_end: "2026-02-01T00:00:00Z" })',
+      'ALSO USE FOR: one-off catch-up after a long outage when refresh_policy missed runs; or after manually editing the source hypertable\'s rows.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        view_name: { type: 'string', description: 'CAG view name in the project schema (no prefix).' },
+        window_start: { type: ['string', 'null'], description: 'ISO 8601 timestamp or null = from beginning. Inclusive.' },
+        window_end: { type: ['string', 'null'], description: 'ISO 8601 timestamp or null = up to now. Exclusive.' },
+        wait: { type: 'boolean', description: 'Default true. Blocks until refresh finishes.' },
+        statement_timeout_ms: { type: 'number', description: 'Per-call timeout in ms. Default 300000 (5 min), max 1800000 (30 min).' },
+      },
+      required: ['view_name'],
+    },
+  },
+  {
+    name: 'remove_retention_policy',
+    description: [
+      'Remove the retention policy from a hypertable. Idempotent — does not error if no policy exists.',
+      'AFTER: chunks accumulate forever again. Use add_retention_policy to install a new one, or update_retention_policy to change drop_after without remove + add.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: { table: { type: 'string', description: 'Hypertable name (no schema prefix).' } },
+      required: ['table'],
+    },
+  },
+  {
+    name: 'remove_compression_policy',
+    description: [
+      'Remove the automatic-compression policy from a hypertable. Idempotent.',
+      'NOTE: existing compressed chunks stay compressed — this only stops new chunks from auto-compressing. To decompress existing chunks use raw SQL CALL decompress_chunk on each chunk (no dedicated MCP tool yet).',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: { table: { type: 'string' } },
+      required: ['table'],
+    },
+  },
+  {
+    name: 'remove_continuous_aggregate_policy',
+    description: [
+      'Remove the refresh policy from a continuous aggregate. View itself is preserved with its current data — only the auto-refresh job is dropped.',
+      'AFTER: the CAG stops getting fresh data automatically. You can still manually refresh via refresh_continuous_aggregate, or install a new policy via update_continuous_aggregate_policy.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: { view_name: { type: 'string' } },
+      required: ['view_name'],
+    },
+  },
+  {
+    name: 'update_retention_policy',
+    description: [
+      'Change the drop_after interval on an existing retention policy (or install one if none exists yet — equivalent to add_retention_policy in that case).',
+      'Atomic: remove + add wrapped in a single transaction so there is never a window without a policy.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'string' },
+        drop_after: { type: 'string', description: 'e.g. "30 days", "365 days". Chunks older than this get dropped.' },
+      },
+      required: ['table', 'drop_after'],
+    },
+  },
+  {
+    name: 'update_compression_policy',
+    description: [
+      'Change the compress_after interval on an existing compression policy (or install one if none exists).',
+      'Atomic: remove + add wrapped in a single transaction.',
+      'Does NOT alter compress_segmentby / compress_orderby — for that, drop and re-add via add_compression_policy.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'string' },
+        compress_after: { type: 'string', description: 'e.g. "7 days". Chunks older than this get compressed.' },
+      },
+      required: ['table', 'compress_after'],
+    },
+  },
+  {
+    name: 'update_continuous_aggregate_policy',
+    description: [
+      'Replace the refresh policy on a continuous aggregate. Atomic: remove + add in one transaction.',
+      'Use this to retune cadence (e.g. switch from refresh-every-hour to refresh-every-5min) without ever leaving the CAG without a policy.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        view_name: { type: 'string' },
+        start_offset: { type: 'string', description: 'e.g. "2 hours". Refresh window: [now - start_offset, now - end_offset). Must be > end_offset.' },
+        end_offset: { type: 'string', description: 'e.g. "5 minutes". Must be >= time_bucket of the CAG.' },
+        schedule_interval: { type: 'string', description: 'How often the refresh job runs, e.g. "5 minutes".' },
+      },
+      required: ['view_name', 'start_offset', 'end_offset', 'schedule_interval'],
+    },
+  },
+  {
+    name: 'drop_continuous_aggregate',
+    description: [
+      'Drop a continuous aggregate (DROP MATERIALIZED VIEW). Removes the view, the underlying materialization hypertable, and any refresh policy.',
+      'Without cascade=true, fails if other objects depend on the view (e.g. another CAG built on top of this one). Pass cascade=true to drop dependents.',
+      'Source hypertable is NOT touched.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        view_name: { type: 'string' },
+        cascade: { type: 'boolean', description: 'Default false. Drops dependent objects (e.g. cascading CAGs) if true.' },
+      },
+      required: ['view_name'],
+    },
+  },
+  {
+    name: 'drop_hypertable',
+    description: [
+      'Drop a hypertable (DROP TABLE). Removes the table, all its chunks, retention/compression policies, and dependent CAGs (only with cascade=true).',
+      'Without cascade, fails if any CAG is built on top of this hypertable. Use list_continuous_aggregates first to see what would break.',
+      'For regular (non-hypertable) tables use drop_table — this tool is hypertable-aware and reports chunk count in the result.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'string' },
+        cascade: { type: 'boolean', description: 'Default false. Set true to drop dependent CAGs / views / FK references.' },
+      },
+      required: ['table'],
+    },
+  },
+  {
+    name: 'drop_chunks',
+    description: [
+      'Drop chunks of a hypertable older than a given INTERVAL. One-shot version of retention policy — for ad-hoc cleanup.',
+      'TYPICAL USES:',
+      '- Empty/abandoned hypertable cluttered with empty chunks: drop_chunks({hypertable, older_than: "1 second"}) wipes them all.',
+      '- Manual cleanup before installing a tighter retention policy.',
+      '- Cleaning up after schema changes when retention is overkill for a one-time op.',
+      'RETURNED: chunks_dropped (count) and chunks (list of fully-qualified chunk names dropped).',
+      'NOTE: drop_chunks does not run inside a transaction, so it is fast — but it is also irreversible. Always verify with a query first if unsure.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hypertable: { type: 'string' },
+        older_than: { type: 'string', description: 'INTERVAL string, e.g. "30 days". Drops chunks whose end-time is older than now() - INTERVAL.' },
+      },
+      required: ['hypertable', 'older_than'],
+    },
+  },
+  {
+    name: 'compress_chunk',
+    description: [
+      'Force-compress a single TimescaleDB chunk on demand, bypassing the auto-compression policy schedule.',
+      'WHY DEDICATED: CALL compress_chunk commits internally and refuses to run inside a transaction block, so execute_sql / execute_sql_mutation / cron cannot dispatch it. Same autocommit-runner as refresh_continuous_aggregate.',
+      'TYPICAL USES: compress yesterday\'s chunk before policy fires; one-off cleanup of an old chunk that escaped the policy window; ad-hoc batch compression of a backlog.',
+      'CHUNK NAMES come from list_hypertables → describe_table → hypertable_info.chunks[].name (looks like "_timescaledb_internal._hyper_14_217_chunk"). The schema prefix is optional — if you pass just the relname we default to _timescaledb_internal.',
+      'OWNERSHIP: the chunk must belong to a hypertable in the project schema. Cross-tenant compression is rejected with 403.',
+      'IDEMPOTENT by default: if_not_compressed=true (default) skips already-compressed chunks silently. Pass if_not_compressed=false to force re-error on already-compressed chunks (rare).',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chunk_name: { type: 'string', description: 'Chunk relname (e.g. "_hyper_14_217_chunk") or fully-qualified "schema.relname". Default schema is _timescaledb_internal.' },
+        if_not_compressed: { type: 'boolean', description: 'Default true. Skip silently if the chunk is already compressed.' },
+      },
+      required: ['chunk_name'],
+    },
+  },
+  {
+    name: 'decompress_chunk',
+    description: [
+      'Decompress a single TimescaleDB chunk. Required before mutating rows in a compressed chunk (UPDATE/DELETE on compressed chunks is supported in TS 2.11+ but slower; for bulk rewrites it is faster to decompress, mutate, then compress_chunk).',
+      'AUTOCOMMIT — same dispatch path as compress_chunk.',
+      'IDEMPOTENT by default: if_compressed=true (default) skips already-decompressed chunks silently.',
+      'CAUTION: decompressed chunks immediately consume their pre-compression size in storage (typically 5-10x larger). On large hypertables only decompress what you need.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chunk_name: { type: 'string' },
+        if_compressed: { type: 'boolean', description: 'Default true.' },
+      },
+      required: ['chunk_name'],
+    },
+  },
+  {
+    name: 'recompress_chunk',
+    description: [
+      'Re-compress a chunk that was previously compressed and has had data appended/modified since. Equivalent to decompress_chunk + compress_chunk in one CALL — but only re-encodes the delta, not the whole chunk, so it is faster on chunks with mostly-unchanged data.',
+      'AUTOCOMMIT.',
+      'NOTE: deprecated in TimescaleDB 2.18+ in favor of automatic policy refresh; this tool still dispatches it and falls back with a clear 501 if the function is missing.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: { chunk_name: { type: 'string' } },
+      required: ['chunk_name'],
+    },
+  },
+  {
+    name: 'run_timescaledb_job',
+    description: [
+      'Trigger a TimescaleDB background job to run NOW, bypassing its schedule. Wraps `CALL run_job(<job_id>)`.',
+      'TYPICAL USES: "I just changed the retention policy and want to apply it immediately" / "the refresh job runs hourly but I need fresh data right now" / "the compression policy missed last night, kick it off manually".',
+      'OWNERSHIP: same strict project scope as alter_timescaledb_job — system-wide jobs (telemetry / job_stat_history retention) cannot be triggered from a project context.',
+      'AUTOCOMMIT — the underlying CALL commits per chunk for compression / refresh policies.',
+      'Use list_timescaledb_jobs to find job_id values. For continuous aggregate refresh specifically, prefer refresh_continuous_aggregate (window-controlled) unless you specifically want to re-trigger the policy job itself.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: { job_id: { type: 'integer' } },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'set_chunk_time_interval',
+    description: [
+      'Change the time-bucket width of NEW chunks on a hypertable. Existing chunks keep their current width — this only affects chunks created from now on.',
+      'TYPICAL USES: realised "1 day" chunks are too wide (causes huge per-chunk scans for short queries) → switch to "1 hour"; or the opposite, "1 hour" chunks fragment too much → switch to "1 day".',
+      'Wraps `SELECT set_chunk_time_interval(table, INTERVAL ...)`. No autocommit needed — this is a regular DDL-ish operation in a transaction.',
+      'There is no per-chunk migration tool; if you want existing chunks rewritten, drop them and let TimescaleDB rebuild from upstream sources, or re-INSERT data after dropping.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        hypertable: { type: 'string' },
+        new_interval: { type: 'string', description: 'e.g. "1 hour", "12 hours", "1 day", "7 days".' },
+      },
+      required: ['hypertable', 'new_interval'],
+    },
+  },
+  {
+    name: 'alter_timescaledb_job',
+    description: [
+      'Modify a TimescaleDB background job (retention / compression / CAG-refresh / custom). Wraps Postgres alter_job(...).',
+      'COMMON USE CASES:',
+      '- Reschedule a job that is firing at an inconvenient hour: pass next_start to a chosen ISO timestamp.',
+      '- Change the cadence of an existing job without remove + add: pass schedule_interval.',
+      'AT LEAST ONE of schedule_interval / next_start must be provided.',
+      'Use list_timescaledb_jobs to find job_id. The tool verifies the job belongs to the project schema before altering.',
+    ].join('\n'),
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'integer' },
+        schedule_interval: { type: 'string', description: 'New schedule_interval, e.g. "1 hour". Optional.' },
+        next_start: { type: 'string', description: 'ISO 8601 timestamp for the next run (e.g. "2026-05-03T03:00:00Z"). Optional.' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'create_materialized_view',
+    description: 'Create a materialized view. To auto-refresh, create a cron job that runs "REFRESH MATERIALIZED VIEW schema.view".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        query: { type: 'string', description: 'SELECT statement backing the view.' },
+        refresh_cron: { type: 'string', description: 'Optional cron expression. Returns a hint for creating the refresh job.' },
+        refresh_concurrently: { type: 'boolean' },
+      },
+      required: ['name', 'query'],
+    },
+  },
+  {
+    name: 'list_materialized_views',
+    description: [
+      'List CLASSIC PostgreSQL materialized views in the project (those backed by pg_matviews — typically created via create_materialized_view + a refresh cron).',
+      'WARNING: TimescaleDB continuous aggregates (CAGs) in finalized form (default since TS 2.7) are NOT classic matviews — they are regular views over a materialization hypertable, and this tool will NOT return them. Use list_continuous_aggregates for CAGs.',
+      'Returned per view: name, size, populated, definition.',
+    ].join('\n'),
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'search_endpoints',
+    description: 'Search endpoints by path/description/source_config (case-insensitive substring).',
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'suggest_index',
+    description: 'Look at pg_stat for the given table and suggest indexes if sequential scans dominate.',
+    inputSchema: {
+      type: 'object',
+      properties: { table: { type: 'string' } },
+      required: ['table'],
+    },
+  },
+  {
+    name: 'analyze_schema_quality',
+    description: 'Scan all tables and report schema quality issues: missing PKs, large tables with few indexes, unused indexes.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'explain_query',
+    description: 'Explain and analyze a SQL query. Returns the plan tree, total cost, bottlenecks (Seq Scan on >10k rows, Nested Loop without hash, big Sort), and suggested CREATE INDEX statements.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sql: { type: 'string' },
+        params: { type: 'object', description: 'Values for {{name}} placeholders.' },
+        analyze: { type: 'boolean', description: 'Run EXPLAIN ANALYZE (actually executes inside a rolled-back txn). Default false.' },
+      },
+      required: ['sql'],
+    },
+  },
+  {
+    name: 'begin_transaction',
+    description: 'Open a database transaction that survives across MCP calls. Pass the returned txn_id to subsequent write tools (currently execute_sql_mutation) to run them atomically. Auto-rollback on timeout or disconnect.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        timeout_seconds: { type: 'number', description: 'Auto-rollback after this many seconds. Default 600. Max 1800.' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'commit_transaction',
+    description: 'Commit an open transaction.',
+    inputSchema: { type: 'object', properties: { txn_id: { type: 'string' } }, required: ['txn_id'] },
+  },
+  {
+    name: 'rollback_transaction',
+    description: 'Roll back an open transaction.',
+    inputSchema: { type: 'object', properties: { txn_id: { type: 'string' } }, required: ['txn_id'] },
+  },
+  {
+    name: 'list_transactions',
+    description: 'List active transactions for this project.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_openapi_spec',
+    description: 'Return the auto-generated OpenAPI 3.0 spec for this project. Reflects all active endpoints and table schemas.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        format: { type: 'string', enum: ['json', 'yaml'], default: 'json', description: 'Response format (yaml requires js-yaml — currently falls back to JSON).' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'call_endpoint',
+    description: 'Invoke a project API endpoint internally (no HTTP hop). Auth is implicit — the MCP session already authenticated. Use this to test endpoints or chain calls from schema tools to data.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        endpoint_id: { type: 'string', description: 'UUID of the endpoint. Alternatively provide path + method.' },
+        path: { type: 'string', description: 'e.g. "/users/:id". Used when endpoint_id is not provided.' },
+        method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], description: 'Default GET. Only used when endpoint_id is not provided.' },
+        params: { type: 'object', description: 'Merged path+query parameters. Example: {"id":"abc","limit":"10"}' },
+        body: { description: 'Request body (object or array for create_many).' },
+        headers: { type: 'object', description: 'Additional headers (mostly ignored in internal dispatch).' },
+        bypass_cache: { type: 'boolean', description: 'If true, skip reading/writing cache even when endpoint has caching enabled.' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'list_api_tokens',
+    description: 'List all API tokens of this project (metadata only — raw tokens are never retrievable after creation). Returns id, name, prefix, scopes, allowed_ips, is_active, expires_at, last_used_at, created_at.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'create_api_token',
+    description: 'Create a new API token. Returns the raw token ONCE — store it immediately, it cannot be retrieved later. Scopes grant per-table access: "read:<table>" / "write:<table>" / "delete:<table>" / "admin:<table>", or wildcard "read:*" / "admin:*". Legacy "read" / "write" / "delete" / "admin" are equivalent to "<verb>:*".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Human-readable label.' },
+        scopes: { type: 'array', items: { type: 'string' }, description: 'e.g. ["read:users","write:orders"] or ["admin:*"].' },
+        allowed_ips: { type: 'array', items: { type: 'string' }, description: 'Optional IP allowlist.' },
+        expires_at: { type: 'string', description: 'Optional ISO-8601 expiration.' },
+      },
+      required: ['name', 'scopes'],
+    },
+  },
+  {
+    name: 'update_api_token',
+    description: 'Update an existing token (name/scopes/allowed_ips/expires_at). Token hash and raw value stay the same; only permissions and metadata change. Synced to the worker cache immediately.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        token_id: { type: 'string' },
+        name: { type: 'string' },
+        scopes: { type: 'array', items: { type: 'string' } },
+        allowed_ips: { type: 'array', items: { type: 'string' } },
+        expires_at: { type: 'string' },
+      },
+      required: ['token_id'],
+    },
+  },
+  {
+    name: 'rotate_api_token',
+    description: 'Issue a new token with the same scopes and revoke the old one. Returns the new raw token ONCE. Use this when a token is suspected leaked.',
+    inputSchema: {
+      type: 'object',
+      properties: { token_id: { type: 'string' } },
+      required: ['token_id'],
+    },
+  },
+  {
+    name: 'revoke_api_token',
+    description: 'Revoke a token (set is_active=false) without deleting the record. Revoked tokens cannot be re-enabled — create a new one instead.',
+    inputSchema: {
+      type: 'object',
+      properties: { token_id: { type: 'string' } },
+      required: ['token_id'],
+    },
+  },
+  {
+    name: 'delete_api_token',
+    description: 'Permanently delete a token record. Prefer revoke_api_token unless you need to remove the row entirely.',
+    inputSchema: {
+      type: 'object',
+      properties: { token_id: { type: 'string' } },
+      required: ['token_id'],
+    },
+  },
+  {
+    name: 'list_cron_jobs',
+    description: 'List all cron jobs in the project. Returns each job with its name, cron expression, active status, last run info, and run count.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_cron_job',
+    description: 'Get details of a specific cron job including its configuration and the 20 most recent run results.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'create_cron_job',
+    description: 'Create a new scheduled cron job. Currently supports SQL action type. The job executes the query on the configured schedule. DDL statements (DROP, ALTER, CREATE, etc.) are blocked for safety.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Human-readable job name' },
+        cron_expression: { type: 'string', description: 'Cron schedule expression, e.g. "0 * * * *" (every hour), "*/5 * * * *" (every 5 min), "0 0 * * *" (daily midnight)' },
+        action_type: { type: 'string', enum: ['sql', 'http'], description: 'Type of action. "sql" runs a query; "http" calls an external HTTPS URL.' },
+        action_config: {
+          type: 'object',
+          description: 'For sql: { "query": "SELECT ..." }. For http: { "method", "url" (https only), "headers"?, "body_template"?, "body_sql"?, "retry_policy"? { max_attempts, backoff: fixed|exponential, initial_delay_ms }, "timeout_ms"? (≤60000) }',
+        },
+        is_active: { type: 'boolean', default: true, description: 'Whether the job starts active (default true)' },
+      },
+      required: ['name', 'cron_expression', 'action_type', 'action_config'],
+    },
+  },
+  {
+    name: 'update_cron_job',
+    description: 'Update an existing cron job. Only provided fields are changed. The job is automatically rescheduled if the cron expression or active status changes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job to update' },
+        name: { type: 'string' },
+        cron_expression: { type: 'string' },
+        action_type: { type: 'string', enum: ['sql'] },
+        action_config: { type: 'object', properties: { query: { type: 'string' } } },
+        is_active: { type: 'boolean' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'delete_cron_job',
+    description: 'Delete a cron job permanently. Stops the scheduled execution and removes all run history.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job to delete' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'toggle_cron_job',
+    description: 'Toggle a cron job between active and inactive. Active jobs run on schedule; inactive jobs are paused but retain their configuration.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job to toggle' },
+      },
+      required: ['job_id'],
+    },
+  },
+  {
+    name: 'run_cron_job',
+    description: 'Execute a cron job immediately regardless of its schedule or active status. Returns the execution result including status, output rows, and any errors.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        job_id: { type: 'string', description: 'UUID of the cron job to run' },
+      },
+      required: ['job_id'],
+    },
+  },
+
+  // ========== AI Studio ==========
+  {
+    name: 'ai_studio_list_endpoints',
+    description: 'List all AI Studio endpoints in this project. Returns each endpoint with provider, model, slug, configured prompts, context settings, and is_active flag. Use this before test/update/delete to find the right endpoint_id or slug.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'ai_studio_get_endpoint',
+    description: 'Get full config of one AI Studio endpoint by id (UUID) or slug. Returns system_prompt, response_format, temperature, max_tokens, context config, validation_rules, etc.',
+    inputSchema: {
+      type: 'object',
+      properties: { endpoint: { type: 'string', description: 'endpoint id (UUID) or slug' } },
+      required: ['endpoint'],
+    },
+  },
+  {
+    name: 'ai_studio_list_models',
+    description: 'List all AI providers and models supported by AI Studio. Returns: {providers: ["openai","deepseek","claude"], models: {openai: [...], deepseek: [...], claude: [...]}}. Use when picking provider+model for create_endpoint.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'ai_studio_create_endpoint',
+    description: 'Create a new AI Studio endpoint. Supports OpenAI / DeepSeek / Claude providers. Endpoints can enforce response_format (JSON schema), validation_rules (max_length/contains/required_fields), enable chat history (context), and per-session token caps. API keys can be set per-endpoint or inherited from AI Studio plugin settings (openai_key / deepseek_key / claude_key).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Human-readable name. Auto-slugified for URL use unless slug is passed.' },
+        slug: { type: 'string', description: 'Optional URL-safe slug. Default: slugified name.' },
+        provider: { type: 'string', enum: ['openai', 'deepseek', 'claude'] },
+        model: { type: 'string', description: 'Model id. Must match the provider. Call ai_studio_list_models to see valid options.' },
+        api_key: { type: 'string', description: 'Optional per-endpoint API key. If omitted, the plugin-level key (openai_key/deepseek_key/claude_key) is used.' },
+        system_prompt: { type: 'string', description: 'System message prepended to every call.' },
+        response_format: { type: 'object', description: 'Optional JSON schema the model must match. Enables JSON mode and auto-appends the schema to system_prompt.' },
+        temperature: { type: 'number', minimum: 0, maximum: 2, description: 'Default 0.7.' },
+        max_tokens: { type: 'number', description: 'Default 1024. Max per provider varies.' },
+        context_enabled: { type: 'boolean', description: 'Enable chat history per session. Requires session_id on each call.' },
+        context_ttl_minutes: { type: 'number', description: 'How long contexts live (min). Default 60, max 10080 (7 days).' },
+        max_context_messages: { type: 'number', description: 'Keep only the last N messages in each session. Default 50.' },
+        max_tokens_per_session: { type: 'number', description: 'Stop accepting new calls once a session exceeds this many tokens. 0 = unlimited. Default 0.' },
+        validation_rules: {
+          type: 'object',
+          description: 'Post-response validation. Keys: json (boolean — require valid JSON), required_fields ([string] — must exist on parsed JSON), max_length (number — reject longer responses), contains (string — must be a substring).',
+        },
+        retry_on_invalid: { type: 'boolean', description: 'If validation fails, ask the model to fix its response and retry. Default false.' },
+        max_retries: { type: 'number', description: 'Max retries when retry_on_invalid is true. Default 3, max 5.' },
+      },
+      required: ['name', 'provider', 'model'],
+    },
+  },
+  {
+    name: 'ai_studio_update_endpoint',
+    description: 'Update an AI Studio endpoint. Only fields passed are changed. Also accepts is_active to enable/disable without deleting.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        endpoint_id: { type: 'string', description: 'UUID of the endpoint (not slug).' },
+        name: { type: 'string' }, provider: { type: 'string' }, model: { type: 'string' },
+        api_key: { type: 'string' }, system_prompt: { type: 'string' },
+        response_format: { type: 'object' }, temperature: { type: 'number' }, max_tokens: { type: 'number' },
+        context_enabled: { type: 'boolean' }, context_ttl_minutes: { type: 'number' },
+        max_context_messages: { type: 'number' }, max_tokens_per_session: { type: 'number' },
+        validation_rules: { type: 'object' },
+        retry_on_invalid: { type: 'boolean' }, max_retries: { type: 'number' },
+        is_active: { type: 'boolean' },
+      },
+      required: ['endpoint_id'],
+    },
+  },
+  {
+    name: 'ai_studio_delete_endpoint',
+    description: 'Permanently delete an AI Studio endpoint. All its logs and contexts are deleted via ON DELETE CASCADE. Prefer disabling (is_active=false) if you just want to pause traffic.',
+    inputSchema: {
+      type: 'object',
+      properties: { endpoint_id: { type: 'string' } },
+      required: ['endpoint_id'],
+    },
+  },
+  {
+    name: 'ai_studio_test_endpoint',
+    description: 'Invoke an AI Studio endpoint with a user input or message history. Returns {content, tokens_used, model, duration_ms, attempts, validation_warning?}. Use session_id to maintain chat history across calls (requires context_enabled on the endpoint).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        endpoint: { type: 'string', description: 'endpoint id (UUID) or slug' },
+        input: { type: 'string', description: 'Single-turn user message. Use either input OR messages, not both.' },
+        messages: {
+          type: 'array',
+          description: 'Multi-turn history. Each item: {role:"user"|"assistant", content}. Overrides input.',
+          items: {
+            type: 'object',
+            properties: { role: { type: 'string', enum: ['user', 'assistant'] }, content: { type: 'string' } },
+            required: ['role', 'content'],
+          },
+        },
+        session_id: { type: 'string', description: 'Required only if endpoint has context_enabled=true. Groups messages into one chat.' },
+      },
+      required: ['endpoint'],
+    },
+  },
+  {
+    name: 'ai_studio_get_logs',
+    description: 'Fetch recent AI Studio call logs. Each row: input_messages, output, tokens_used, duration_ms, status (success|error|validation_failed), error. Useful for debugging failed calls or tracking token spend.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        endpoint_id: { type: 'string', description: 'Optional filter by endpoint.' },
+        limit: { type: 'number', description: 'Default 50.' },
+        offset: { type: 'number', description: 'Default 0.' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'ai_studio_get_stats',
+    description: 'Return 24-hour stats across all AI Studio endpoints: total calls, by provider, by status (success/error/validation_failed), avg duration, total tokens.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'ai_studio_get_session',
+    description: 'Get chat history for one session of a context-enabled endpoint. Returns {messages, tokens_used, created_at, updated_at}.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        endpoint: { type: 'string', description: 'endpoint id (UUID) or slug' },
+        session_id: { type: 'string' },
+      },
+      required: ['endpoint', 'session_id'],
+    },
+  },
+  {
+    name: 'ai_studio_clear_session',
+    description: 'Wipe chat history for one session. The endpoint itself and its other sessions are unaffected. Use to reset a user conversation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        endpoint: { type: 'string', description: 'endpoint id (UUID) or slug' },
+        session_id: { type: 'string' },
+      },
+      required: ['endpoint', 'session_id'],
+    },
+  },
+
+  // ========== Plugins ==========
+  {
+    name: 'list_plugins',
+    description: 'List every built-in plugin with its manifest metadata and enabled status for this project. Returns [{manifest:{id,name,description,version,icon,settings[...]}, enabled, instance_id}]. Common plugins: ai-rest-gateway, ai-mcp-server, ai-studio, feature-webhooks, feature-websocket, feature-graphql, discord-webhook, telegram-bot, uptime-ping, sbox-auth.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_plugin',
+    description: 'Get one plugin\'s manifest + current settings (password fields redacted) + enabled status. Use before update_plugin_settings to see the expected shape.',
+    inputSchema: {
+      type: 'object',
+      properties: { plugin_id: { type: 'string' } },
+      required: ['plugin_id'],
+    },
+  },
+  {
+    name: 'enable_plugin',
+    description: 'Enable a plugin for this project with initial settings. Required password/text settings from the manifest must be provided (use get_plugin to see which). Plugins that create per-project tables (ai-studio, uptime-ping, etc.) auto-create them on enable. Idempotent — re-running on an already-enabled plugin updates settings and keeps data.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plugin_id: { type: 'string' },
+        settings: { type: 'object', description: 'Key-value settings matching the plugin manifest. Example: {"deepseek_key":"sk-..."} for ai-studio, {"bot_token":"..."} for telegram-bot.' },
+      },
+      required: ['plugin_id'],
+    },
+  },
+  {
+    name: 'disable_plugin',
+    description: 'Disable (not delete) a plugin for this project. Settings are preserved — re-enabling restores state. Features tied to the plugin become unavailable: AI Studio endpoints stop accepting calls, webhooks stop firing, WebSocket rejects new connections, etc.',
+    inputSchema: {
+      type: 'object',
+      properties: { plugin_id: { type: 'string' } },
+      required: ['plugin_id'],
+    },
+  },
+  {
+    name: 'update_plugin_settings',
+    description: 'Change the settings of an already-enabled plugin. Merges with existing settings. Use this to rotate API keys (ai-studio, telegram-bot), change webhook URLs, etc.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plugin_id: { type: 'string' },
+        settings: { type: 'object', description: 'New key-value pairs. Deep merge with existing settings (top-level keys overwritten, nested objects replaced).' },
+      },
+      required: ['plugin_id', 'settings'],
+    },
+  },
+
+  // ========== Webhooks ==========
+  {
+    name: 'list_webhooks',
+    description: 'List all webhooks for this project with delivery stats: {total, success_count, last_triggered}. Secrets are redacted. Requires the feature-webhooks plugin enabled.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_webhook',
+    description: 'Get one webhook with its full config (secret INCLUDED — be careful when showing to users).',
+    inputSchema: {
+      type: 'object',
+      properties: { webhook_id: { type: 'string' } },
+      required: ['webhook_id'],
+    },
+  },
+  {
+    name: 'create_webhook',
+    description: 'Create a webhook that fires when rows are INSERTed / UPDATEd / DELETEd through API endpoints. The URL is called with a JSON body: {table, event, record, timestamp}. If "secret" is set, an X-Webhook-Signature: sha256=<hmac> header is added so the receiver can verify authenticity. Failed deliveries retry with exponential backoff (2s, 4s, 8s, 16s by default). IMPORTANT: webhooks do NOT fire on execute_sql_mutation — only on table CRUD operations via endpoints.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Optional human-readable name.' },
+        table_names: { type: 'array', items: { type: 'string' }, description: 'Tables this webhook listens to. Must exist in project schema.' },
+        events: { type: 'array', items: { type: 'string', enum: ['INSERT', 'UPDATE', 'DELETE'] } },
+        url: { type: 'string', description: 'HTTPS URL receiving the POST. Localhost and private IPs are blocked by the SSRF guard.' },
+        method: { type: 'string', enum: ['POST', 'PUT', 'PATCH'], description: 'Default POST.' },
+        headers: { type: 'object', description: 'Extra headers: {"x-api-token":"..."}.' },
+        payload_template: { type: 'object', description: 'Optional JSON template applied to the standard payload before sending. Reserved for future customization.' },
+        secret: { type: 'string', description: 'HMAC-SHA256 key. Signature is sent as X-Webhook-Signature: sha256=<hex>. Verify on receiver side.' },
+        retry_count: { type: 'number', description: 'Max retry attempts on 5xx or network error. Default 3. 4xx responses never retry.' },
+        is_active: { type: 'boolean', description: 'Default true. Set false to pause without deleting.' },
+      },
+      required: ['table_names', 'events', 'url'],
+    },
+  },
+  {
+    name: 'update_webhook',
+    description: 'Update a webhook. Pass only the fields you want to change. Use is_active=false to temporarily pause without losing history.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        webhook_id: { type: 'string' },
+        name: { type: 'string' },
+        table_names: { type: 'array', items: { type: 'string' } },
+        events: { type: 'array', items: { type: 'string' } },
+        url: { type: 'string' },
+        method: { type: 'string' },
+        headers: { type: 'object' },
+        payload_template: { type: 'object' },
+        secret: { type: 'string' },
+        retry_count: { type: 'number' },
+        is_active: { type: 'boolean' },
+      },
+      required: ['webhook_id'],
+    },
+  },
+  {
+    name: 'delete_webhook',
+    description: 'Permanently delete a webhook and all its delivery logs.',
+    inputSchema: {
+      type: 'object',
+      properties: { webhook_id: { type: 'string' } },
+      required: ['webhook_id'],
+    },
+  },
+  {
+    name: 'get_webhook_logs',
+    description: 'Recent delivery attempts for one webhook: status code, attempt number, response body, duration, sent_at. Useful for debugging failing webhooks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        webhook_id: { type: 'string' },
+        limit: { type: 'number', description: 'Default 50, max reasonable is 500.' },
+      },
+      required: ['webhook_id'],
+    },
+  },
+
+  // ========== Optimization ==========
+  {
+    name: 'optimize_table',
+    description: 'Deep indexing audit for one table. Checks: seq_scan dominance, unindexed timestamp columns (created_at is very common), unindexed foreign key columns, unused indexes, large tables with few indexes. Returns concrete CREATE INDEX / DROP INDEX suggestions with severity (high/medium/low) and estimated impact. Wider than suggest_index which only looks at seq vs idx stats.',
+    inputSchema: {
+      type: 'object',
+      properties: { table_name: { type: 'string' } },
+      required: ['table_name'],
+    },
+  },
+
+  // ========== Triggers ==========
+  {
+    name: 'list_triggers',
+    description: 'List user-defined triggers on a table: name, enabled state, timing (BEFORE/AFTER), event (INSERT/UPDATE/DELETE/TRUNCATE), granularity (ROW/STATEMENT), and the function it calls. Hides system/internal triggers (FK enforcement, mat-view refresh). Use before toggle_trigger to see what is there.',
+    inputSchema: {
+      type: 'object',
+      properties: { table_name: { type: 'string' } },
+      required: ['table_name'],
+    },
+  },
+  {
+    name: 'toggle_trigger',
+    description: 'Enable or disable a trigger on a table. Primary use case: temporarily disable the auto-generated "update_<table>_updated_at" trigger before a data migration that wants to set updated_at to a specific value (e.g. backfill from last_seen_at). Without disabling, the trigger overwrites updated_at with NOW() on every UPDATE. Re-enable immediately after. If trigger_name is omitted, defaults to update_<table>_updated_at. Emits: ALTER TABLE ... [ENABLE|DISABLE] TRIGGER "<name>".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table_name: { type: 'string' },
+        enabled: { type: 'boolean', description: 'true → ENABLE TRIGGER. false → DISABLE TRIGGER.' },
+        trigger_name: { type: 'string', description: 'Optional. Defaults to "update_<table>_updated_at" (the DataForge-auto updated_at trigger).' },
+      },
+      required: ['table_name', 'enabled'],
+    },
+  },
+
+  // ========== WebSocket ==========
+  {
+    name: 'get_websocket_info',
+    description: 'Get WebSocket connection details for this project: URL, auth header, supported channels, server event shapes, limits, AND the df_emit() SQL bridge usage (how to emit realtime events from custom_sql CTEs, cron, execute_sql_mutation). Returns ready-to-paste CTE examples for batch insert / single upsert / multi-table sync / AFTER trigger patterns, plus the planner_warning explaining why AS MATERIALIZED alone is NOT enough to force an unreferenced emit CTE to execute. READ planner_warning BEFORE writing a custom_sql endpoint that needs realtime.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_websocket_stats',
+    description: 'Runtime WebSocket + pg_notify bridge stats for this project. Returns: connectedClients, messagesSent/Received, plus pg_notify {status, events_received_total, events_delivered_total, events_dropped_total, reconnects, last_event_at, per_table{table: count}}. Use after deploying df_emit() calls to verify events actually fire. Diagnostic: (1) if the table is MISSING from per_table but events_received_total still grew — your emit CTE is being pruned by the planner (reference it in the outer SELECT, AS MATERIALIZED alone is not enough); (2) if dropped > 0 — payload was for an unknown schema or malformed JSON; (3) if delivered grew but WS client silent — check the client subscribed to "table:<name>" channel with the exact name used in df_emit.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+];

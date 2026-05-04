@@ -1,0 +1,1775 @@
+import type { Knex } from 'knex';
+import type Redis from 'ioredis';
+import { SchemaService } from '../schema/schema.service.js';
+import { BuilderService } from '../api-builder/builder.service.js';
+import { ConsoleService } from '../sql-console/console.service.js';
+import { AnalyzerService } from '../sql-console/analyzer.service.js';
+import { CronService } from '../cron/cron.service.js';
+import { TimescaleService } from '../timescale/timescale.service.js';
+import { Executor } from '../api-builder/executor.js';
+import { CacheService } from '../api-builder/cache.service.js';
+import { OpenAPIService } from '../api-executor/openapi.service.js';
+import { AiStudioService } from '../ai-studio/ai-studio.service.js';
+import { PROVIDER_MODELS } from '../ai-studio/ai-studio.types.js';
+import { PluginManager } from '../plugins/plugin.manager.js';
+import { WebhooksService } from '../webhooks/webhooks.service.js';
+import { WebSocketService } from '../realtime/websocket.service.js';
+import { getPgNotifyListener } from '../realtime/pg-listener.service.js';
+import { isModuleEnabled } from '../../utils/module-check.js';
+import type { AiContextResponse, AiGatewayLogEntry } from './ai-gateway.types.js';
+
+export class AiGatewayService {
+  private schema: SchemaService;
+  private builder: BuilderService;
+  private console: ConsoleService;
+  private analyzer: AnalyzerService;
+  private cron: CronService;
+  private timescale: TimescaleService;
+  private executor: Executor;
+  private cacheService: CacheService | null;
+  private aiStudio: AiStudioService;
+  private plugins: PluginManager;
+  private webhooks: WebhooksService;
+
+  constructor(private db: Knex, private redis?: Redis) {
+    this.schema = new SchemaService(db);
+    this.builder = new BuilderService(db);
+    this.console = new ConsoleService(db);
+    this.analyzer = new AnalyzerService(db);
+    this.cron = new CronService(db);
+    this.timescale = new TimescaleService(db);
+    this.executor = new Executor(db);
+    this.cacheService = redis ? new CacheService(redis) : null;
+    this.aiStudio = new AiStudioService(db);
+    this.plugins = new PluginManager(db);
+    this.webhooks = new WebhooksService(db);
+  }
+
+  // ===== Plugin management (MCP) =====
+
+  async listPlugins(projectId: string) {
+    await this.plugins.loadPlugins().catch(() => {});
+    return this.plugins.listPluginsWithStatus(projectId);
+  }
+
+  async getPluginInfo(projectId: string, pluginId: string) {
+    await this.plugins.loadPlugins().catch(() => {});
+    const all = await this.plugins.listPluginsWithStatus(projectId);
+    const entry = all.find((p: { id: string }) => p.id === pluginId);
+    if (!entry) throw new Error(`Plugin "${pluginId}" not found`);
+    // getPluginSettings returns { settings, is_enabled } — unwrap
+    let savedSettings: Record<string, unknown> = {};
+    try {
+      const res = await this.plugins.getPluginSettings(projectId, pluginId) as { settings?: unknown };
+      const raw = res?.settings;
+      savedSettings = (typeof raw === 'string' ? JSON.parse(raw) : (raw as Record<string, unknown>)) ?? {};
+    } catch {}
+    const manifestWrapper = { settings: (entry as { settings?: Array<{ key: string; type?: string }> }).settings ?? [] };
+    return { ...entry, saved_settings: this.redactSecrets(savedSettings, manifestWrapper) };
+  }
+
+  async enablePluginForProject(projectId: string, pluginId: string, settings: Record<string, unknown> = {}) {
+    return this.plugins.enablePlugin(projectId, pluginId, settings ?? {});
+  }
+
+  async disablePluginForProject(projectId: string, pluginId: string) {
+    return this.plugins.disablePlugin(projectId, pluginId);
+  }
+
+  async updatePluginSettingsForProject(projectId: string, pluginId: string, settings: Record<string, unknown>) {
+    return this.plugins.updatePluginSettings(projectId, pluginId, settings);
+  }
+
+  /** Redact password-type settings per manifest — MCP must never return raw API keys. */
+  private redactSecrets(settings: Record<string, unknown>, manifest: { settings?: Array<{ key: string; type?: string }> }): Record<string, unknown> {
+    const out = { ...settings };
+    for (const s of manifest.settings ?? []) {
+      if (s.type === 'password' && typeof out[s.key] === 'string' && out[s.key]) {
+        const v = out[s.key] as string;
+        out[s.key] = v.length > 8 ? v.slice(0, 4) + '••••' + v.slice(-2) : '••••';
+      }
+    }
+    return out;
+  }
+
+  // ===== Webhooks (MCP) =====
+
+  async listWebhooks(projectId: string) {
+    return this.webhooks.findAll(projectId);
+  }
+
+  async getWebhook(projectId: string, webhookId: string) {
+    return this.webhooks.findById(webhookId, projectId);
+  }
+
+  async createWebhook(projectId: string, userId: string | null, input: Parameters<WebhooksService['create']>[2]) {
+    return this.webhooks.create(projectId, (userId ?? null) as unknown as string, input);
+  }
+
+  async updateWebhook(projectId: string, webhookId: string, input: Record<string, unknown>) {
+    return this.webhooks.update(webhookId, projectId, input);
+  }
+
+  async deleteWebhook(projectId: string, webhookId: string) {
+    await this.webhooks.delete(webhookId, projectId);
+    return { deleted: true, webhook_id: webhookId };
+  }
+
+  async getWebhookLogs(projectId: string, webhookId: string, limit = 50) {
+    return this.webhooks.getLogs(webhookId, projectId, limit);
+  }
+
+  // ===== WebSocket info / stats (MCP) =====
+
+  getWebsocketInfo(projectSlug: string, host = 'your-dataforge-host') {
+    return {
+      protocol: 'wss (TLS)',
+      url: `wss://${host}/ws/v1/${projectSlug}?token=YOUR_API_TOKEN`,
+      auth: {
+        method: 'API token (same as REST)',
+        header: 'Authorization: Bearer YOUR_TOKEN',
+        query_alternative: '?token=YOUR_TOKEN',
+      },
+      client_messages: [
+        { action: 'subscribe', channel: 'project:<slug>   — receives events from ALL tables in the project' },
+        { action: 'subscribe', channel: 'table:<name>     — receives events only from one table' },
+        { action: 'unsubscribe', channel: '<same format>' },
+        { action: 'ping' },
+      ],
+      server_events: {
+        connected: '{ type:"connected", projectSlug, timestamp }',
+        subscribed: '{ type:"subscribed", channel, timestamp }',
+        data_change: '{ type:"data_change", table, action:"INSERT"|"UPDATE"|"DELETE", record, timestamp }',
+        pong: '{ type:"pong", timestamp }',
+        error: '{ type:"error", code, message }',
+      },
+      limits: {
+        max_connections_per_project: 100,
+        max_channels_per_client: 50,
+        rate_limit: '20 client messages per second per socket',
+      },
+      event_sources: {
+        table_endpoints: 'Table-based endpoints (source_type: table) emit events automatically on every INSERT/UPDATE/DELETE.',
+        df_emit: 'SQL-callable bridge: public.df_emit(table text, action text, pk text DEFAULT NULL, data jsonb DEFAULT NULL) — call from custom_sql endpoints, execute_sql_mutation, cron jobs, triggers, or direct SQL sessions. Events fire only on COMMIT, so aborted transactions never leak. Payload >7500 bytes is auto-truncated; keep "data" minimal (pk only) when clients can refetch.',
+        example_custom_sql: "WITH upserted AS (INSERT INTO players ... ON CONFLICT DO UPDATE RETURNING *), _emit AS (SELECT df_emit('players','UPSERT',id::text, to_jsonb(u)) FROM upserted u) SELECT u.* FROM upserted u, _emit;",
+        example_batch_insert: "WITH ins AS (INSERT INTO chat_messages ... RETURNING msg_id, ts, ...), emit AS (SELECT df_emit('chat_messages','INSERT',msg_id::text, jsonb_build_object('msg_id',msg_id::text,'ts',ts,...)) FROM ins) SELECT COUNT(*)::int FROM emit;",
+        example_multi_table_cte: "WITH p AS (INSERT INTO players ... RETURNING *), i AS (INSERT INTO player_ips ... RETURNING *), ep AS (SELECT df_emit('players','UPSERT',id::text) FROM p), ei AS (SELECT df_emit('player_ips','INSERT',id::text) FROM i) SELECT 1 FROM ep, ei;",
+        example_trigger: "CREATE FUNCTION emit_chat() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM df_emit('chat_messages', TG_OP, NEW.msg_id::text, to_jsonb(NEW)); RETURN NEW; END $$; CREATE TRIGGER tg_emit_chat AFTER INSERT OR UPDATE OR DELETE ON chat_messages FOR EACH ROW EXECUTE FUNCTION emit_chat();",
+        planner_warning: "CRITICAL: a SELECT-only emit CTE MUST be referenced in the outer query (FROM emit, CROSS JOIN emit, or SELECT COUNT(*) FROM emit). AS MATERIALIZED ALONE does NOT work — PostgreSQL still prunes unreferenced CTEs even when marked MATERIALIZED. The final SELECT must touch the emit CTE by name, otherwise df_emit never executes and no WS event fires, even though the upstream INSERT CTE runs and rows persist.",
+        verification: "After deploying, POST to the endpoint then call get_websocket_stats. The table MUST appear in per_table with a count >= expected events. If per_table entry is missing, the emit CTE is being pruned — move COUNT/RETURNING to reference the emit CTE or install an AFTER trigger.",
+      },
+      prerequisites: 'Enable the "feature-websocket" plugin for the project before clients can connect. df_emit() is always available on worker DB (installed via migration) — no plugin toggle needed on the SQL side.',
+    };
+  }
+
+  getWebsocketStats(projectId: string) {
+    const ws = WebSocketService.getInstance();
+    const wsStats = ws.getStats(projectId);
+    let pgNotify: Record<string, unknown> | null = null;
+    const listener = getPgNotifyListener();
+    if (listener) {
+      const s = listener.getStats();
+      // Filter per_table stats to just this project's tables
+      const perTable: Record<string, number> = {};
+      for (const [k, v] of Object.entries(s.per_table ?? {})) {
+        if (k.startsWith(`${projectId}:`)) {
+          perTable[k.slice(projectId.length + 1)] = v as number;
+        }
+      }
+      pgNotify = {
+        status: s.status,
+        connected_at: s.connected_at,
+        events_received_total: s.events_received_total,
+        events_delivered_total: s.events_delivered_total,
+        events_dropped_total: s.events_dropped_total,
+        last_event_at: s.last_event_at,
+        reconnects: s.reconnects,
+        per_table: perTable,
+      };
+    }
+    return { ...wsStats, pg_notify: pgNotify };
+  }
+
+  // ===== Triggers (MCP) =====
+
+  async listTriggers(dbSchema: string, tableName: string) {
+    return this.schema.listTriggers(dbSchema, tableName);
+  }
+
+  async toggleTrigger(dbSchema: string, tableName: string, triggerName: string | undefined, enabled: boolean) {
+    // If trigger_name is omitted, default to the auto-generated updated_at trigger.
+    const name = triggerName && triggerName.trim() ? triggerName : `update_${tableName}_updated_at`;
+    const sql = await this.schema.toggleTrigger(dbSchema, tableName, name, enabled);
+    return { sql, trigger_name: name, enabled };
+  }
+
+  /**
+   * Comprehensive indexing audit for a single table. Combines everything a human DBA would check:
+   *   • seq_scan vs idx_scan ratio on stats
+   *   • unindexed timestamp columns (created_at / updated_at commonly sorted on)
+   *   • unindexed foreign key columns (classic slow-join culprit)
+   *   • unused indexes (idx_scan = 0 after many scans elsewhere)
+   *   • table size + existing index count for context
+   * Returns a list of concrete CREATE INDEX / DROP INDEX suggestions with severity and estimated win.
+   */
+  async optimizeTable(dbSchema: string, tableName: string) {
+    // Validate inputs
+    if (!/^[a-z_][a-z0-9_]*$/.test(dbSchema)) throw new Error('Invalid schema name');
+    if (!/^[a-z_][a-z0-9_]*$/.test(tableName)) throw new Error('Invalid table name');
+
+    // 1. Basic stats
+    const statsRow: any = await this.db.raw(`
+      SELECT seq_scan, seq_tup_read, idx_scan, idx_tup_fetch, n_live_tup AS estimated_rows,
+             pg_total_relation_size(format('%I.%I', schemaname, relname)::regclass)::bigint AS size_bytes
+      FROM pg_stat_user_tables
+      WHERE schemaname = ? AND relname = ?
+    `, [dbSchema, tableName]);
+    if (!statsRow.rows[0]) {
+      return { table: tableName, message: 'Table not found or no stats available yet. Try again after some queries have run.' };
+    }
+    const stats = statsRow.rows[0];
+
+    // 2. Columns with their types
+    const cols: any = await this.db.raw(`
+      SELECT column_name, data_type FROM information_schema.columns
+      WHERE table_schema = ? AND table_name = ?
+    `, [dbSchema, tableName]);
+    const columns = cols.rows as Array<{ column_name: string; data_type: string }>;
+
+    // 3. Currently indexed columns (plain single-column b-tree only for simplicity)
+    const idxRows: any = await this.db.raw(`
+      SELECT a.attname AS col, i.relname AS index_name, idx.indisunique, idx.indisprimary
+      FROM pg_index idx
+      JOIN pg_class i ON i.oid = idx.indexrelid
+      JOIN pg_class t ON t.oid = idx.indrelid
+      JOIN pg_namespace n ON n.oid = t.relnamespace
+      JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(idx.indkey)
+      WHERE n.nspname = ? AND t.relname = ? AND idx.indpred IS NULL
+    `, [dbSchema, tableName]);
+    const indexedCols = new Set<string>((idxRows.rows as Array<{ col: string }>).map(r => r.col));
+
+    // 4. Foreign key columns
+    const fks: any = await this.db.raw(`
+      SELECT kcu.column_name FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu
+        ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+      WHERE tc.table_schema = ? AND tc.table_name = ? AND tc.constraint_type = 'FOREIGN KEY'
+    `, [dbSchema, tableName]);
+    const fkCols = new Set<string>((fks.rows as Array<{ column_name: string }>).map(r => r.column_name));
+
+    // 5. Unused indexes on this table
+    const unusedRows: any = await this.db.raw(`
+      SELECT indexrelname AS index_name, idx_scan
+      FROM pg_stat_user_indexes
+      WHERE schemaname = ? AND relname = ? AND idx_scan = 0
+    `, [dbSchema, tableName]).catch(() => ({ rows: [] }));
+
+    const suggestions: Array<{
+      severity: 'low' | 'medium' | 'high';
+      reason: string;
+      sql?: string;
+      estimated_impact?: string;
+    }> = [];
+
+    let rowCount = Number(stats.estimated_rows);
+    // pg_stat.n_live_tup is updated by autovacuum/ANALYZE, lagging immediate inserts by up to 60s.
+    // When stats look too low, fall back to an actual COUNT(*) — cheap on anything up to ~1M rows.
+    if (rowCount < 100) {
+      try {
+        const actual: any = await this.db.raw(`SELECT COUNT(*)::bigint AS n FROM "${dbSchema}"."${tableName}"`);
+        rowCount = Math.max(rowCount, Number(actual.rows?.[0]?.n ?? 0));
+      } catch {}
+    }
+
+    // --- Check 1: seq_scan dominance ---
+    if (rowCount > 10_000 && stats.seq_scan > stats.idx_scan * 5 && stats.seq_scan > 50) {
+      suggestions.push({
+        severity: 'high',
+        reason: `Sequential scans dominate (seq=${stats.seq_scan} vs idx=${stats.idx_scan}) on ${rowCount} rows. Identify frequent WHERE columns via explain_query and add targeted indexes.`,
+        estimated_impact: 'Can drop query time from hundreds of ms to single-digit ms.',
+      });
+    }
+
+    // --- Check 2: unindexed created_at (common ORDER BY column) ---
+    if (columns.some(c => c.column_name === 'created_at') && !indexedCols.has('created_at') && rowCount > 1000) {
+      suggestions.push({
+        severity: 'high',
+        reason: `Table has created_at but no index on it. Default find operations ORDER BY created_at DESC — each query triggers a full sort on ${rowCount} rows.`,
+        sql: `CREATE INDEX IF NOT EXISTS "idx_${tableName}_created_at" ON "${dbSchema}"."${tableName}" ("created_at" DESC)`,
+        estimated_impact: rowCount > 100_000 ? '100-500ms → <10ms per find()' : '10-50ms → <5ms per find()',
+      });
+    }
+
+    // --- Check 3: unindexed updated_at (if frequently queried) ---
+    if (columns.some(c => c.column_name === 'updated_at') && !indexedCols.has('updated_at') && rowCount > 10_000) {
+      suggestions.push({
+        severity: 'low',
+        reason: 'Table has updated_at but no index on it. Useful only if you actually sort/filter by updated_at frequently — not the default case.',
+        sql: `CREATE INDEX IF NOT EXISTS "idx_${tableName}_updated_at" ON "${dbSchema}"."${tableName}" ("updated_at" DESC)`,
+      });
+    }
+
+    // --- Check 4: unindexed FK columns ---
+    for (const fkCol of fkCols) {
+      if (!indexedCols.has(fkCol)) {
+        suggestions.push({
+          severity: 'medium',
+          reason: `Foreign-key column "${fkCol}" has no index. JOINs and cascading DELETE on the parent side will do a seq scan on this table.`,
+          sql: `CREATE INDEX IF NOT EXISTS "idx_${tableName}_${fkCol}" ON "${dbSchema}"."${tableName}" ("${fkCol}")`,
+        });
+      }
+    }
+
+    // --- Check 5: unused indexes (waste of write overhead) ---
+    for (const row of unusedRows.rows as Array<{ index_name: string }>) {
+      // Skip primary key and constraint-backed unique indexes — can't drop those directly
+      if (row.index_name.endsWith('_pkey') || row.index_name.endsWith('_key')) continue;
+      suggestions.push({
+        severity: 'low',
+        reason: `Index "${row.index_name}" has never been used (idx_scan = 0). If the table has seen enough traffic, this index is likely dead weight on writes.`,
+        sql: `DROP INDEX IF EXISTS "${dbSchema}"."${row.index_name}"`,
+      });
+    }
+
+    // --- Check 6: huge table with only PK ---
+    if (rowCount > 100_000 && idxRows.rows.length <= 1) {
+      suggestions.push({
+        severity: 'medium',
+        reason: `Table has ${rowCount} rows but only ${idxRows.rows.length} index. Consider adding btree on commonly filtered columns.`,
+      });
+    }
+
+    return {
+      table: tableName,
+      stats: {
+        estimated_rows: rowCount,
+        size_bytes: Number(stats.size_bytes),
+        seq_scans: Number(stats.seq_scan),
+        index_scans: Number(stats.idx_scan),
+        existing_indexes: (idxRows.rows as Array<{ index_name: string }>).length,
+      },
+      suggestions,
+      summary: suggestions.length === 0
+        ? 'Table looks healthy. No index changes suggested.'
+        : `${suggestions.filter(s => s.severity === 'high').length} high / ${suggestions.filter(s => s.severity === 'medium').length} medium / ${suggestions.filter(s => s.severity === 'low').length} low severity suggestions.`,
+    };
+  }
+
+  // ===== AI Studio plugin wrappers =====
+  // All of these require the ai-studio plugin to be enabled for the project.
+
+  private async ensureAiStudioEnabled(projectId: string) {
+    const enabled = await isModuleEnabled(this.db, projectId, 'ai-studio');
+    if (!enabled) {
+      throw new Error('AI Studio plugin is not enabled for this project. Enable it in the CP panel under Plugins → AI Studio.');
+    }
+  }
+
+  private async getPluginSettings(projectId: string): Promise<Record<string, unknown>> {
+    const row = await this.db('plugin_instances').where({ project_id: projectId, plugin_id: 'ai-studio' }).first();
+    if (!row) return {};
+    const raw = row.settings;
+    if (!raw) return {};
+    try {
+      return typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+
+  async listAiEndpoints(projectId: string, dbSchema: string) {
+    await this.ensureAiStudioEnabled(projectId);
+    return this.aiStudio.listEndpoints(dbSchema);
+  }
+
+  async getAiEndpoint(projectId: string, dbSchema: string, idOrSlug: string) {
+    await this.ensureAiStudioEnabled(projectId);
+    // Try by id first (UUID shape), then slug
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug)) {
+      const byId = await this.aiStudio.getEndpoint(dbSchema, idOrSlug);
+      if (byId) return byId;
+    }
+    return this.aiStudio.getEndpointBySlug(dbSchema, idOrSlug);
+  }
+
+  async createAiEndpoint(projectId: string, dbSchema: string, input: Parameters<AiStudioService['createEndpoint']>[1]) {
+    await this.ensureAiStudioEnabled(projectId);
+    this.validateProviderModel(input.provider, input.model);
+    return this.aiStudio.createEndpoint(dbSchema, input);
+  }
+
+  async updateAiEndpoint(projectId: string, dbSchema: string, id: string, input: Parameters<AiStudioService['updateEndpoint']>[2]) {
+    await this.ensureAiStudioEnabled(projectId);
+    if (input.provider || input.model) {
+      const existing = await this.aiStudio.getEndpoint(dbSchema, id);
+      const provider = input.provider ?? existing?.provider;
+      const model = input.model ?? existing?.model;
+      if (provider && model) this.validateProviderModel(provider, model);
+    }
+    return this.aiStudio.updateEndpoint(dbSchema, id, input);
+  }
+
+  private validateProviderModel(provider: string, model: string) {
+    const allowed = PROVIDER_MODELS[provider];
+    if (!allowed) {
+      throw new Error(`Unknown provider "${provider}". Supported: ${Object.keys(PROVIDER_MODELS).join(', ')}. Use ai_studio_list_models for full list.`);
+    }
+    if (!allowed.includes(model)) {
+      throw new Error(`Model "${model}" is not a known ${provider} model. Known: ${allowed.join(', ')}. Use ai_studio_list_models for full list.`);
+    }
+  }
+
+  async deleteAiEndpoint(projectId: string, dbSchema: string, id: string) {
+    await this.ensureAiStudioEnabled(projectId);
+    await this.aiStudio.deleteEndpoint(dbSchema, id);
+    return { deleted: true, id };
+  }
+
+  async testAiEndpoint(projectId: string, dbSchema: string, slugOrId: string, input: { input?: string; messages?: Array<{ role: 'user' | 'assistant'; content: string }>; session_id?: string }) {
+    await this.ensureAiStudioEnabled(projectId);
+    // Resolve id → slug if needed
+    let slug = slugOrId;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId)) {
+      const ep = await this.aiStudio.getEndpoint(dbSchema, slugOrId);
+      if (!ep) throw new Error(`AI Studio endpoint "${slugOrId}" not found`);
+      slug = ep.slug;
+    }
+    const pluginSettings = await this.getPluginSettings(projectId);
+    return this.aiStudio.callEndpoint(dbSchema, slug, input, pluginSettings);
+  }
+
+  async getAiLogs(projectId: string, dbSchema: string, opts: { endpoint_id?: string; limit?: number; offset?: number }) {
+    await this.ensureAiStudioEnabled(projectId);
+    return this.aiStudio.getLogs(dbSchema, { endpointId: opts.endpoint_id, limit: opts.limit, offset: opts.offset });
+  }
+
+  async getAiStats(projectId: string, dbSchema: string) {
+    await this.ensureAiStudioEnabled(projectId);
+    return this.aiStudio.getStats(dbSchema);
+  }
+
+  async getAiSession(projectId: string, dbSchema: string, endpointIdOrSlug: string, sessionId: string) {
+    await this.ensureAiStudioEnabled(projectId);
+    const ep = await this.getAiEndpoint(projectId, dbSchema, endpointIdOrSlug);
+    if (!ep) throw new Error(`AI Studio endpoint "${endpointIdOrSlug}" not found`);
+    return this.aiStudio.getContext(dbSchema, ep.id, sessionId);
+  }
+
+  async clearAiSession(projectId: string, dbSchema: string, endpointIdOrSlug: string, sessionId: string) {
+    await this.ensureAiStudioEnabled(projectId);
+    const ep = await this.getAiEndpoint(projectId, dbSchema, endpointIdOrSlug);
+    if (!ep) throw new Error(`AI Studio endpoint "${endpointIdOrSlug}" not found`);
+    await this.aiStudio.deleteContext(dbSchema, ep.id, sessionId);
+    return { deleted: true, endpoint_id: ep.id, session_id: sessionId };
+  }
+
+  listAiModels() {
+    return {
+      providers: Object.keys(PROVIDER_MODELS),
+      models: PROVIDER_MODELS,
+    };
+  }
+
+  async callEndpoint(projectId: string, dbSchema: string, projectSlug: string, input: {
+    endpoint_id?: string;
+    path?: string;
+    method?: string;
+    params?: Record<string, string>;
+    body?: unknown;
+    headers?: Record<string, string>;
+    bypass_cache?: boolean;
+  }) {
+    let endpoint: any;
+    if (input.endpoint_id) {
+      endpoint = await this.db('api_endpoints')
+        .where({ id: input.endpoint_id, project_id: projectId })
+        .whereNull('deprecated_at')
+        .first();
+    } else if (input.path) {
+      const method = (input.method ?? 'GET').toUpperCase();
+      endpoint = await this.db('api_endpoints')
+        .where({ project_id: projectId, path: input.path, method, is_active: true })
+        .whereNull('deprecated_at')
+        .orderBy('version', 'desc')
+        .first();
+    } else {
+      throw new Error('Provide "endpoint_id" or ("path" + optional "method")');
+    }
+    if (!endpoint) throw new Error('Endpoint not found');
+
+    const parseMaybe = (v: unknown) => (typeof v === 'string' ? JSON.parse(v) : v);
+    const sourceConfig = parseMaybe(endpoint.source_config) ?? {};
+    const responseConfig = parseMaybe(endpoint.response_config) ?? null;
+    const validationSchema = parseMaybe(endpoint.validation_schema) ?? null;
+
+    const endpointDef = {
+      source_type: endpoint.source_type,
+      source_config: sourceConfig,
+      response_config: responseConfig,
+      validation_schema: validationSchema,
+      method: endpoint.method,
+    };
+
+    const params = input.params ?? {};
+
+    let cacheHit = false;
+    let fromCacheAgeSeconds: number | undefined;
+    const canCache = endpoint.cache_enabled && endpoint.method === 'GET' && !input.bypass_cache && this.cacheService;
+
+    // Mirror the HTTP-path cache context so call_endpoint and a real HTTP hit
+    // hash to the same key and respect the same cache_key_template.
+    const cacheCtx: Record<string, unknown> = {
+      method: endpoint.method,
+      path: endpoint.path,
+      query: params,
+      params, // same source here since MCP call_endpoint doesn't distinguish path/query
+    };
+    const cacheTemplate = (endpoint.cache_key_template as string | null | undefined) ?? null;
+
+    if (canCache) {
+      const cached = await this.cacheService!.getWithTtl(projectSlug, endpoint.id, cacheCtx, cacheTemplate);
+      if (cached !== null) {
+        const origTtl = Number(endpoint.cache_ttl ?? 60);
+        const remaining = cached.ttl_seconds > 0 ? cached.ttl_seconds : 0;
+        fromCacheAgeSeconds = Math.max(0, origTtl - remaining);
+        return {
+          status: 200,
+          duration_ms: 0,
+          cache_hit: true,
+          from_cache_age_seconds: fromCacheAgeSeconds,
+          body: cached.data,
+        };
+      }
+    }
+
+    const start = Date.now();
+    let status = 200;
+    let body: unknown;
+    try {
+      body = await this.executor.execute(endpointDef, dbSchema, params, params, input.body, 30_000, projectId);
+    } catch (err: any) {
+      status = err.statusCode ?? 500;
+      return {
+        status,
+        duration_ms: Date.now() - start,
+        cache_hit: false,
+        body: { error: err.message },
+      };
+    }
+    const duration = Date.now() - start;
+
+    if (canCache && !cacheHit) {
+      await this.cacheService!.set(projectSlug, endpoint.id, cacheCtx, body, Number(endpoint.cache_ttl ?? 60), cacheTemplate);
+    }
+
+    if (body && typeof body === 'object' && Array.isArray((body as any).errors) && ((body as any).errors.length > 0)) {
+      status = 207;
+    }
+
+    return {
+      status,
+      duration_ms: duration,
+      cache_hit: false,
+      body,
+    };
+  }
+
+  getProjectInfo(): string {
+    return `DataForge is a backend-as-a-service platform built on PostgreSQL. You are connected to a DataForge project via the AI Gateway.
+
+CAPABILITIES:
+- Schema: create/alter/drop tables, indexes (btree/hash/gin/gist/brin, partial, expression, covering), foreign keys, materialized views, CHECK constraints
+- Data: read-only SELECT (execute_sql) and writes (execute_sql_mutation: INSERT/UPDATE/DELETE/MERGE)
+- API endpoints: table CRUD, bulk ingest (create_many), custom SQL, versioning + canary rollout
+- TimescaleDB: hypertables, continuous aggregates, compression/retention policies (if extension available)
+- Ops: cron (SQL and HTTPS), internal call_endpoint, query planner (explain_query), OpenAPI spec, cross-call transactions
+- AI Studio plugin: create/edit/test AI endpoints across OpenAI/DeepSeek/Claude with structured response, validation, chat history (ai_studio_*)
+- Plugins: enable/disable/configure every built-in plugin (list_plugins, enable_plugin, disable_plugin, update_plugin_settings)
+- Webhooks: outbound HTTP on data changes with HMAC signatures + retries (list/create/update/delete_webhook, get_webhook_logs)
+- WebSockets: realtime client subscriptions with per-table or per-project channels (get_websocket_info, get_websocket_stats)
+- Triggers: list + temporarily disable table triggers (list_triggers, toggle_trigger) — critical for data backfills where the auto updated_at trigger would overwrite migrated values
+- Discoverability: list_tables, describe_table, list_endpoints, get_endpoint, search_endpoints, suggest_index, analyze_schema_quality
+
+IMPORTANT: SQL execution is via MCP tools only (execute_sql / execute_sql_mutation). There is NO built-in HTTP endpoint like /execute_sql. If you need HTTP-accessible SQL, create a custom_sql endpoint via create_endpoint.
+
+==========================================================
+INTROSPECTION — ALWAYS START HERE
+==========================================================
+
+Prefer fast, targeted introspection over get_schema_context on large projects:
+- list_tables — thin listing with row_count_estimate (pg_class.reltuples, not COUNT(*)), size_bytes, is_hypertable. P95 ≤ 500ms.
+- describe_table(name) — columns, indexes, FKs, hypertable_info for one table.
+- list_endpoints({ method?, path_contains? }) — endpoints metadata only (no SQL body).
+- get_endpoint(id_or_path, method?) — FULL config of one endpoint including source_config/SQL, validation_schema, response_config. Call this before update_endpoint on any non-trivial custom_sql or composite endpoint, so you have the current SQL to edit surgically instead of rewriting blind.
+- get_schema_context — full snapshot; heavy, use only on small projects.
+- search_endpoints(query) — substring match on path/description/source_config (metadata only — still needs get_endpoint for the SQL).
+- suggest_index(table) — scans pg_stat for seq_scan vs idx_scan ratio.
+- analyze_schema_quality — reports missing PKs, large tables with few indexes, unused indexes.
+
+==========================================================
+COLUMN TYPES
+==========================================================
+Scalar:     text, integer, bigint, float, decimal, boolean, date, timestamp, timestamptz, uuid, json, jsonb
+Network:    inet (IPv4+IPv6, validates on insert), cidr (subnet), macaddr
+Arrays:     text[], integer[], inet[]
+Auto-incr:  serial, bigserial
+
+When to use inet vs text for IP addresses:
+  Prefer inet — it validates format, stores IPv4+IPv6 uniformly, and enables network operators:
+    WHERE ip << '192.168.1.0/24'         -- IP is in subnet
+    WHERE ip <<= '10.0.0.0/8'            -- IP is in subnet or equals network
+    WHERE ip1 && ip2                     -- any overlap between two cidr ranges
+    WHERE family(ip) = 6                 -- filter by IPv4/IPv6
+  Migrate existing text → inet: alter_columns({changes:[{action:"alter", name:"ip", type:"inet"}]}). A USING "ip"::inet clause is added automatically. Invalid IPs in existing data will surface as an error — clean them up first with execute_sql_mutation.
+
+==========================================================
+CREATE TABLE (use create_table)
+==========================================================
+- add_uuid_pk (default true) — adds "id" UUID PRIMARY KEY DEFAULT gen_random_uuid()
+- add_timestamps (default true) — shortcut for both created_at and updated_at TIMESTAMPTZ columns (updated_at gets an update trigger)
+- add_created_at / add_updated_at (optional) — fine-grained override. Set add_timestamps=false and add_created_at=true to get ONLY created_at.
+- index_created_at / index_updated_at (optional, default false) — opt-in btree indexes on the timestamp columns at creation time. Strongly recommended to pass index_created_at:true when the table will be queried with ORDER BY created_at DESC (most find-operations do this by default). Skipping it means a full sort on every list query — ~300-500ms at 500k rows, multi-second at 5M.
+- checks (optional) — table-level CHECK constraints: [{name?, expression}], e.g. [{expression: "role IN ('admin','user','guest')"}]. Per-column CHECK also supported via columns[].check.
+- Composite PK: set add_uuid_pk=false and mark multiple columns with is_primary:true. A table-level PRIMARY KEY(col1, col2, ...) is emitted automatically. Useful for M:N link tables (e.g. player_ips: (player_id, ip)).
+- storage_params (optional) — PostgreSQL table storage tuning. For write-heavy tables with hot updates, set {"fillfactor":85} to enable HOT updates (10-30% throughput gain). Other keys: autovacuum_vacuum_scale_factor/threshold, autovacuum_analyze_scale_factor/threshold.
+- default_value quoting: pass SQL expressions as-is. Typed casts preserved: "'[]'::jsonb", "0::bigint", "now()". Literal strings get auto-quoted, so pass "user" not "'user'".
+- Define only business columns. System columns are auto-added.
+- For TimescaleDB hypertables: create with add_uuid_pk=false (hypertable PK must include the time column).
+- BEFORE calling create_table on a time-series / append-only table, read the "WHEN TO AUTO-CONVERT TO HYPERTABLE" section and set add_uuid_pk=false up front so you can convert cleanly in one step.
+
+ALTER COLUMNS (use alter_columns)
+- changes: [{action: "add", name, type, nullable, default_value, is_unique?, json_schema?}]
+  - is_unique: also creates UNIQUE INDEX "idx_{table}_{column}_unique" in the same transaction.
+  - json_schema (jsonb columns only): attaches CHECK (jsonb_matches_schema(...)) — requires pg_jsonschema extension.
+- {action: "alter", name, type, nullable} — change type or nullability. Auto-adds USING col::newtype for inet/cidr/uuid/jsonb/int/date/bool.
+- {action: "rename", name, newName}
+- {action: "drop", name} — destroys data
+- {action: "set_primary_key", columns: [...], constraint_name?} — set or replace the table's PRIMARY KEY.
+    * Single or composite PK ("columns": ["a", "b"]).
+    * Drops any existing PK first.
+    * Promotes an existing UNIQUE INDEX that matches the column list exactly — no table rewrite.
+    * Ensures NOT NULL on target columns; fails with clear error if any contain NULLs.
+    * Use this after dropping the auto UUID PK (e.g. for composite natural keys).
+- {action: "drop_primary_key"} — remove PK constraint (idempotent if no PK exists).
+- {action: "drop_constraint", name: "<constraint_name>"} — drop any named constraint: UNIQUE, CHECK, FK, EXCLUDE.
+    * Use this to clean up duplicate UNIQUE left behind after set_primary_key (e.g. the auto-created <table>_<col>_key from an inline UNIQUE column constraint).
+    * Never use drop_index on a constraint-backed index — PG refuses with "cannot drop index because constraint requires it". Use drop_constraint instead; it drops both the constraint and its owned index.
+    * Uses DROP CONSTRAINT IF EXISTS — idempotent, no error if the constraint is already gone.
+    * PostgreSQL enforces FK dependencies: if another table's FK references this constraint, the drop will fail with a clear error. Drop the dependent FK first via drop_foreign_key.
+    * Find constraint names via describe_table (for FK and index-backed ones) or "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = 'schema.table'::regclass" through execute_sql.
+- storage_params: {...} — tune PostgreSQL storage parameters at the table level, alongside or without any column changes. Example: {"fillfactor": 85} for write-heavy tables. Other keys: autovacuum_vacuum_scale_factor, autovacuum_vacuum_threshold, autovacuum_analyze_scale_factor, autovacuum_analyze_threshold.
+
+==========================================================
+INDEXES (use add_index)
+==========================================================
+Types: btree (default), hash, gin, gist, brin
+Shape:
+- columns: ["a","b"]                   — regular composite
+- expressions: ["lower(email)"]        — expression index (mutually exclusive with columns)
+- where: "status = 'active'"           — partial index predicate (no subqueries, no side-effect functions)
+- include: ["name"]                    — INCLUDE covering columns (btree)
+- is_unique: true/false, name?
+Usage:
+- btree — equality, range, ORDER BY, LIKE 'prefix%', INCLUDE covering
+- hash — equality only
+- gin — JSONB @>, array &&, full-text, pg_trgm for fuzzy/substring LIKE
+- gist — geometric, ranges, ts_vector, inet range overlaps
+- brin — append-only time-series / naturally-ordered big tables
+
+pg_trgm (trigram-based ILIKE/LIKE '%substring%' search) is installed automatically when you
+create a GIN or GIST index on a text column. add_index({table_name:"users", columns:["nick"], type:"gin"})
+enables the extension if missing, builds the index with gin_trgm_ops, and makes ILIKE '%knife%'
+use a bitmap index scan instead of a full seq scan. No manual CREATE EXTENSION needed.
+
+ops_class — explicit PostgreSQL operator class. Needed for gin/gist on EXPRESSIONS (the column-form
+auto-detects text columns, but for expressions you must be explicit). Allowed values:
+gin_trgm_ops, gist_trgm_ops, jsonb_ops, jsonb_path_ops, inet_ops, array_ops, tsvector_ops,
+text_pattern_ops, varchar_pattern_ops, int4_ops, int8_ops, text_ops.
+
+Pattern examples:
+  -- Fuzzy nick search on 400k rows, <5ms:
+  add_index({table_name:"players", columns:["nick"], type:"gin"})
+  -- Substring search on a BIGINT column (cast to text in expression, give it ops_class):
+  add_index({table_name:"players", expressions:["steam_id::text"], type:"gin", ops_class:"gin_trgm_ops"})
+  -- JSONB path lookup (faster but only supports @>):
+  add_index({table_name:"events", expressions:["data"], type:"gin", ops_class:"jsonb_path_ops"})
+  -- LIKE 'prefix%' on text (btree path):
+  add_index({table_name:"users", columns:["email"], type:"btree", ops_class:"text_pattern_ops"})
+  -- Subnet lookup on IP column (use inet type + gist):
+  add_index({table_name:"player_ips", columns:["ip"], type:"gist"})
+
+==========================================================
+WRITE SQL (use execute_sql_mutation)
+==========================================================
+execute_sql_mutation({
+  query,                               // INSERT/UPDATE/DELETE/MERGE (WITH + mutation allowed)
+  confirm_write: true,                 // REQUIRED guard
+  params?: {name: value, ...},         // fills {{name}} placeholders safely
+  returning?: boolean,                 // appends RETURNING * if missing
+  dry_run?: boolean,                   // executes and rolls back, returns affected row count
+  timeout?: number,                    // ms, default 30000, max 120000
+  txn_id?: string,                     // run inside open transaction (see below)
+})
+- DDL (DROP/TRUNCATE/ALTER/CREATE/GRANT/REVOKE/VACUUM/CLUSTER/REINDEX) is blocked. Use schema tools instead.
+
+UPSERT / ON CONFLICT — fully supported
+  Inside ON CONFLICT DO UPDATE SET ..., use:
+    EXCLUDED.<col>               -- the row you tried to insert
+    <target_table>.<col>         -- the existing row (e.g. players.seen_count)
+    <alias>.<col>                -- if you wrote INSERT INTO players AS p, use p.col
+
+  Atomic counter bump:
+    INSERT INTO players (steam_id, nick, seen_count) VALUES ('s1','bob',1)
+    ON CONFLICT (steam_id) DO UPDATE
+    SET seen_count = players.seen_count + 1,
+        nick       = COALESCE(EXCLUDED.nick, players.nick);
+
+  Bulk UPSERT from VALUES:
+    INSERT INTO players (steam_id, nick) VALUES ('s1','a'), ('s2','b'), ('s3','c')
+    ON CONFLICT (steam_id) DO UPDATE SET nick = EXCLUDED.nick;
+
+CTE (WITH) — fully supported, including RECURSIVE and multi-CTE
+    WITH filtered AS (SELECT id FROM scores WHERE points > 100),
+         renamed  AS (SELECT id, nick || '-vip' AS new_nick FROM players p JOIN filtered f ON p.id = f.id)
+    UPDATE players SET nick = r.new_nick FROM renamed r WHERE players.id = r.id;
+
+MERGE — supported (PostgreSQL 15+)
+    MERGE INTO scores t
+    USING (SELECT 's1' AS pid, 200 AS pts) src
+    ON t.player_id = src.pid
+    WHEN MATCHED THEN UPDATE SET points = src.pts
+    WHEN NOT MATCHED THEN INSERT (player_id, points) VALUES (src.pid, src.pts);
+
+SCHEMA ACCESS RULES
+  Inside query, the prefix X in "X.Y" must be one of:
+    1. your project schema
+    2. a table used in FROM/INTO/UPDATE/JOIN/MERGE in this same query
+    3. an alias you defined via "AS alias" or space-alias
+    4. a CTE name from WITH
+    5. EXCLUDED, OLD, or NEW (PostgreSQL built-ins)
+  Blocked: pg_catalog / information_schema / pg_* / any other project's schema, even via alias shadowing.
+  Error code DF_ALIEN_SCHEMA lists these rules on violation; DF_SCHEMA_SHADOW fires if you pick an alias name matching another schema.
+
+==========================================================
+CROSS-CALL TRANSACTIONS
+==========================================================
+- begin_transaction({ timeout_seconds? }) → { txn_id, expires_at }
+- Pass txn_id to execute_sql_mutation to batch multiple writes atomically.
+- commit_transaction({ txn_id }) / rollback_transaction({ txn_id })
+- list_transactions — active txns for this project
+- Auto-rollback on timeout (default 600s, max 1800s) or disconnect.
+
+==========================================================
+API ENDPOINTS (use create_endpoint)
+==========================================================
+Table CRUD — source_type "table", source_config:
+  { table, operation: "find|findOne|create|update|delete|create_many" }
+  - find query params: page, limit (max 100), sort, order (asc|desc).
+    Filters (both forms accepted):
+      ?column=value                      — shorthand equality
+      ?column__op=value                  — shorthand with operator (eq, neq, gt, gte, lt, lte, like, ilike, in, is_null)
+      ?filter[column]=value              — PostgREST-style equality
+      ?filter[column][op]=value          — PostgREST-style with operator
+    Reserved shorthand keys (skipped as filters): page, limit, offset, sort, order, q, search, fields, include, include_deleted, only_deleted, v.
+    Default sort falls back to created_at, then id, then unsorted if neither exists.
+  - create_many: bulk insert. POST JSON array or NDJSON (Content-Type: application/x-ndjson).
+    Extra config: on_conflict ("error|do_nothing|do_update"), conflict_columns, max_batch_size (default 1000).
+    Errors returned per-row with HTTP 207 Multi-Status: { inserted, skipped, errors:[{index,error}] }
+
+Custom SQL — source_type "custom_sql", source_config.query with {{param}} placeholders.
+  Parameters come from URL path, query string, or request body. Sanitized, not interpolated.
+  Missing parameters fail fast with a clear error listing which {{name}} had no value and which keys WERE provided.
+
+Auth — auth_type: "public" | "api_token" (default) | "sbox_session" (S&box games plugin)
+Caching — cache_enabled: true + cache_ttl (seconds) on GET.
+  Default cache key hashes { method, path, query, params } — so each distinct query
+  string gets its own cache slot. Nested objects are stable-serialized (key order is
+  normalized, so ?a=1&b=2 and ?b=2&a=1 share a slot).
+  cache_key_template — optional override. Placeholders: {{dotted.path}} against
+    { method, path, query, params }. Examples:
+      "{{path}}:{{query.q}}:{{query.limit}}"   — vary only by q and limit
+      "{{query.tenant_id}}"                    — one cache slot per tenant
+      "v1"                                     — single shared slot (fully static)
+    Missing paths resolve to "". Use this to EXCLUDE volatile params (tracking IDs,
+    client timestamps) that would otherwise fragment the cache, or to narrow the
+    vary-by dimensions for predictable hit rates. Any endpoint mutation invalidates
+    the whole endpoint's cache regardless of template.
+Rate limit — rate_limit: { max, window, per: "ip" }
+Versioning & canary:
+  version: 1..99 (multiple versions coexist on same method+path)
+  rollout: { strategy: "full"|"canary", percentage: 0..100, sticky_by: "api_token"|"ip" }
+  deprecates: { replaces_version, sunset_date }
+Router behavior:
+  - Client picks version via ?v=N or header X-API-Version: N; URL /api/v2/... also hints v=2.
+  - Canary: deterministic hash(sticky) % 100 < percentage → canary; else stable.
+  - Response headers: X-API-Version, Deprecation, Sunset, X-Rollout-Bucket.
+
+Call an endpoint from AI without an HTTP hop:
+  call_endpoint({ endpoint_id? or path+method?, params?, body?, bypass_cache? })
+  → { status, duration_ms, cache_hit, from_cache_age_seconds?, body }
+
+==========================================================
+API TOKENS & SCOPES
+==========================================================
+
+Scope model: "<verb>:<resource>"
+  verb ∈ { read, write, delete, admin }
+  resource = table name or "*"
+  admin covers read/write/delete on same resource
+  "*" covers any resource for the same verb
+  Legacy "read" / "write" / "delete" / "admin" without ":" = "<verb>:*"
+
+Endpoints auto-derive required_scopes from source_config:
+  table + find/findOne → read:<table>
+  table + create/create_many/update → write:<table>
+  table + delete → delete:<table>
+  custom_sql + GET → read:*, custom_sql + other → admin:*
+
+If a token's scopes don't cover the endpoint's required_scopes, the router returns HTTP 403 with errorCode DF_SCOPE_DENIED.
+
+Token management tools:
+- list_api_tokens() → [{id, name, prefix, scopes, allowed_ips, is_active, expires_at, last_used_at, created_at}]
+- create_api_token({ name, scopes, allowed_ips?, expires_at? }) → { token (RAW — store immediately), id, prefix, scopes, ... }
+- update_api_token({ token_id, name?, scopes?, allowed_ips?, expires_at? }) → updated record (token hash unchanged)
+- rotate_api_token({ token_id }) → { token (RAW new value), revoked_id } — old token deactivated
+- revoke_api_token({ token_id }) → { is_active: false }
+- delete_api_token({ token_id }) → 204 (prefer revoke unless you truly need to drop the row)
+
+Scope examples:
+  ["read:users"]              — read-only for users table
+  ["read:*","write:events"]   — read any table, but write only events
+  ["admin:orders"]            — full control over orders
+  ["admin:*"]                 — full access to everything
+  ["read"]                    — legacy alias for ["read:*"]
+
+==========================================================
+OPENAPI
+==========================================================
+- get_openapi_spec({ format?: "json"|"yaml" }) — auto-generated 3.0.3 spec reflecting active endpoints and table schemas. Invalidated on endpoint changes.
+
+==========================================================
+MATERIALIZED VIEWS
+==========================================================
+- create_materialized_view({ name, query, refresh_cron?, refresh_concurrently? })
+  Creates MV + refresh_cron_hint text for building a cron job that calls REFRESH MATERIALIZED VIEW.
+- list_materialized_views
+
+==========================================================
+TIMESCALEDB (requires extension, 'timescale/timescaledb:latest-pg16' worker image)
+==========================================================
+- create_hypertable({ table, time_column, chunk_time_interval? })       — partition a table by time. Table must have add_uuid_pk=false or PK including time_column.
+- add_compression_policy({ table, compress_after: "7 days", segment_by?, order_by? })
+- add_retention_policy({ table, drop_after: "365 days" })
+- add_continuous_aggregate({ view_name, source_table, time_column, time_bucket, aggregations:[{column, function, alias?}], group_by?, refresh_policy? })
+  Allowed aggregation functions: count, sum, avg, min, max, first, last, stddev, variance.
+- list_hypertables — chunks count, size before/after compression, time interval.
+
+Interval format: "1 day", "7 days", "1 hour", "15 minutes" etc.
+
+WHEN TO AUTO-CONVERT TO HYPERTABLE
+Convert a new table to a hypertable proactively (without asking the user) when ANY of these holds:
+  1. Table name or purpose suggests time-series ingestion: events, metrics, logs, readings, telemetry, traces, samples, measurements, sensor_*, *_events, *_log, *_history, audit_*, clickstream, pageviews, analytics_*.
+  2. Schema has a NOT NULL timestamptz column that is the natural event time (e.g. ts, occurred_at, event_time, recorded_at, observed_at, timestamp).
+  3. The user describes append-only / high-volume / ingest workloads ("we collect X every second", "store sensor data", "track user events", "write-heavy time-series").
+  4. Rows will predictably grow > ~10M and queries filter by time range.
+
+Do NOT auto-convert for: small lookup tables, configuration, user profiles, transactional data with heavy updates on non-time columns, any table where the natural PK is not time-related.
+
+HYPERTABLE CREATION WORKFLOW (follow in order)
+  Step 1. create_table({ name, columns, add_uuid_pk: false, add_timestamps: false })
+          — include a NOT NULL timestamptz event-time column (e.g. "ts timestamptz NOT NULL DEFAULT now()").
+          — add_uuid_pk MUST be false: TimescaleDB requires every unique index to include the partitioning column, and a UUID PK alone doesn't.
+          — if you need a PK, make it composite: (event_time_col, id) via add_index with is_unique=true AFTER hypertable creation, or skip PK for pure append-only tables.
+  Step 2. create_hypertable({ table, time_column, chunk_time_interval })
+          — chunk_time_interval sizing guidance:
+              high-frequency (> 1M rows/day): "1 hour" or "6 hours"
+              medium (100k–1M rows/day):     "1 day" (default)
+              low (< 100k rows/day):         "7 days"
+          — rule of thumb: a chunk should cover ≈ 25% of the active working set that fits in RAM.
+  Step 3. (optional) add_compression_policy({ table, compress_after: "7 days", segment_by: ["entity_id"] })
+          — saves 90%+ disk for historical data.
+          — segment_by: choose a low-cardinality column frequently used in WHERE (e.g. sensor_id, user_id, tenant_id).
+          — compress_after sizing: 2× the typical "hot" query window (e.g. if dashboards query last 3 days → compress_after = "7 days").
+  Step 4. (optional) add_retention_policy({ table, drop_after: "365 days" })
+          — automatically drops chunks older than the window. Only set if the user has accepted data loss at that age.
+  Step 5. (optional) add_continuous_aggregate for dashboards that roll up time_bucket(...) aggregations — faster than querying raw rows.
+
+POST-CREATION CHECKS
+  - Verify via list_hypertables that num_chunks > 0 after inserts.
+  - For bulk backfill, use execute_sql_mutation with INSERT ... SELECT generate_series(...) or create_many endpoints.
+
+==========================================================
+AI STUDIO (plugin — must be enabled in CP under Plugins → AI Studio)
+==========================================================
+AI Studio lets you create ready-to-use AI endpoints backed by OpenAI / DeepSeek / Claude. Each endpoint
+has its own model, system prompt, response format, validation rules and optional chat history.
+API keys may be set per endpoint or inherited from plugin-level settings (openai_key / deepseek_key / claude_key).
+
+DISCOVERY
+  ai_studio_list_models()                          → { providers, models }
+  ai_studio_list_endpoints()                       → [{id, slug, provider, model, is_active, ...}]
+  ai_studio_get_endpoint({ endpoint: id|slug })    → full config
+  ai_studio_get_stats()                            → { calls_24h, by_provider, by_status, avg_duration_ms, total_tokens }
+  ai_studio_get_logs({ endpoint_id?, limit?, offset? }) → recent calls with input/output/tokens/duration/status
+
+LIFECYCLE
+  ai_studio_create_endpoint({
+    name, provider:"openai"|"deepseek"|"claude", model,
+    api_key?, system_prompt?,
+    response_format?,       // JSON schema — enables JSON mode; auto-appended to system prompt
+    temperature?, max_tokens?,
+    context_enabled?, context_ttl_minutes?, max_context_messages?, max_tokens_per_session?,
+    validation_rules?,      // { json?, required_fields?, max_length?, contains? }
+    retry_on_invalid?, max_retries?
+  })                                                → created endpoint
+  ai_studio_update_endpoint({ endpoint_id, ...fields })  → updated endpoint
+  ai_studio_delete_endpoint({ endpoint_id })        → { deleted }
+  // To pause without deleting: update_endpoint with is_active=false
+
+TESTING / INVOCATION
+  ai_studio_test_endpoint({ endpoint:id|slug, input:"..." })                         // single turn
+  ai_studio_test_endpoint({ endpoint:id|slug, messages:[{role,content},...] })       // multi-turn
+  ai_studio_test_endpoint({ endpoint:id|slug, input:"...", session_id:"user-42" })  // uses persisted chat history
+  → { content, tokens_used, model, duration_ms, attempts, validation_warning? }
+
+CHAT SESSIONS (when context_enabled=true on endpoint)
+  ai_studio_get_session({ endpoint:id|slug, session_id })   → { messages:[...], tokens_used, updated_at }
+  ai_studio_clear_session({ endpoint:id|slug, session_id }) → { deleted }
+
+VALIDATION RULES (applied after each model response)
+  { "json": true }                                 // must parse as JSON
+  { "json": true, "required_fields":["id","ok"] }  // JSON with these keys
+  { "max_length": 500 }                            // reject responses longer than N chars
+  { "contains": "sorry" }                          // response must contain substring
+  Combined with retry_on_invalid=true and max_retries=3, AI Studio will ask the model to fix
+  and retry up to N times.
+
+COMMON PATTERNS
+  • Structured output: set response_format to a JSON schema — the model is forced into JSON mode
+    and the schema is appended to the system prompt.
+  • Rate-limited chatbot: context_enabled=true + max_tokens_per_session=20000 + context_ttl_minutes=30.
+  • Cached provider pool: leave api_key empty on endpoints — they share the plugin-level key.
+  • Disabled but preserved: update_endpoint is_active=false keeps history and logs.
+
+==========================================================
+TRIGGERS
+==========================================================
+Every table created with add_timestamps=true (or add_updated_at=true) gets an auto-trigger
+"update_<table>_updated_at" that sets updated_at = NOW() on every UPDATE. When you backfill
+updated_at from another column (last_seen_at, migration timestamps, etc.), the trigger overwrites
+your value. Use toggle_trigger to pause it:
+
+  list_triggers({table_name})                                  → [{name, enabled, timing, event, granularity, function_name}]
+  toggle_trigger({table_name, enabled:false})                  → disables update_<table>_updated_at
+  (run your UPDATE backfill here — updated_at is no longer touched)
+  toggle_trigger({table_name, enabled:true})                   → re-enables
+
+Example backfill workflow:
+  toggle_trigger({table_name:"players", enabled:false})
+  execute_sql_mutation({query:"UPDATE players SET updated_at = last_seen_at WHERE last_seen_at IS NOT NULL", confirm_write:true})
+  toggle_trigger({table_name:"players", enabled:true})
+
+Custom triggers: pass trigger_name to target a different trigger. Only triggers in the project
+schema can be toggled; pg_trigger system internals are filtered out by list_triggers.
+
+==========================================================
+PLUGINS
+==========================================================
+Each project can enable / disable plugins independently. Some plugins expose new features
+(ai-studio, feature-websocket, feature-graphql, feature-webhooks), others integrate with external
+services (telegram-bot, discord-webhook, uptime-ping, sbox-auth).
+
+MCP tools:
+  list_plugins()                                         → full list + enabled status + manifest
+  get_plugin({plugin_id})                                → settings (password fields redacted) + manifest
+  enable_plugin({plugin_id, settings?})                  → enable + set initial settings
+  disable_plugin({plugin_id})                            → turn off without deleting settings/data
+  update_plugin_settings({plugin_id, settings})          → rotate keys, change config
+
+Built-in plugins (canonical IDs):
+  ai-rest-gateway       — REST AI gateway for arbitrary LLM clients
+  ai-mcp-server         — this MCP interface
+  ai-studio             — custom AI endpoints (OpenAI / DeepSeek / Claude)
+  feature-webhooks      — outbound HTTP webhooks on data changes
+  feature-websocket     — realtime WebSocket subscription to data changes
+  feature-graphql       — GraphQL /graphql endpoint auto-generated from schema
+  discord-webhook       — post data events to a Discord channel
+  telegram-bot          — post data events to a Telegram chat
+  uptime-ping           — periodic HTTP health checks
+  sbox-auth             — S&box game session auth
+
+==========================================================
+WEBHOOKS (plugin: feature-webhooks must be enabled)
+==========================================================
+Outbound HTTP notifications when rows change. Fires on INSERT/UPDATE/DELETE made via
+API endpoints (table CRUD). Direct execute_sql_mutation does NOT fire webhooks —
+only endpoint-mediated mutations.
+
+MCP tools:
+  list_webhooks()                                        → [{id, table_names, events, url, stats:{total,success_count,last_triggered}}]
+  get_webhook({webhook_id})                              → full config incl. secret
+  create_webhook({table_names, events, url, ...})        → new webhook
+  update_webhook({webhook_id, ...fields})                → partial update
+  delete_webhook({webhook_id})                           → permanent delete
+  get_webhook_logs({webhook_id, limit?})                 → recent delivery attempts
+
+Delivery payload (JSON):
+  {"table":"players", "event":"INSERT",
+   "record":{id, steam_id, nick, ...}, "timestamp":"2026-04-18T..."}
+Headers:
+  X-Webhook-Event: INSERT|UPDATE|DELETE
+  X-Webhook-Signature: sha256=<hex>   (present when secret is set; HMAC over JSON body)
+
+Retry: 2s → 4s → 8s → 16s on 5xx or network error. 4xx never retries. Max attempts = retry_count+1.
+SSRF guard: URL must be public HTTPS. localhost/private IPs blocked.
+Example — notify Slack when a player joins:
+  create_webhook({
+    table_names: ["players"], events: ["INSERT"],
+    url: "https://hooks.slack.com/services/...",
+    secret: "my-hmac-key",
+    retry_count: 5
+  })
+
+==========================================================
+WEBSOCKETS (plugin: feature-websocket must be enabled)
+==========================================================
+Realtime push to browser / mobile / game clients. TWO event sources funnel into the same stream:
+
+  (1) Table-based endpoints (source_type: table) — auto-emit on every CRUD.
+  (2) SQL-level df_emit() — works from custom_sql, execute_sql_mutation, cron, PG triggers,
+      and direct psql. See "REALTIME FROM SQL" below.
+
+Connection URL:
+  wss://<your-host>/ws/v1/<project-slug>?token=<API_TOKEN>
+
+Authenticate via token query param or "Authorization: Bearer <token>" header. API token must
+belong to this project. Failed auth → close code 4001.
+
+Client messages (JSON):
+  {"action":"subscribe",   "channel":"project:<slug>"}    — all tables
+  {"action":"subscribe",   "channel":"table:<name>"}       — single table
+  {"action":"unsubscribe", "channel":"..."}
+  {"action":"ping"}
+
+Server events (JSON):
+  {"type":"connected", projectSlug, timestamp}
+  {"type":"subscribed", channel, timestamp}
+  {"type":"data_change", table, action:"INSERT"|"UPDATE"|"DELETE", record, timestamp}
+  {"type":"pong", timestamp}
+  {"type":"error", code, message}
+
+Limits:
+  100 simultaneous connections per project
+  50 channels per client socket
+  20 client messages / second (rate limited)
+
+MCP tools:
+  get_websocket_info()  → connection URL, channel format, event shapes, df_emit examples
+  get_websocket_stats() → {connectedClients, messagesSent, messagesReceived, pg_notify:{status,events_received_total,per_table,...}}
+
+NOTE: subscribing is a client-side activity (MCP is request/response, not streaming). The tools
+above document the protocol and report live stats — the AI agent can generate code for the
+subscriber but can't itself "stay connected".
+
+==========================================================
+REALTIME FROM SQL — public.df_emit(...)
+==========================================================
+DataForge installs a SQL function on the worker DB that emits realtime events via PostgreSQL
+NOTIFY. The worker's LISTEN bridge re-broadcasts every event to WebSocket subscribers and
+registered webhooks.
+
+Signature:
+  public.df_emit(
+    p_table  text,             -- target table name (required)
+    p_action text,              -- INSERT | UPDATE | DELETE | UPSERT (required)
+    p_pk     text DEFAULT NULL, -- primary key (stringified); clients put this into record.id
+    p_data   jsonb DEFAULT NULL -- optional extra payload; omit when clients can refetch
+  ) RETURNS void
+
+Why df_emit instead of a second HTTP call:
+  • Transactional — runs inside your CTE. If the enclosing transaction aborts, no event fires.
+    Zero risk of "sync succeeded but WS event lost" or vice-versa.
+  • Zero extra HTTP roundtrip — critical for hot-path endpoints that already receive bursts.
+  • Works from ALL writers: custom_sql endpoints, execute_sql_mutation, cron SQL actions,
+    PG triggers, direct psql sessions. Enable feature-websocket (or feature-webhooks) for the
+    project and df_emit calls from ANY source are broadcast.
+
+Payload size:
+  PostgreSQL caps NOTIFY payload at 8000 bytes. df_emit auto-truncates oversized events —
+  it drops p_data and sets {"trunc": true} so subscribers can still react (and refetch).
+  Prefer sending ONLY the pk when the client can fetch fresh rows via a normal endpoint.
+
+CRITICAL — PostgreSQL CTE evaluation semantics (read this carefully, it's the #1 source of silent WS bugs):
+  A SELECT-only CTE with df_emit() is NOT guaranteed to execute unless the outer query
+  references it. If you write "emit AS (SELECT df_emit(...) FROM ins) ... SELECT COUNT(*) FROM ins"
+  the planner DROPS the emit CTE entirely — verified via EXPLAIN — and the event never fires,
+  even though the INSERT in "ins" runs. events_received_total will NOT increment.
+
+  AS MATERIALIZED is NOT a fix. MATERIALIZED only disables CTE inlining when the CTE IS
+  referenced; it does NOT promote an unreferenced CTE to "must execute". Confirmed on PG 16.
+
+  The ONLY reliable fix: reference the emit CTE in the outer query. Two shapes work:
+
+  (a) Read COUNT/rows from emit instead of from the insert CTE:
+        WITH ins  AS (INSERT INTO t ... RETURNING id),
+             emit AS (SELECT df_emit('t','INSERT',id::text) FROM ins)
+        SELECT COUNT(*) FROM emit;         -- ← final SELECT points at emit
+
+  (b) CROSS JOIN the emit CTEs (useful for multi-table atomic syncs):
+        WITH p  AS (INSERT INTO players ... RETURNING *),
+             ep AS (SELECT df_emit('players','UPSERT', id::text) FROM p),
+             i  AS (INSERT INTO player_ips ... RETURNING *),
+             ei AS (SELECT df_emit('player_ips','INSERT', id::text) FROM i)
+        SELECT (SELECT row_to_json(p.*) FROM p) AS player
+        FROM ep, ei;                       -- ← cross-join forces ep, ei to execute
+
+  (c) CROSS JOIN LATERAL in a single statement (no separate emit CTE):
+        WITH ins AS (INSERT INTO t ... RETURNING *)
+        SELECT COUNT(*)
+        FROM ins
+        CROSS JOIN LATERAL (SELECT df_emit('t','INSERT', ins.id::text)) e;
+
+  (d) BEST for hot-path tables: install an AFTER INSERT/UPDATE/DELETE trigger that calls
+      df_emit(). Then the endpoint SQL is just the INSERT — no emit CTE to forget.
+        CREATE OR REPLACE FUNCTION emit_chat_messages() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN PERFORM df_emit('chat_messages', TG_OP, NEW.msg_id::text, to_jsonb(NEW));
+              RETURN NEW; END $$;
+        CREATE TRIGGER tg_emit_chat_messages AFTER INSERT OR UPDATE OR DELETE ON chat_messages
+        FOR EACH ROW EXECUTE FUNCTION emit_chat_messages();
+      Tradeoff: fires on EVERY write (including bulk backfills). Use toggle_trigger to disable
+      during migrations if needed.
+
+  To verify after deployment: POST to the endpoint, then get_websocket_stats(). The table
+  MUST appear in per_table; events_delivered_total MUST grow by exactly the INSERT count.
+  If per_table entry is missing while events_received_total grew — you're seeing unrelated
+  background traffic from other tables, and your emit CTE is being pruned.
+
+Parameter placeholder syntax:
+  custom_sql and execute_sql_mutation use {{name}} — NOT PostgreSQL's :name style.
+  The worker rewrites {{name}} → $N before sending to PG. Cast explicitly:
+    {{steam_id}}::bigint, {{email}}::text, {{role}}::text
+
+Single-table upsert pattern (canonical):
+  WITH upserted AS (
+    INSERT INTO players (steam_id, last_name, last_seen_at)
+    VALUES ({{steam_id}}::bigint, {{name}}::text, now())
+    ON CONFLICT (steam_id) DO UPDATE SET last_name = EXCLUDED.last_name, last_seen_at = now()
+    RETURNING *
+  ),
+  _emit AS (
+    SELECT df_emit('players', 'UPSERT', id::text, to_jsonb(u)) FROM upserted u
+  )
+  SELECT u.* FROM upserted u, _emit;    -- ← emit is in FROM, guaranteed to execute
+
+Batch insert pattern (like /chat/ingest, /admin_actions/ingest):
+  WITH ins AS (
+    INSERT INTO chat_messages (...)
+    SELECT ... FROM jsonb_array_elements({{rows}}::jsonb) AS r
+    ON CONFLICT (msg_id, ts) DO NOTHING
+    RETURNING msg_id, ts, ... (all columns you want in the event)
+  ),
+  emit AS (
+    SELECT df_emit('chat_messages','INSERT', msg_id::text,
+                   jsonb_build_object('msg_id', msg_id::text, 'ts', ts, ...)) FROM ins
+  )
+  SELECT COUNT(*)::int AS inserted FROM emit;   -- ← COUNT from emit, NOT from ins
+
+Multi-table atomic CTE pattern (hot path sync: players + player_ips + player_nicks):
+  WITH p  AS (INSERT INTO players      ... RETURNING *),
+       i  AS (INSERT INTO player_ips   ... RETURNING *),
+       n  AS (INSERT INTO player_nicks ... RETURNING *),
+       ep AS (SELECT df_emit('players',      'UPSERT', id::text) FROM p),
+       ei AS (SELECT df_emit('player_ips',   'INSERT', id::text) FROM i),
+       en AS (SELECT df_emit('player_nicks', 'INSERT', id::text) FROM n)
+  SELECT (SELECT row_to_json(p.*) FROM p) AS player
+  FROM ep, ei, en;   -- cross-join the emit CTEs so the planner can't skip them
+
+All three emits commit or abort together with the INSERTs. On commit, the worker LISTEN handler
+delivers three WS messages to all subscribers of the respective table: / project: channels.
+
+Operational:
+  • get_websocket_stats({}) → pg_notify.{status, events_received_total, events_delivered_total,
+    events_dropped_total, reconnects, last_event_at, per_table{<table>:<count>}}
+  • "dropped" events = payload was for an unknown schema (project deleted) or JSON was malformed.
+  • Listener auto-reconnects with exponential backoff on DB restart.
+
+==========================================================
+CRON JOBS
+==========================================================
+create_cron_job({
+  name, cron_expression,
+  action_type: "sql" | "http",
+  action_config: ...,                  // see below
+  is_active?: boolean,
+})
+
+SQL action: { query: "SELECT / INSERT / UPDATE / DELETE ..." }
+  DDL is blocked. Runs inside project schema with statement_timeout.
+
+HTTP action: {
+  method: "GET|POST|PUT|PATCH|DELETE",
+  url: "https://...",                  // HTTPS only; localhost + private IPs blocked (SSRF guard)
+  headers?: {...},
+  body_sql?: "SELECT COUNT(*) AS n FROM events",    // fills the template
+  body_template?: "{\\"text\\":\\"{{n}} events\\"}",  // {{col}} filled from the body_sql row
+  retry_policy?: { max_attempts, backoff: "fixed|exponential", initial_delay_ms },
+  timeout_ms?: number,                 // default 30000, max 60000
+}
+
+Other cron tools: list_cron_jobs, get_cron_job, update_cron_job, delete_cron_job, toggle_cron_job, run_cron_job (execute immediately).
+
+Cron expressions: "* * * * *" (every min), "*/5 * * * *", "0 * * * *" (hourly), "0 0 * * *" (daily), "0 0 * * 1" (weekly), "0 0 1 * *" (monthly).
+
+==========================================================
+QUERY PLANNER
+==========================================================
+explain_query({ sql, params?, analyze? })
+  → { plan (raw JSON), total_cost, actual_time_ms?, bottlenecks:[{node_type, rows_scanned, severity, suggestion}], suggested_indexes:[{sql, estimated_improvement_percent, reason}] }
+Heuristics: Seq Scan on > 10k rows, Nested Loop without hash, Sort on > 1M rows.
+
+==========================================================
+ERROR CONVENTIONS
+==========================================================
+Errors carry a machine-readable code in error.data (MCP) or error.code (REST):
+DF_CONFIRM_WRITE, DF_NOT_MUTATION, DF_DDL_IN_MUTATION, DF_READONLY_ROLE,
+DF_INDEX_SUBQUERY, DF_INDEX_SIDEEFFECT, DF_HTTP_SSRF, DF_TIMESCALE_MISSING,
+DF_HYPERTABLE_UUID_PK, DF_BATCH_TOO_LARGE, DF_ALIAS_CONFLICT,
+DF_MISSING_BINDING, DF_SYSTEM_CATALOG, DF_ALIEN_SCHEMA, DF_SCOPE_DENIED.
+Each includes message + cause + suggestion. Use table-alias ≥ 3 chars to avoid DF_ALIAS_CONFLICT.
+
+==========================================================
+RECOMMENDED WORKFLOWS
+==========================================================
+
+Schema bootstrap:
+  1. list_tables / describe_table or get_schema_context
+  2. create_table (+ add_foreign_key, add_index)
+  3. Validate with analyze_schema_quality
+
+Performance tuning:
+  1. execute_sql with EXPLAIN or explain_query to locate slow paths
+  2. optimize_table(table) — comprehensive audit: seq-scan dominance, unindexed timestamps/FKs, unused indexes, table size. Returns concrete CREATE INDEX / DROP INDEX SQL with severity + estimated impact. Use this FIRST on any suspect table.
+  3. suggest_index(table) — narrower: just seq_scan/idx_scan ratio from pg_stat.
+  4. add_index with appropriate type; use where/include/expressions where applicable.
+  5. For time-series at scale: create_hypertable, add_compression_policy.
+  6. New tables — pass index_created_at:true in create_table when the table will be sorted by created_at (most typical admin-ui / feeds / logs).
+
+Creating a time-series ingestion table (events, metrics, logs, sensor data):
+  1. create_table({ name, columns: [{ name: "event_time", type: "timestamptz", nullable: false, default_value: "now()" }, ...], add_uuid_pk: false, add_timestamps: false })
+  2. create_hypertable({ table, time_column: "event_time", chunk_time_interval: "1 day" })
+  3. add_index on low-cardinality filter columns (entity_id, tenant_id) for fast range scans.
+  4. add_compression_policy when hot-window is understood (e.g. compress_after = "7 days").
+  5. add_retention_policy if the user has an explicit data-lifetime requirement.
+  6. Optionally add_continuous_aggregate for dashboard rollups.
+
+Bulk data ingestion (external):
+  1. create_endpoint with operation=create_many, conflict_columns, max_batch_size
+  2. External client POSTs JSON array or NDJSON to the endpoint
+  3. HTTP 207 on partial failure; {inserted, skipped, errors}
+
+Atomic multi-step writes:
+  1. begin_transaction → txn_id
+  2. multiple execute_sql_mutation calls with txn_id
+  3. commit_transaction or rollback_transaction
+
+Safe rollout:
+  1. Create endpoint v2 with rollout: { strategy: "canary", percentage: 10 }
+  2. Monitor, bump percentage
+  3. When ready, update v2 rollout to { strategy: "full" } (or drop v1 via deprecates)
+
+==========================================================
+NAMING CONVENTIONS
+==========================================================
+- Tables: plural lowercase with underscores (users, order_items)
+- Columns: lowercase with underscores (user_name, created_at)
+- FK columns: target_singular + _id (user_id, category_id)
+- Indexes: auto-named idx_{table}_{cols}[_unique]
+- Table aliases in SQL: 3+ chars (srv not s) — single-letter aliases trigger DF_ALIAS_CONFLICT`;
+  }
+
+  async getContext(projectId: string, dbSchema: string): Promise<AiContextResponse> {
+    const tableList = await this.schema.listTables(dbSchema);
+    const tables = await Promise.all(
+      tableList.map(async (t: { name: string }) => {
+        const info = await this.schema.getTableInfo(dbSchema, t.name);
+        return info;
+      })
+    );
+
+    const { rows: endpoints } = await this.db('api_endpoints')
+      .where({ project_id: projectId })
+      .whereNull('deprecated_at')
+      .select('id', 'method', 'path', 'description', 'source_type', 'source_config',
+        'auth_type', 'cache_enabled', 'cache_ttl', 'rate_limit', 'is_active');
+
+    const slug = await this.db('_dataforge_projects').where({ id: projectId }).first()
+      .then(p => p?.slug)
+      .catch(() => null);
+
+    return {
+      project: { slug: slug ?? '', schema: dbSchema },
+      tables: tables.map(t => ({
+        name: t.name,
+        columns: t.columns,
+        indexes: t.indexes,
+        foreign_keys: t.foreign_keys,
+        row_count: t.row_count ?? 0,
+      })),
+      endpoints: endpoints?.map((e: Record<string, unknown>) => ({
+        id: e.id,
+        method: e.method,
+        path: e.path,
+        description: e.description,
+        source_type: e.source_type,
+        source_config: typeof e.source_config === 'string' ? JSON.parse(e.source_config as string) : e.source_config,
+        auth_type: e.auth_type,
+        cache_enabled: e.cache_enabled,
+        cache_ttl: e.cache_ttl,
+        rate_limit: e.rate_limit ? (typeof e.rate_limit === 'string' ? JSON.parse(e.rate_limit as string) : e.rate_limit) : null,
+        is_active: e.is_active,
+      })) ?? [],
+    };
+  }
+
+  async createTable(dbSchema: string, def: { name: string; columns: unknown[]; add_timestamps?: boolean; add_uuid_pk?: boolean }) {
+    return this.schema.createTable(dbSchema, def as Parameters<SchemaService['createTable']>[1]);
+  }
+
+  async alterColumns(
+    dbSchema: string,
+    tableName: string,
+    changes: unknown[],
+    options: { storage_params?: Record<string, number> } = {},
+  ) {
+    return this.schema.alterColumns(dbSchema, tableName, changes as Parameters<SchemaService['alterColumns']>[2], options);
+  }
+
+  async dropTable(dbSchema: string, tableName: string, projectId?: string) {
+    return this.schema.dropTable(dbSchema, tableName, projectId);
+  }
+  async truncateTable(dbSchema: string, tableName: string, opts: Parameters<SchemaService['truncateTable']>[2] = {}) {
+    return this.schema.truncateTable(dbSchema, tableName, opts);
+  }
+
+  async addIndex(dbSchema: string, tableName: string, idx: {
+    columns?: string[];
+    expressions?: string[];
+    type: string;
+    is_unique: boolean;
+    name?: string;
+    where?: string;
+    include?: string[];
+    ops_class?: string | string[];
+  }) {
+    return this.schema.addIndex(dbSchema, tableName, idx as Parameters<SchemaService['addIndex']>[2]);
+  }
+
+  async dropIndex(dbSchema: string, indexName: string) {
+    return this.schema.dropIndex(dbSchema, indexName);
+  }
+
+  async addForeignKey(dbSchema: string, tableName: string, fk: { source_column: string; target_table: string; target_column: string; on_delete?: string; on_update?: string }) {
+    return this.schema.addForeignKey(dbSchema, tableName, {
+      ...fk,
+      on_delete: fk.on_delete ?? 'NO ACTION',
+      on_update: fk.on_update ?? 'NO ACTION',
+    } as Parameters<SchemaService['addForeignKey']>[2]);
+  }
+
+  async dropForeignKey(dbSchema: string, tableName: string, constraintName: string) {
+    return this.schema.dropForeignKey(dbSchema, tableName, constraintName);
+  }
+
+  async createEndpoint(projectId: string, input: Record<string, unknown>) {
+    return this.builder.create(projectId, '00000000-0000-0000-0000-000000000000', input as Parameters<BuilderService['create']>[2]);
+  }
+
+  async updateEndpoint(endpointId: string, projectId: string, input: Record<string, unknown>) {
+    return this.builder.update(endpointId, projectId, input as Parameters<BuilderService['update']>[2]);
+  }
+
+  async bulkUpdateEndpoint(projectId: string, updates: Array<{ endpoint_id: string } & Record<string, unknown>>) {
+    return this.builder.bulkUpdate(projectId, updates as Parameters<BuilderService['bulkUpdate']>[1]);
+  }
+
+  async deleteEndpoint(endpointId: string, projectId: string) {
+    return this.builder.delete(endpointId, projectId);
+  }
+
+  async listEndpoints(projectId: string) {
+    return this.builder.findAll(projectId);
+  }
+
+  async executeSql(dbSchema: string, query: string, timeoutMs = 30000) {
+    return this.console.execute(dbSchema, query, 'editor', timeoutMs);
+  }
+
+  async executeSqlMutation(
+    dbSchema: string,
+    query: string,
+    opts: { params?: Record<string, unknown>; returning?: boolean; dry_run?: boolean; timeout?: number; trx?: any } = {}
+  ) {
+    return this.console.executeMutation(dbSchema, query, {
+      params: opts.params,
+      returning: opts.returning,
+      dryRun: opts.dry_run,
+      timeoutMs: opts.timeout,
+      trx: opts.trx,
+    });
+  }
+
+  async listTables(dbSchema: string) {
+    return this.schema.listTablesFast(dbSchema);
+  }
+
+  async describeTable(dbSchema: string, tableName: string) {
+    return this.schema.describeTable(dbSchema, tableName);
+  }
+
+  async listEndpointsFiltered(projectId: string, filter?: { method?: string; path_contains?: string }) {
+    let q = this.db('api_endpoints')
+      .where({ project_id: projectId })
+      .whereNull('deprecated_at')
+      .select('id', 'method', 'path', 'description', 'source_type', 'auth_type', 'cache_enabled', 'cache_ttl', 'rate_limit', 'is_active', 'version');
+    if (filter?.method) q = q.where('method', filter.method.toUpperCase());
+    if (filter?.path_contains) q = q.where('path', 'ilike', `%${filter.path_contains}%`);
+    return q.orderBy('path');
+  }
+
+  /**
+   * Fetch one endpoint with its FULL config — including source_config (SQL for custom_sql / composite steps),
+   * validation_schema, response_config, cache_invalidation, required_scopes, etc.
+   * Lookup is by UUID id or by path (+ optional method to disambiguate multiple methods on same path).
+   * Returns null if nothing matched.
+   */
+  async getEndpoint(projectId: string, idOrPath: string, method?: string) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrPath);
+    let q = this.db('api_endpoints')
+      .where({ project_id: projectId })
+      .whereNull('deprecated_at');
+    if (isUuid) {
+      q = q.where({ id: idOrPath });
+    } else {
+      // Normalize leading slash so both "/players/sync" and "players/sync" work.
+      const normalizedPath = idOrPath.startsWith('/') ? idOrPath : `/${idOrPath}`;
+      q = q.where({ path: normalizedPath });
+      if (method) q = q.where('method', method.toUpperCase());
+    }
+    const rows = await q.select('*').orderBy('version', 'desc');
+    if (rows.length === 0) return null;
+    if (rows.length > 1 && !method && !isUuid) {
+      // Multiple methods on same path (e.g. GET + POST /players) — return all so caller can pick.
+      return { matches: rows.length, endpoints: rows };
+    }
+    return rows[0];
+  }
+
+  async listCronJobs(projectId: string) {
+    return this.cron.findAll(projectId);
+  }
+
+  async getCronJob(jobId: string, projectId: string) {
+    return this.cron.findById(jobId, projectId);
+  }
+
+  async createCronJob(projectId: string, input: { name: string; cron_expression: string; action_type: string; action_config: Record<string, unknown>; is_active?: boolean }) {
+    return this.cron.create(projectId, input);
+  }
+
+  async updateCronJob(jobId: string, projectId: string, input: Record<string, unknown>) {
+    return this.cron.update(jobId, projectId, input);
+  }
+
+  async deleteCronJob(jobId: string, projectId: string) {
+    return this.cron.delete(jobId, projectId);
+  }
+
+  async toggleCronJob(jobId: string, projectId: string) {
+    return this.cron.toggle(jobId, projectId);
+  }
+
+  async runCronJob(jobId: string, projectId: string) {
+    return this.cron.runNow(jobId, projectId);
+  }
+
+  async createHypertable(dbSchema: string, input: Parameters<TimescaleService['createHypertable']>[1]) {
+    return this.timescale.createHypertable(dbSchema, input);
+  }
+  async addContinuousAggregate(dbSchema: string, input: Parameters<TimescaleService['addContinuousAggregate']>[1]) {
+    return this.timescale.addContinuousAggregate(dbSchema, input);
+  }
+  async addCompressionPolicy(dbSchema: string, input: Parameters<TimescaleService['addCompressionPolicy']>[1]) {
+    return this.timescale.addCompressionPolicy(dbSchema, input);
+  }
+  async addRetentionPolicy(dbSchema: string, input: Parameters<TimescaleService['addRetentionPolicy']>[1]) {
+    return this.timescale.addRetentionPolicy(dbSchema, input);
+  }
+  async listHypertables(dbSchema: string) {
+    return this.timescale.listHypertables(dbSchema);
+  }
+  async listContinuousAggregates(dbSchema: string) {
+    return this.timescale.listContinuousAggregates(dbSchema);
+  }
+  async listTimescaleJobs(dbSchema: string) {
+    return this.timescale.listJobs(dbSchema);
+  }
+  async listRetentionPolicies(dbSchema: string) {
+    return this.timescale.listRetentionPolicies(dbSchema);
+  }
+  async listCompressionPolicies(dbSchema: string) {
+    return this.timescale.listCompressionPolicies(dbSchema);
+  }
+  async refreshContinuousAggregate(dbSchema: string, input: Parameters<TimescaleService['refreshContinuousAggregate']>[1]) {
+    return this.timescale.refreshContinuousAggregate(dbSchema, input);
+  }
+  async compressChunk(dbSchema: string, input: Parameters<TimescaleService['compressChunk']>[1]) {
+    return this.timescale.compressChunk(dbSchema, input);
+  }
+  async decompressChunk(dbSchema: string, input: Parameters<TimescaleService['decompressChunk']>[1]) {
+    return this.timescale.decompressChunk(dbSchema, input);
+  }
+  async recompressChunk(dbSchema: string, input: Parameters<TimescaleService['recompressChunk']>[1]) {
+    return this.timescale.recompressChunk(dbSchema, input);
+  }
+  async runTimescaleJob(dbSchema: string, input: Parameters<TimescaleService['runTimescaleJob']>[1]) {
+    return this.timescale.runTimescaleJob(dbSchema, input);
+  }
+  async setChunkTimeInterval(dbSchema: string, input: Parameters<TimescaleService['setChunkTimeInterval']>[1]) {
+    return this.timescale.setChunkTimeInterval(dbSchema, input);
+  }
+  async removeRetentionPolicy(dbSchema: string, table: string) {
+    return this.timescale.removeRetentionPolicy(dbSchema, table);
+  }
+  async removeCompressionPolicy(dbSchema: string, table: string) {
+    return this.timescale.removeCompressionPolicy(dbSchema, table);
+  }
+  async removeContinuousAggregatePolicy(dbSchema: string, viewName: string) {
+    return this.timescale.removeContinuousAggregatePolicy(dbSchema, viewName);
+  }
+  async updateRetentionPolicy(dbSchema: string, input: Parameters<TimescaleService['updateRetentionPolicy']>[1]) {
+    return this.timescale.updateRetentionPolicy(dbSchema, input);
+  }
+  async updateCompressionPolicy(dbSchema: string, input: Parameters<TimescaleService['updateCompressionPolicy']>[1]) {
+    return this.timescale.updateCompressionPolicy(dbSchema, input);
+  }
+  async updateContinuousAggregatePolicy(dbSchema: string, input: Parameters<TimescaleService['updateContinuousAggregatePolicy']>[1]) {
+    return this.timescale.updateContinuousAggregatePolicy(dbSchema, input);
+  }
+  async dropContinuousAggregate(dbSchema: string, viewName: string, cascade = false) {
+    return this.timescale.dropContinuousAggregate(dbSchema, viewName, cascade);
+  }
+  async dropHypertable(dbSchema: string, table: string, cascade = false) {
+    return this.timescale.dropHypertable(dbSchema, table, cascade);
+  }
+  async dropChunks(dbSchema: string, input: Parameters<TimescaleService['dropChunks']>[1]) {
+    return this.timescale.dropChunks(dbSchema, input);
+  }
+  async alterTimescaleJob(dbSchema: string, input: Parameters<TimescaleService['alterTimescaleJob']>[1]) {
+    return this.timescale.alterTimescaleJob(dbSchema, input);
+  }
+
+  private async cpInternalFetch(path: string, init: RequestInit = {}) {
+    const cpUrl = (await import('../../config/env.js')).env.CONTROL_PLANE_URL;
+    const nodeKey = (await import('../../config/env.js')).env.NODE_API_KEY;
+    if (!cpUrl) throw new Error('CONTROL_PLANE_URL not configured');
+    const headers: Record<string, string> = {
+      'x-node-api-key': nodeKey,
+      ...(init.headers as Record<string, string> | undefined ?? {}),
+    };
+    if (init.body !== undefined && init.body !== null) {
+      headers['Content-Type'] = 'application/json';
+    }
+    const res = await fetch(`${cpUrl.replace(/\/$/, '')}${path}`, {
+      ...init,
+      headers,
+    });
+    const text = await res.text();
+    let body: unknown;
+    try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+    if (!res.ok) throw new Error(`CP ${path} → ${res.status} ${typeof body === 'object' && body && 'error' in body ? (body as Record<string, unknown>).error : text}`);
+    return body;
+  }
+
+  async listApiTokens(projectId: string) {
+    return this.cpInternalFetch(`/internal/tokens/${projectId}`);
+  }
+
+  async createApiToken(projectId: string, input: { name: string; scopes: string[]; allowed_ips?: string[]; expires_at?: string }) {
+    return this.cpInternalFetch(`/internal/tokens/${projectId}`, { method: 'POST', body: JSON.stringify(input) });
+  }
+
+  async updateApiToken(projectId: string, tokenId: string, input: { name?: string; scopes?: string[]; allowed_ips?: string[] | null; expires_at?: string | null }) {
+    return this.cpInternalFetch(`/internal/tokens/${projectId}/${tokenId}`, { method: 'PUT', body: JSON.stringify(input) });
+  }
+
+  async rotateApiToken(projectId: string, tokenId: string) {
+    return this.cpInternalFetch(`/internal/tokens/${projectId}/${tokenId}/rotate`, { method: 'POST', body: '{}' });
+  }
+
+  async revokeApiToken(projectId: string, tokenId: string) {
+    return this.cpInternalFetch(`/internal/tokens/${projectId}/${tokenId}/revoke`, { method: 'POST', body: '{}' });
+  }
+
+  async deleteApiToken(projectId: string, tokenId: string) {
+    return this.cpInternalFetch(`/internal/tokens/${projectId}/${tokenId}`, { method: 'DELETE' });
+  }
+
+  async explainQuery(dbSchema: string, sql: string, params: Record<string, unknown> = {}, analyze = false) {
+    return this.analyzer.analyze(dbSchema, sql, params, analyze);
+  }
+
+async createMaterializedView(dbSchema: string, input: Parameters<SchemaService['createMaterializedView']>[1]) {
+    return this.schema.createMaterializedView(dbSchema, input);
+  }
+  async listMaterializedViews(dbSchema: string) {
+    return this.schema.listMaterializedViews(dbSchema);
+  }
+
+  async searchEndpoints(projectId: string, query: string) {
+    const q = `%${query.toLowerCase()}%`;
+    return this.db('api_endpoints')
+      .where({ project_id: projectId })
+      .whereNull('deprecated_at')
+      .where(function(this: import('knex').Knex.QueryBuilder) {
+        this.whereRaw('LOWER(path) LIKE ?', [q])
+          .orWhereRaw('LOWER(description) LIKE ?', [q])
+          .orWhereRaw("source_config::text ILIKE ?", [q]);
+      })
+      .select('id', 'method', 'path', 'description', 'source_type', 'version')
+      .orderBy('path');
+  }
+
+  async suggestIndex(dbSchema: string, tableName: string) {
+    const result: any = await this.db.raw(`
+      SELECT
+        schemaname AS schema,
+        relname AS table,
+        seq_scan,
+        seq_tup_read,
+        idx_scan,
+        idx_tup_fetch,
+        n_live_tup AS estimated_rows
+      FROM pg_stat_user_tables
+      WHERE schemaname = ? AND relname = ?
+    `, [dbSchema, tableName]);
+    const row = result.rows[0];
+    if (!row) return { table: tableName, message: 'Table not found or no stats available yet.' };
+
+    const suggestions: Array<{ reason: string; priority: 'low' | 'medium' | 'high'; suggested_sql?: string }> = [];
+    if (row.seq_scan > row.idx_scan * 5 && row.estimated_rows > 10_000) {
+      suggestions.push({
+        reason: `Sequential scans (${row.seq_scan}) dominate index scans (${row.idx_scan}). Table has ${row.estimated_rows} rows. Identify common WHERE/JOIN columns and add indexes.`,
+        priority: 'high',
+        suggested_sql: `-- Use explain_query on a typical query to identify filter columns, then:\n-- CREATE INDEX idx_${tableName}_<col> ON "${dbSchema}"."${tableName}" (<col>)`,
+      });
+    }
+    return {
+      table: tableName,
+      stats: {
+        seq_scans: row.seq_scan,
+        index_scans: row.idx_scan,
+        estimated_rows: row.estimated_rows,
+      },
+      suggestions,
+    };
+  }
+
+  async analyzeSchemaQuality(dbSchema: string) {
+    const issues: Array<{ severity: 'low' | 'medium' | 'high'; code: string; message: string; table?: string; column?: string }> = [];
+
+    const tables: any = await this.db.raw(`
+      SELECT
+        t.relname AS table,
+        t.reltuples::bigint AS estimated_rows,
+        pg_total_relation_size(t.oid) AS size_bytes,
+        (SELECT COUNT(*) FROM pg_index i WHERE i.indrelid = t.oid) AS index_count,
+        (SELECT COUNT(*) FROM pg_index i WHERE i.indrelid = t.oid AND i.indisprimary) AS has_pk
+      FROM pg_class t
+      JOIN pg_namespace n ON n.oid = t.relnamespace
+      WHERE n.nspname = ? AND t.relkind = 'r'
+    `, [dbSchema]);
+
+    for (const row of tables.rows) {
+      if (Number(row.has_pk) === 0) {
+        issues.push({ severity: 'high', code: 'NO_PRIMARY_KEY', message: `Table has no primary key.`, table: row.table });
+      }
+      if (Number(row.estimated_rows) > 100_000 && Number(row.index_count) <= 1) {
+        issues.push({ severity: 'medium', code: 'LARGE_TABLE_FEW_INDEXES', message: `Table has ${row.estimated_rows} rows but only ${row.index_count} index(es). Consider adding indexes on frequently queried columns.`, table: row.table });
+      }
+    }
+
+    const unusedIdx: any = await this.db.raw(`
+      SELECT schemaname, relname AS table, indexrelname AS index, idx_scan
+      FROM pg_stat_user_indexes
+      WHERE schemaname = ? AND idx_scan = 0
+    `, [dbSchema]).catch(() => ({ rows: [] }));
+    for (const row of unusedIdx.rows) {
+      issues.push({ severity: 'low', code: 'UNUSED_INDEX', message: `Index "${row.index}" has never been used. Consider dropping.`, table: row.table });
+    }
+
+    return {
+      tables_checked: tables.rows.length,
+      issues,
+    };
+  }
+
+  async getOpenapiSpec(projectId: string, projectSlug: string, dbSchema: string, baseUrl: string, format: 'json' | 'yaml' = 'json') {
+    const openapi = new OpenAPIService(this.db);
+    const spec = await openapi.generateSpec(projectSlug, projectId, dbSchema, baseUrl);
+    if (format === 'yaml') {
+      const yaml = await import('js-yaml').then(m => m.default ?? m).catch(() => null);
+      if (yaml && typeof (yaml as any).dump === 'function') {
+        return { format: 'yaml', content: (yaml as any).dump(spec) };
+      }
+      return { format: 'json', content: spec, note: 'YAML requested but js-yaml is not installed; returning JSON.' };
+    }
+    return spec;
+  }
+
+  async logActivity(entry: AiGatewayLogEntry) {
+    try {
+      await this.db('ai_gateway_logs').insert({
+        project_id: entry.project_id,
+        gateway_type: entry.gateway_type,
+        tool_name: entry.tool_name,
+        request_summary: entry.request_summary ? JSON.stringify(entry.request_summary) : null,
+        response_status: entry.response_status,
+        duration_ms: entry.duration_ms,
+      });
+    } catch {}
+  }
+
+  async getActivity(projectId: string, limit = 50, offset = 0) {
+    return this.db('ai_gateway_logs')
+      .where({ project_id: projectId })
+      .orderBy('created_at', 'desc')
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getStats(projectId: string) {
+    const total = await this.db('ai_gateway_logs').where({ project_id: projectId }).count('* as count').first();
+    const byTool = await this.db('ai_gateway_logs')
+      .where({ project_id: projectId })
+      .groupBy('tool_name')
+      .select('tool_name')
+      .count('* as count')
+      .orderBy('count', 'desc');
+    const byGateway = await this.db('ai_gateway_logs')
+      .where({ project_id: projectId })
+      .groupBy('gateway_type')
+      .select('gateway_type')
+      .count('* as count');
+    const avgDuration = await this.db('ai_gateway_logs')
+      .where({ project_id: projectId })
+      .avg('duration_ms as avg_ms')
+      .first();
+
+    return {
+      total_calls: Number((total as Record<string, unknown>)?.count ?? 0),
+      by_tool: byTool,
+      by_gateway: byGateway,
+      avg_duration_ms: Math.round(Number((avgDuration as Record<string, unknown>)?.avg_ms ?? 0)),
+    };
+  }
+}
